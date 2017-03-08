@@ -1,4 +1,4 @@
-# xvtree
+# Frink
 
 Parses XML into a DOM level 4 compatible, presistent VTree (with some additional features).
 
