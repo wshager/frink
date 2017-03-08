@@ -1,0 +1,49 @@
+{
+  "name": "frink",
+  "description": "Parses XML to VTree",
+  "keywords": [
+    "xml",
+    "vtree",
+    "vnode",
+    "virtual dom",
+    "json",
+    "immutable"
+  ],
+  "version": "0.0.2",
+  "author": "Wouter Hager <wshager@gmail.com> (https://lagua.nl)",
+  "contributors": [],
+  "main": "./lib/index",
+  "files": [
+    "lib"
+  ],
+  "directories": {
+    "lib": "./lib"
+  },
+  "scripts": {
+      "build": "babel src --out-dir lib && browserify lib/index.js -o dist/frink.js",
+      "test": ""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wshager/frink.git"
+  },
+  "dependencies": {
+    "bufferutil": "^3.0.0",
+    "events": "^1.1.1",
+    "hamt_plus": "^1.0.1",
+    "js-persistent-vector": "*",
+    "sax": "^1.2.1",
+    "xvnode": "*"
+  },
+  "license": "BSD-3-Clause",
+  "bugs": {
+    "url": "https://github.com/wshager/frink/issues"
+  },
+  "homepage": "https://github.com/wshager/frink#readme",
+  "devDependencies": {
+    "babel-cli": "^6.18.0",
+    "babel-plugin-transform-es2015-modules-umd": "^6.18.0",
+    "browserify": "^14.1.0",
+    "microtime": "^2.1.2"
+  }
+}
