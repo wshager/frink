@@ -2,6 +2,7 @@ import * as ohamt from "ohamt";
 
 import { prettyXML } from "./pretty";
 
+import { forEach, into } from "./transducers";
 
 export function Value(type, name, value, depth) {
 	this._type = type;
@@ -20,8 +21,8 @@ Value.prototype.toString = function(doc) {
 	return this._value;
 };
 
-export function Node(vnode,type,name,value,path,index,parent,indexInParent){
-	this.vnode = vnode;
+export function VNode(inode,type,name,value,path,index,parent,indexInParent){
+	this.inode = inode;
 	this.type = type;
 	this.name = name;
 	this.value = value;
@@ -29,14 +30,23 @@ export function Node(vnode,type,name,value,path,index,parent,indexInParent){
 	this.index = index;
 	this.parent = parent;
 	this.indexInParent = indexInParent;
+	Object.defineProperty(this,"children",{
+		"get": () => {
+			return into(this.inode,forEach((c,i) => new VNode(c,c._type,c._name,c._value,this.path,-1,this.inode,i)), []);
+		}
+	});
 }
 
-Node.prototype.toString = function(){
-	return this.vnode.toString();
+VNode.prototype.toString = function(){
+	return this.inode.toString();
 };
 
-export function Step(vnode,path,index,parent,indexInParent){
-	this.vnode = vnode;
+VNode.prototype.clone = function(){
+	return new VNode(this.inode,this.type,this.name,this.value,this.path,this.index,this.parent,this.indexInParent);
+};
+
+export function Step(inode,path,index,parent,indexInParent){
+	this.inode = inode;
 	this.path = path;
 	this.index = index;
 	this.parent = parent;
@@ -51,14 +61,13 @@ Step.prototype.toString = function(){
 
 var OrderedMap = ohamt.empty.constructor;
 
-export function emptyVNode(type, name, depth, attrs) {
-    //return new VNode(type,name,depth,attrs);
-    var vnode = ohamt.make().beginMutation();
-    vnode._type = type;
-    vnode._name = name;
-    vnode._depth = depth;
-    vnode._attrs = attrs;
-    return vnode;
+export function emptyINode(type, name, depth, attrs) {
+    var inode = ohamt.make().beginMutation();
+    inode._type = type;
+    inode._name = name;
+    inode._depth = depth;
+    inode._attrs = attrs;
+    return inode;
 }
 
 export function restoreNode(next,node){
@@ -115,12 +124,12 @@ export function map(name,children){
 }
 
 export function elem(name, children) {
-	var node = new Node(function (parent, insertIndex = -1) {
+	var node = new VNode(function (parent, insertIndex = -1) {
 		var attrMap = ohamt.empty; //.beginMutation();
 		let path = parent.path;
-		let pvnode = parent.vnode;
-		let vnode = emptyVNode(1, name, pvnode._depth + 1, attrMap); //.beginMutation();
-		node.vnode = vnode;
+		let pvnode = parent.inode;
+		let inode = emptyINode(1, name, pvnode._depth + 1, attrMap); //.beginMutation();
+		node.inode = inode;
 		node.index = path.length;
 		node.indexInParent = pvnode.count();
 		path.push(node);
@@ -130,20 +139,20 @@ export function elem(name, children) {
 			if (child.type == 2) {
 				attrMap = attrMap.set(child.name, child.value);
 			} else {
-				child = child.vnode(node);
-				node.vnode = restoreNode(child.parent, node.vnode);
+				child = child.inode(node);
+				node.inode = restoreNode(child.parent, node.inode);
 			}
 		}
-		//node.vnode = node.vnode; //.endMutation(true);
-		node.vnode._attrs = attrMap; //.endMutation(true);
+		//node.inode = node.inode; //.endMutation(true);
+		node.inode._attrs = attrMap; //.endMutation(true);
 		// insert into the parent means: update all parents until we come to the root
 		// BUT creating an element doesn't mutate the doc yet, just the path
 		// however, the parent is mutated, which means I have a new parent
 		// so we just update our copy in the path
 		if (insertIndex > -1) {
-			node.parent = pvnode.insert(insertIndex, node.vnode);
+			node.parent = pvnode.insert(insertIndex, node.inode);
 		} else {
-			node.parent = restoreNode(pvnode.push(node.name,node.vnode), pvnode);
+			node.parent = restoreNode(pvnode.push([node.name,node.inode]), pvnode);
 		}
 		return node;
 	}, 1, name);
@@ -151,21 +160,21 @@ export function elem(name, children) {
 }
 
 export function text(value) {
-	var node = new Node(function (parent) {
-		let pvnode = parent.vnode;
+	var node = new VNode(function (parent) {
+		let pvnode = parent.inode;
 		let path = parent.path;
 		node.indexInParent = pvnode.count();
 		node.name = node.indexInParent + 1;
-		node.vnode = new Value(3, node.name, value, pvnode._depth + 1);
+		node.inode = new Value(3, node.name, value, pvnode._depth + 1);
 		node.index = path.length;
 		path.push(node);
 		node.path = path;
-		node.parent = restoreNode(pvnode.push(node.name,node.vnode),pvnode);
+		node.parent = restoreNode(pvnode.push([node.name,node.inode]),pvnode);
 		return node;
 	}, 3, null, value);
 	return node;
 }
 
-export function doc() {
-	return new Node(emptyVNode(9,"#document",-1,ohamt.empty), 9, "#document", null, [], -1);
+export function document() {
+	return new VNode(emptyINode(9,"#document",0,ohamt.empty), 9, "#document", null, [], -1);
 }
