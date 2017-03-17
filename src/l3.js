@@ -1,6 +1,8 @@
 import FastIntCompression from "fastintcompression";
 
-import { Node, Value, emptyVNode } from './vnode';
+import { VNode, Value, emptyINode, emptyAttrMap } from './vnode';
+
+import { iter } from "./access";
 
 
 function str2array(str, ar = []){
@@ -50,8 +52,8 @@ export function toL3(doc){
 	}
 	iter(doc, function (node) {
 		let type = node.type,
-		    vnode = node.vnode,
-		    depth = vnode._depth,
+		    inode = node.inode,
+		    depth = inode._depth,
 		    name = node.name;
 		if (type == 1) {
 			if (!names[name]) {
@@ -65,7 +67,7 @@ export function toL3(doc){
 			out.push(type);
 			out.push(depth);
 			out.push(names[name]);
-			for (let attr of vnode._attrs.entries()) {
+			for (let attr of inode._attrs.entries()) {
 				let name = attr[0], attrname = "@"+name;
 				if (!names[attrname]) {
 					names[attrname] = i;
@@ -75,7 +77,7 @@ export function toL3(doc){
 					out = str2array(name,out);
 				}
 				out.push(0);
-				out.push(12);
+				out.push(2);
 				out.push(names[attrname]);
 				out = str2array(attr[1],out);
 			}
@@ -84,7 +86,11 @@ export function toL3(doc){
 			out.push(type);
 			out.push(depth);
 			out = str2array(node.value,out);
-		}
+		} else if(type == 17) {
+            out.push(0);
+			out.push(type);
+            out.push(depth);
+        }
 	});
 	return FastIntCompression.compress(out);
 }
@@ -97,7 +103,7 @@ export function fromL3(buf) {
 	    parents = [],
 		depth = 0,
 		c = 0;
-	var doc = emptyVNode(9, "#document", -1, ohamt.empty.beginMutation());
+	var doc = emptyINode(9, "#document", 0, emptyAttrMap());
 	parents[0] = doc;
 	function process(entry){
 		var type = entry[0];
@@ -106,9 +112,9 @@ export function fromL3(buf) {
 			{
 				depth = entry[1];
 				let name = names[entry[2]];
-				let node = emptyVNode(type, name, depth, ohamt.empty.beginMutation());
+				let node = emptyINode(type, name, depth, emptyAttrMap());
 				let parent = parents[depth - 1];
-				if (parent) parent = parent.push(name, node);
+				if (parent) parent = parent.push([name, node]);
 				parents[depth] = node;
 				break;
 			}
@@ -116,7 +122,7 @@ export function fromL3(buf) {
 			{
 				let name = names[entry[1]];
 				let parent = parents[depth];
-				parent._attrs = parent._attrs.push(name, array2str(entry,2));
+				parent._attrs = parent._attrs.push([name, array2str(entry,2)]);
 				break;
 			}
 			case 3:
@@ -125,17 +131,22 @@ export function fromL3(buf) {
 				let parent = parents[depth - 1];
 				let name = parent.count();
 				let node = new Value(type,name,array2str(entry,2),depth);
-				parent = parent.push(name, node);
+				parent = parent.push([name, node]);
 				break;
 			}
 			case 7:
 			case 10:
-				doc._attrs = doc._attrs.push(entry[1],array2str(entry,2));
+				doc._attrs = doc._attrs.push([entry[1],array2str(entry,2)]);
 			break;
 			case 15:
 				names[n] = array2str(entry,1);
 				n++;
 				break;
+            case 17:
+                // close
+                depth = entry[1];
+                parents[depth] = parents[depth].endMutation();
+                break;
 		}
 	}
 	var entry = [];
@@ -147,20 +158,6 @@ export function fromL3(buf) {
 			entry.push(l3[i]);
 		}
 	}
-	return parents[0];
-}
-
-function iter(node, f) {
-	// FIXME pass doc?
-	while (node) {
-		if (!node.vnode) {
-			let root = firstNode(node);
-			node = new Node(root, root._type, root._name, root._value, [], 0, node, 0);
-			node.path.push(node);
-			f(node);
-		} else {
-			node = nextNode(node);
-			if (node) f(node);
-		}
-	}
+    process(entry);
+	return parents[0].endMutation();
 }
