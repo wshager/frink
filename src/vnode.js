@@ -1,5 +1,7 @@
 import * as ohamt from "ohamt";
 
+import * as rrb from "rrb-vector";
+
 import { prettyXML } from "./pretty";
 
 import { forEach, into } from "./transducers";
@@ -18,7 +20,7 @@ Value.prototype.count = function(){
 Value.prototype.size = 0;
 
 Value.prototype.toString = function(doc) {
-	return this._value;
+	return this._value + "";
 };
 
 export function VNode(inode,type,name,value,path,index,parent,indexInParent){
@@ -59,10 +61,8 @@ Step.prototype.toString = function(){
 	return "Step {depth:"+this._depth+", closes:"+this.parent.name+"}";
 };
 
-var OrderedMap = ohamt.empty.constructor;
-
 export function emptyINode(type, name, depth, attrs) {
-    var inode = ohamt.make().beginMutation();
+    var inode = type == 5 ? rrb.empty.beginMutation() : ohamt.make().beginMutation();
     inode._type = type;
     inode._name = name;
     inode._depth = depth;
@@ -100,16 +100,22 @@ function elemToString(e){
 	return str;
 }
 
+var OrderedMap = ohamt.empty.constructor;
+
 OrderedMap.prototype.toString = function(root = true){
 	var str = "";
 	var type = this._type;
-	const docAttrFunc = (z,v,k) => {
-		return z += k=="DOCTYPE" ? "<!"+k+" "+v+">" : "<?"+k+" "+v+"?>";
-	};
+	const docAttrFunc = (z,v,k) =>
+		z += k=="DOCTYPE" ? "<!"+k+" "+v+">" : "<?"+k+" "+v+"?>";
+	const objFunc = (acc,v,k) => acc += "\""+k+"\":"+v;
 	if(type==1) {
 		str += elemToString(this);
 	} else if(type==3){
 		str += this.toString();
+	} else  if(type == 6){
+		str += "{";
+		str = this.reduce(objFunc,str);
+		str += "}";
 	} else if(type==9){
 		str = this._attrs.reduce(docAttrFunc,str);
 		for(let c of this.values()){
@@ -117,6 +123,18 @@ OrderedMap.prototype.toString = function(root = true){
 		}
 	}
 	return root ? prettyXML(str) : str;
+};
+
+var List = rrb.empty.constructor;
+
+List.prototype.toString = function(){
+	var str = "[";
+	for(var i=0,l = this.size; i < l; ){
+		str += this.get(i).toString();
+		i++;
+		if(i<l) str += ",";
+	}
+	return str + "]";
 };
 
 export function map(name,children){
