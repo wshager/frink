@@ -5,8 +5,10 @@ export function parseString(str, cb) {
     return parser.parseString(str, cb);
 }
 
-export { element, attribute, text , cdata, comment, processingInstruction, qname } from "./vnode";
+export { elem, attr, text , cdata, comment, processingInstruction, qname } from "./vnode";
 
-export { appendChild, insertBefore } from "./modify";
+export { appendChild, insertBefore, removeChild } from "./modify";
 
-export { docIter, nextNode, firstChild, nextSibling, parent, children, childrenByName } from "./access";
+export { iter, docIter, nextNode, firstChild, nextSibling, parent, children, childrenByName, stringify } from "./access";
+
+export { fromL3, toL3 } from "./l3";
