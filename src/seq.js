@@ -1,15 +1,17 @@
-import { forEach$1, filter$1, forEach, filter, isIterable, _iterate } from "./transducers";
-
 export function LazySeq(iterable){
-	this.iterable = iterable;
+	this.iterable = iterable || [];
 }
 
-LazySeq.prototype.filter = function(f){
-	return new LazySeq(filter(this.iterable,f));
+LazySeq.prototype.push = function (v) {
+	return this.concat(v);
 };
 
-LazySeq.prototype.map = function(f){
-	return new LazySeq(forEach(this.iterable,f));
+// we need this for transducers, because LazySeq is immutable
+LazySeq.prototype["@@append"] = LazySeq.prototype.push;
+
+
+LazySeq.prototype.concat = function (...v) {
+	return new LazySeq(this.iterable.concat(v));
 };
 
 LazySeq.prototype.get = function(index){
