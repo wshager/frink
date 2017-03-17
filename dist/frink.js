@@ -1,4 +1,1130 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.amd = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+    value: true
+});
+/**
+    @fileOverview Hash Array Mapped Trie.
+
+    Code based on: https://github.com/exclipy/pdata
+*/
+
+/* Configuration
+ ******************************************************************************/
+const SIZE = 5;
+
+const BUCKET_SIZE = Math.pow(2, SIZE);
+
+const MASK = BUCKET_SIZE - 1;
+
+const MAX_INDEX_NODE = BUCKET_SIZE / 2;
+
+const MIN_ARRAY_NODE = BUCKET_SIZE / 4;
+
+/*
+ ******************************************************************************/
+const nothing = {};
+
+const constant = x => () => x;
+
+/**
+    Get 32 bit hash of string.
+
+    Based on:
+    http://stackoverflow.com/questions/7616461/generate-a-hash-from-string-in-javascript-jquery
+*/
+const hash = exports.hash = str => {
+    const type = typeof str;
+    if (type === 'number') return str;
+    if (type !== 'string') str += '';
+
+    let hash = 0;
+    for (let i = 0, len = str.length; i < len; ++i) {
+        const c = str.charCodeAt(i);
+        hash = (hash << 5) - hash + c | 0;
+    }
+    return hash;
+};
+
+/* Bit Ops
+ ******************************************************************************/
+/**
+    Hamming weight.
+
+    Taken from: http://jsperf.com/hamming-weight
+*/
+const popcount = v => {
+    v -= v >>> 1 & 0x55555555; // works with signed or unsigned shifts
+    v = (v & 0x33333333) + (v >>> 2 & 0x33333333);
+    return (v + (v >>> 4) & 0xF0F0F0F) * 0x1010101 >>> 24;
+};
+
+const hashFragment = (shift, h) => h >>> shift & MASK;
+
+const toBitmap = x => 1 << x;
+
+const fromBitmap = (bitmap, bit) => popcount(bitmap & bit - 1);
+
+/* Array Ops
+ ******************************************************************************/
+/**
+    Set a value in an array.
+
+    @param mutate Should the input array be mutated?
+    @param at Index to change.
+    @param v New value
+    @param arr Array.
+*/
+const arrayUpdate = (mutate, at, v, arr) => {
+    let out = arr;
+    if (!mutate) {
+        const len = arr.length;
+        out = new Array(len);
+        for (let i = 0; i < len; ++i) out[i] = arr[i];
+    }
+    out[at] = v;
+    return out;
+};
+
+/**
+    Remove a value from an array.
+
+    @param mutate Should the input array be mutated?
+    @param at Index to remove.
+    @param arr Array.
+*/
+const arraySpliceOut = (mutate, at, arr) => {
+    const len = arr.length - 1;
+    let i = 0,
+        g = 0;
+    let out = arr;
+    if (mutate) {
+        g = i = at;
+    } else {
+        out = new Array(len);
+        while (i < at) out[g++] = arr[i++];
+    }
+    ++i;
+    while (i <= len) out[g++] = arr[i++];
+    out.length = len;
+    return out;
+};
+
+/**
+    Insert a value into an array.
+
+    @param mutate Should the input array be mutated?
+    @param at Index to insert at.
+    @param v Value to insert,
+    @param arr Array.
+*/
+const arraySpliceIn = (mutate, at, v, arr) => {
+    const len = arr.length;
+    if (mutate) {
+        let i = len;
+        while (i >= at) arr[i--] = arr[i];
+        arr[at] = v;
+        return arr;
+    }
+    let i = 0,
+        g = 0;
+    const out = new Array(len + 1);
+    while (i < at) out[g++] = arr[i++];
+    out[at] = v;
+    while (i < len) out[++g] = arr[i++];
+    return out;
+};
+
+/* Node Structures
+ ******************************************************************************/
+const LEAF = 1;
+const COLLISION = 2;
+const INDEX = 3;
+const ARRAY = 4;
+const MULTI = 5;
+
+/**
+    Empty node.
+*/
+const emptyNode = {
+    __hamt_isEmpty: true
+};
+
+const isEmptyNode = x => x === emptyNode || x && x.__hamt_isEmpty;
+
+/**
+    Leaf holding a value.
+
+    @member edit Edit of the node.
+    @member hash Hash of key.
+    @member key Key.
+    @member value Value stored.
+*/
+const Leaf = (edit, hash, key, value, prev, id, next) => ({
+    type: LEAF,
+    edit: edit,
+    hash: hash,
+    key: key,
+    value: value,
+    prev: prev,
+    next: next,
+    id: id,
+    _modify: Leaf__modify
+});
+
+/**
+    Leaf holding multiple values with the same hash but different keys.
+
+    @member edit Edit of the node.
+    @member hash Hash of key.
+    @member children Array of collision children node.
+*/
+const Collision = (edit, hash, children) => ({
+    type: COLLISION,
+    edit: edit,
+    hash: hash,
+    children: children,
+    _modify: Collision__modify
+});
+
+/**
+    Internal node with a sparse set of children.
+
+    Uses a bitmap and array to pack children.
+
+  @member edit Edit of the node.
+    @member mask Bitmap that encode the positions of children in the array.
+    @member children Array of child nodes.
+*/
+const IndexedNode = (edit, mask, children) => ({
+    type: INDEX,
+    edit: edit,
+    mask: mask,
+    children: children,
+    _modify: IndexedNode__modify
+});
+
+/**
+    Internal node with many children.
+
+    @member edit Edit of the node.
+    @member size Number of children.
+    @member children Array of child nodes.
+*/
+const ArrayNode = (edit, size, children) => ({
+    type: ARRAY,
+    edit: edit,
+    size: size,
+    children: children,
+    _modify: ArrayNode__modify
+});
+
+const Multi = (edit, hash, key, children) => ({
+    type: MULTI,
+    edit: edit,
+    hash: hash,
+    key: key,
+    children: children,
+    _modify: Multi__modify
+});
+
+/**
+    Is `node` a leaf node?
+*/
+const isLeaf = node => node === emptyNode || node.type === LEAF || node.type === COLLISION;
+
+/* Internal node operations.
+ ******************************************************************************/
+/**
+    Expand an indexed node into an array node.
+
+  @param edit Current edit.
+    @param frag Index of added child.
+    @param child Added child.
+    @param mask Index node mask before child added.
+    @param subNodes Index node children before child added.
+*/
+const expand = (edit, frag, child, bitmap, subNodes) => {
+    const arr = [];
+    let bit = bitmap;
+    let count = 0;
+    for (let i = 0; bit; ++i) {
+        if (bit & 1) arr[i] = subNodes[count++];
+        bit >>>= 1;
+    }
+    arr[frag] = child;
+    return ArrayNode(edit, count + 1, arr);
+};
+
+/**
+    Collapse an array node into a indexed node.
+
+  @param edit Current edit.
+    @param count Number of elements in new array.
+    @param removed Index of removed element.
+    @param elements Array node children before remove.
+*/
+const pack = (edit, count, removed, elements) => {
+    const children = new Array(count - 1);
+    let g = 0;
+    let bitmap = 0;
+    for (let i = 0, len = elements.length; i < len; ++i) {
+        if (i !== removed) {
+            const elem = elements[i];
+            if (elem && !isEmptyNode(elem)) {
+                children[g++] = elem;
+                bitmap |= 1 << i;
+            }
+        }
+    }
+    return IndexedNode(edit, bitmap, children);
+};
+
+/**
+    Merge two leaf nodes.
+
+    @param shift Current shift.
+    @param h1 Node 1 hash.
+    @param n1 Node 1.
+    @param h2 Node 2 hash.
+    @param n2 Node 2.
+*/
+const mergeLeaves = (edit, shift, h1, n1, h2, n2) => {
+    if (h1 === h2) return Collision(edit, h1, [n2, n1]);
+
+    const subH1 = hashFragment(shift, h1);
+    const subH2 = hashFragment(shift, h2);
+    return IndexedNode(edit, toBitmap(subH1) | toBitmap(subH2), subH1 === subH2 ? [mergeLeaves(edit, shift + SIZE, h1, n1, h2, n2)] : subH1 < subH2 ? [n1, n2] : [n2, n1]);
+};
+
+/**
+    Update an entry in a collision list.
+
+    @param mutate Should mutation be used?
+    @param edit Current edit.
+    @param keyEq Key compare function.
+    @param hash Hash of collision.
+    @param list Collision list.
+    @param f Update function.
+    @param k Key to update.
+    @param size Size ref.
+*/
+const updateCollisionList = (mutate, edit, keyEq, h, list, f, k, size, insert, multi) => {
+    const len = list.length;
+    for (let i = 0; i < len; ++i) {
+        const child = list[i];
+        if (keyEq(k, child.key)) {
+            const value = child.value;
+            const newValue = f(value);
+            if (newValue === value) return list;
+
+            if (newValue === nothing) {
+                --size.value;
+                return arraySpliceOut(mutate, i, list);
+            }
+            return arrayUpdate(mutate, i, Leaf(edit, h, k, newValue, insert), list);
+        }
+    }
+
+    const newValue = f();
+    if (newValue === nothing) return list;
+    ++size.value;
+    return arrayUpdate(mutate, len, Leaf(edit, h, k, newValue, insert), list);
+};
+
+const updateMultiList = (mutate, edit, h, list, f, k, size, insert, multi) => {
+    var len = list.length;
+    var newValue = f();
+    if (newValue === nothing) {
+        --size.value;
+        var idx = len - 1;
+        for (; idx >= 0; idx--) if (list[idx].id === multi) break;
+        return arraySpliceOut(mutate, idx, list);
+    }
+    ++size.value;
+    return arrayUpdate(mutate, len, Leaf(edit, h, k, newValue, insert, list[len - 1].id + 1), list);
+};
+
+const canEditNode = (edit, node) => edit === node.edit;
+
+/* Editing
+ ******************************************************************************/
+const Leaf__modify = function (edit, keyEq, shift, f, h, k, size, insert, multi) {
+    var leaf;
+    if (keyEq(k, this.key)) {
+        let v = f(this.value);
+        if (v === nothing) {
+            --size.value;
+            return emptyNode;
+        }
+        if (multi) {
+            leaf = this;
+        } else {
+            if (v === this.value) return this;
+            if (canEditNode(edit, this)) {
+                this.value = v;
+                this.prev = insert || this.prev;
+                return this;
+            }
+            return Leaf(edit, h, k, v, insert || this.prev, 0, this.next);
+        }
+    }
+    let v = f();
+    if (v === nothing) return this;
+    ++size.value;
+    if (multi && leaf) {
+        //if(v===leaf.value) throw new Error("Either key or value must be unique in a multimap");
+        return Multi(edit, h, k, [leaf, Leaf(edit, h, k, v, insert, multi)]);
+    }
+    return mergeLeaves(edit, shift, this.hash, this, h, Leaf(edit, h, k, v, insert, 0));
+};
+
+const Collision__modify = function (edit, keyEq, shift, f, h, k, size, insert, multi) {
+    if (h === this.hash) {
+        const canEdit = canEditNode(edit, this);
+        const list = updateCollisionList(canEdit, edit, keyEq, this.hash, this.children, f, k, size, insert);
+        if (list === this.children) return this;
+
+        return list.length > 1 ? Collision(edit, this.hash, list) : list[0]; // collapse single element collision list
+    }
+    const v = f();
+    if (v === nothing) return this;
+    ++size.value;
+    return mergeLeaves(edit, shift, this.hash, this, h, Leaf(edit, h, k, v, insert, 0));
+};
+
+const IndexedNode__modify = function (edit, keyEq, shift, f, h, k, size, insert, multi) {
+    const mask = this.mask;
+    const children = this.children;
+    const frag = hashFragment(shift, h);
+    const bit = toBitmap(frag);
+    const indx = fromBitmap(mask, bit);
+    const exists = mask & bit;
+    const current = exists ? children[indx] : emptyNode;
+    const child = current._modify(edit, keyEq, shift + SIZE, f, h, k, size, insert, multi);
+
+    if (current === child) return this;
+
+    const canEdit = canEditNode(edit, this);
+    let bitmap = mask;
+    let newChildren;
+    if (exists && isEmptyNode(child)) {
+        // remove
+        bitmap &= ~bit;
+        if (!bitmap) return emptyNode;
+        if (children.length <= 2 && isLeaf(children[indx ^ 1])) return children[indx ^ 1]; // collapse
+
+        newChildren = arraySpliceOut(canEdit, indx, children);
+    } else if (!exists && !isEmptyNode(child)) {
+        // add
+        if (children.length >= MAX_INDEX_NODE) return expand(edit, frag, child, mask, children);
+
+        bitmap |= bit;
+        newChildren = arraySpliceIn(canEdit, indx, child, children);
+    } else {
+        // modify
+        newChildren = arrayUpdate(canEdit, indx, child, children);
+    }
+
+    if (canEdit) {
+        this.mask = bitmap;
+        this.children = newChildren;
+        return this;
+    }
+    return IndexedNode(edit, bitmap, newChildren);
+};
+
+const ArrayNode__modify = function (edit, keyEq, shift, f, h, k, size, insert, multi) {
+    let count = this.size;
+    const children = this.children;
+    const frag = hashFragment(shift, h);
+    const child = children[frag];
+    const newChild = (child || emptyNode)._modify(edit, keyEq, shift + SIZE, f, h, k, size);
+
+    if (child === newChild) return this;
+
+    const canEdit = canEditNode(edit, this);
+    let newChildren;
+    if (isEmptyNode(child) && !isEmptyNode(newChild)) {
+        // add
+        ++count;
+        newChildren = arrayUpdate(canEdit, frag, newChild, children);
+    } else if (!isEmptyNode(child) && isEmptyNode(newChild)) {
+        // remove
+        --count;
+        if (count <= MIN_ARRAY_NODE) return pack(edit, count, frag, children);
+        newChildren = arrayUpdate(canEdit, frag, emptyNode, children);
+    } else {
+        // modify
+        newChildren = arrayUpdate(canEdit, frag, newChild, children);
+    }
+
+    if (canEdit) {
+        this.size = count;
+        this.children = newChildren;
+        return this;
+    }
+    return ArrayNode(edit, count, newChildren);
+};
+
+const Multi__modify = function (edit, keyEq, shift, f, h, k, size, insert, multi) {
+    if (keyEq(k, this.key)) {
+        // modify
+        const canEdit = canEditNode(edit, this);
+        var list = this.children;
+        // if Multi exists, find leaf
+        list = updateMultiList(canEdit, edit, h, list, f, k, size, insert, multi);
+        if (list === this.children) return this;
+
+        if (list.length > 1) return Multi(edit, h, k, list);
+        // collapse single element collision list
+        return list[0];
+    }
+    let v = f();
+    if (v === nothing) return this;
+    ++size.value;
+    return mergeLeaves(edit, shift, this.hash, this, h, Leaf(edit, h, k, v, insert, 0));
+};
+
+emptyNode._modify = (edit, keyEq, shift, f, h, k, size, insert) => {
+    const v = f();
+    if (v === nothing) return emptyNode;
+    ++size.value;
+    return Leaf(edit, h, k, v, insert, 0);
+};
+
+/* Ordered / Multi helpers
+ ******************************************************************************/
+
+function getLeafOrMulti(node, hash, key) {
+    var s = 0,
+        len = 0;
+    while (node && node.type > 1) {
+        if (node.type == 2) {
+            len = node.children.length;
+            for (var i = 0; i < len; i++) {
+                var c = node.children[i];
+                if (c.key === key) {
+                    node = c;
+                    break;
+                }
+            }
+        } else if (node.type == 3) {
+            var frag = hashFragment(s, hash);
+            var bit = toBitmap(frag);
+            if (node.mask & bit) {
+                node = node.children[fromBitmap(node.mask, bit)];
+            } else {
+                return;
+            }
+            s += SIZE;
+        } else if (node.type == 4) {
+            node = node.children[hashFragment(s, hash)];
+            s += SIZE;
+        } else {
+            // just return
+            if (node.key === key) {
+                return node;
+            } else {
+                return;
+            }
+        }
+    }
+    if (node.key === key) return node;
+}
+
+function getLeafFromMulti(node, id) {
+    for (var i = 0, len = node.children.length; i < len; i++) {
+        var c = node.children[i];
+        if (c.id === id) return c;
+    }
+}
+
+function getLeafFromMultiV(node, val) {
+    for (var i = 0, len = node.children.length; i < len; i++) {
+        var c = node.children[i];
+        if (c.value === val) return c;
+    }
+}
+
+function updatePosition(parent, edit, entry, val, prev = false, s = 0) {
+    var len = 0,
+        type = parent.type,
+        node = null,
+        idx = 0,
+        hash = entry[0],
+        key = entry[1],
+        id = entry[2];
+    if (type == 1) {
+        return Leaf(edit, parent.hash, parent.key, parent.value, prev ? val : parent.prev, parent.id, prev ? parent.next : val);
+    }
+    var children = parent.children;
+    if (type == 2) {
+        len = children.length;
+        for (; idx < len; ++idx) {
+            node = children[idx];
+            if (key === node.key) break;
+        }
+    } else if (type == 3) {
+        var frag = hashFragment(s, hash);
+        var bit = toBitmap(frag);
+        if (parent.mask & bit) {
+            idx = fromBitmap(parent.mask, bit);
+            node = children[idx];
+            s += SIZE;
+        }
+    } else if (type == 4) {
+        idx = hashFragment(s, hash);
+        node = children[idx];
+        s += SIZE;
+    } else if (type == 5) {
+        // assume not in use
+        len = children.length;
+        for (; idx < len;) {
+            node = children[idx];
+            if (node.id === id) break;
+            idx++;
+        }
+    }
+    if (node) {
+        children = arrayUpdate(canEditNode(edit, node), idx, updatePosition(node, edit, entry, val, prev, s), children);
+        if (type == 2) {
+            return Collision(edit, parent.hash, children);
+        } else if (type == 3) {
+            return IndexedNode(edit, parent.mask, children);
+        } else if (type == 4) {
+            return ArrayNode(edit, parent.size, children);
+        } else if (type == 5) {
+            return Multi(edit, hash, key, children);
+        }
+    }
+    return parent;
+}
+
+function last(arr) {
+    return arr[arr.length - 1];
+}
+
+/*
+ ******************************************************************************/
+function Map(editable, edit, config, root, size, start, insert) {
+    this._editable = editable;
+    this._edit = edit;
+    this._config = config;
+    this._root = root;
+    this._size = size;
+    this._start = start;
+    this._insert = insert;
+}
+
+Map.prototype.setTree = function (newRoot, newSize, insert) {
+    var start = newSize == 1 ? insert : this._start;
+    if (this._editable) {
+        this._root = newRoot;
+        this._size = newSize;
+        this._insert = insert;
+        this._start = start;
+        return this;
+    }
+    return newRoot === this._root ? this : new Map(this._editable, this._edit, this._config, newRoot, newSize, start, insert);
+};
+
+/* Queries
+ ******************************************************************************/
+/**
+    Lookup the value for `key` in `map` using a custom `hash`.
+
+    Returns the value or `alt` if none.
+*/
+const tryGetHash = exports.tryGetHash = (alt, hash, key, map) => {
+    let node = map._root;
+    let shift = 0;
+    const keyEq = map._config.keyEq;
+    while (true) switch (node.type) {
+        case LEAF:
+            {
+                return keyEq(key, node.key) ? node.value : alt;
+            }
+        case COLLISION:
+            {
+                if (hash === node.hash) {
+                    const children = node.children;
+                    for (let i = 0, len = children.length; i < len; ++i) {
+                        const child = children[i];
+                        if (keyEq(key, child.key)) return child.value;
+                    }
+                }
+                return alt;
+            }
+        case INDEX:
+            {
+                const frag = hashFragment(shift, hash);
+                const bit = toBitmap(frag);
+                if (node.mask & bit) {
+                    node = node.children[fromBitmap(node.mask, bit)];
+                    shift += SIZE;
+                    break;
+                }
+                return alt;
+            }
+        case ARRAY:
+            {
+                node = node.children[hashFragment(shift, hash)];
+                if (node) {
+                    shift += SIZE;
+                    break;
+                }
+                return alt;
+            }
+        case MULTI:
+            {
+                var ret = [];
+                for (let i = 0, len = node.children.length; i < len; i++) {
+                    var c = node.children[i];
+                    ret.push(c.value);
+                }
+                return ret;
+            }
+        default:
+            return alt;
+    }
+};
+
+Map.prototype.tryGetHash = function (alt, hash, key) {
+    return tryGetHash(alt, hash, key, this);
+};
+
+/**
+    Lookup the value for `key` in `map` using internal hash function.
+
+    @see `tryGetHash`
+*/
+const tryGet = exports.tryGet = (alt, key, map) => tryGetHash(alt, map._config.hash(key), key, map);
+
+Map.prototype.tryGet = function (alt, key) {
+    return tryGet(alt, key, this);
+};
+
+/**
+    Lookup the value for `key` in `map` using a custom `hash`.
+
+    Returns the value or `undefined` if none.
+*/
+const getHash = exports.getHash = (hash, key, map) => tryGetHash(undefined, hash, key, map);
+
+Map.prototype.getHash = function (hash, key) {
+    return getHash(hash, key, this);
+};
+
+/**
+    Lookup the value for `key` in `map` using internal hash function.
+
+    @see `get`
+*/
+const get = exports.get = (key, map) => tryGetHash(undefined, map._config.hash(key), key, map);
+
+Map.prototype.get = function (key, alt) {
+    return tryGet(alt, key, this);
+};
+
+Map.prototype.first = function () {
+    var start = this._start;
+    var node = getLeafOrMulti(this._root, start[0], start[1]);
+    if (node.type == MULTI) node = getLeafFromMulti(node, start[2]);
+    return node.value;
+};
+
+Map.prototype.last = function () {
+    var end = this._init;
+    var node = getLeafOrMulti(this._root, end[0], end[1]);
+    if (node.type == MULTI) node = getLeafFromMulti(node, end[2]);
+    return node.value;
+};
+
+Map.prototype.next = function (key, val) {
+    var node = getLeafOrMulti(this._root, hash(key), key);
+    if (node.type == MULTI) {
+        node = getLeafFromMultiV(node, val);
+    }
+    if (node.next === undefined) return;
+    var next = getLeafOrMulti(this._root, node.next[0], node.next[1]);
+    if (next.type == MULTI) {
+        next = getLeafFromMulti(next, node.next[2]);
+    }
+    return next.value;
+};
+
+/**
+    Does an entry exist for `key` in `map`? Uses custom `hash`.
+*/
+const hasHash = exports.hasHash = (hash, key, map) => tryGetHash(nothing, hash, key, map) !== nothing;
+
+Map.prototype.hasHash = function (hash, key) {
+    return hasHash(hash, key, this);
+};
+
+/**
+    Does an entry exist for `key` in `map`? Uses internal hash function.
+*/
+const has = exports.has = (key, map) => hasHash(map._config.hash(key), key, map);
+
+Map.prototype.has = function (key) {
+    return has(key, this);
+};
+
+const defKeyCompare = (x, y) => x === y;
+
+/**
+    Create an empty map.
+
+    @param config Configuration.
+*/
+const make = exports.make = config => new Map(0, 0, {
+    keyEq: config && config.keyEq || defKeyCompare,
+    hash: config && config.hash || hash
+}, emptyNode, 0);
+
+/**
+    Empty map.
+*/
+const empty = exports.empty = make();
+
+/**
+    Does `map` contain any elements?
+*/
+const isEmpty = exports.isEmpty = map => map && !!isEmptyNode(map._root);
+
+Map.prototype.isEmpty = function () {
+    return isEmpty(this);
+};
+
+/* Updates
+ ******************************************************************************/
+/**
+    Alter the value stored for `key` in `map` using function `f` using
+    custom hash.
+
+    `f` is invoked with the current value for `k` if it exists,
+    or no arguments if no such value exists. `modify` will always either
+    update or insert a value into the map.
+
+    Returns a map with the modified value. Does not alter `map`.
+*/
+const modifyHash = exports.modifyHash = (f, hash, key, insert, multi, map) => {
+    const size = { value: map._size };
+    const newRoot = map._root._modify(map._editable ? map._edit : NaN, map._config.keyEq, 0, f, hash, key, size, insert, multi);
+    return map.setTree(newRoot, size.value, insert || !map._size ? [hash, key, multi] : map._insert);
+};
+
+Map.prototype.modifyHash = function (hash, key, f) {
+    return modifyHash(f, hash, key, this.has(key), false, this);
+};
+
+/**
+    Alter the value stored for `key` in `map` using function `f` using
+    internal hash function.
+
+    @see `modifyHash`
+*/
+const modify = exports.modify = (f, key, map) => modifyHash(f, map._config.hash(key), key, map.has(key), false, map);
+
+Map.prototype.modify = function (key, f) {
+    return modify(f, key, this);
+};
+
+/**
+    Store `value` for `key` in `map` using custom `hash`.
+
+    Returns a map with the modified value. Does not alter `map`.
+*/
+const setHash = exports.setHash = (hash, key, value, map) => appendHash(hash, key, value, map.has(key), map);
+
+Map.prototype.setHash = function (hash, key, value) {
+    return setHash(hash, key, value, this);
+};
+
+const appendHash = exports.appendHash = function (hash, key, value, exists, map) {
+    var insert = map._insert;
+    map = modifyHash(constant(value), hash, key, exists ? null : insert, 0, map);
+    if (insert && !exists) {
+        const edit = map._editable ? map._edit : NaN;
+        map._root = updatePosition(map._root, edit, insert, [hash, key]);
+        if (map._start[1] === key) {
+            var node = getLeafOrMulti(map._root, hash, key);
+            var next = node.next;
+            map._root = updatePosition(map._root, edit, [hash, key], undefined);
+            map._root = updatePosition(map._root, edit, node.next, undefined, true);
+            map._start = node.next;
+        }
+    }
+    return map;
+};
+
+Map.prototype.append = function (key, value) {
+    return appendHash(hash(key), key, value, false, this);
+};
+
+/**
+    Store `value` for `key` in `map` using internal hash function.
+
+    @see `setHash`
+*/
+const set = exports.set = (key, value, map) => setHash(map._config.hash(key), key, value, map);
+
+Map.prototype.set = function (key, value) {
+    return set(key, value, this);
+};
+
+/**
+ * multi-map
+ * - create an extra bucket for each entry with same key
+ */
+const addHash = exports.addHash = function (hash, key, value, map) {
+    var insert = map._insert;
+    var node = getLeafOrMulti(map._root, hash, key);
+    var multi = node ? node.type == MULTI ? last(node.children).id + 1 : node.type == LEAF ? node.id + 1 : 0 : 0;
+    var newmap = modifyHash(constant(value), hash, key, insert, multi, map);
+    if (insert) {
+        const edit = map._editable ? map._edit : NaN;
+        newmap._root = updatePosition(newmap._root, edit, insert, [hash, key, multi]);
+    }
+    return newmap;
+};
+
+// single push, like arrays
+Map.prototype.push = function (kv) {
+    var key = kv[0],
+        value = kv[1];
+    return addHash(hash(key), key, value, this);
+};
+
+/**
+    Remove the entry for `key` in `map`.
+
+    Returns a map with the value removed. Does not alter `map`.
+*/
+const del = constant(nothing);
+const removeHash = exports.removeHash = (hash, key, val, map) => {
+    // in case of collision, we need a leaf
+    var node = getLeafOrMulti(map._root, hash, key);
+    if (node === undefined) return map;
+    var prev = node.prev,
+        next = node.next;
+    var insert = map._insert;
+    var leaf;
+    if (node.type == MULTI) {
+        // default: last will be removed
+        leaf = val !== undefined ? getLeafFromMultiV(node, val) : last(node.children);
+        prev = leaf.prev;
+        next = leaf.next;
+    }
+    map = modifyHash(del, hash, key, null, leaf ? leaf.id : undefined, map);
+    const edit = map._editable ? map._edit : NaN;
+    var id = leaf ? leaf.id : 0;
+    if (prev !== undefined) {
+        map._root = updatePosition(map._root, edit, prev, next);
+        if (insert && insert[1] === key && insert[2] === id) map._insert = prev;
+    }
+    if (next !== undefined) {
+        map._root = updatePosition(map._root, edit, next, prev, true);
+        if (map._start[1] === key && map._start[2] === id) {
+            //next = node.next;
+            map._root = updatePosition(map._root, edit, next, undefined, true);
+            map._start = next;
+        }
+    }
+    if (next === undefined && prev === undefined) {
+        map._insert = map._start = undefined;
+    }
+    return map;
+};
+
+Map.prototype.removeHash = Map.prototype.deleteHash = function (hash, key) {
+    return removeHash(hash, key, this);
+};
+
+/**
+    Remove the entry for `key` in `map` using internal hash function.
+
+    @see `removeHash`
+*/
+const remove = exports.remove = (key, map) => removeHash(map._config.hash(key), key, undefined, map);
+
+Map.prototype.remove = Map.prototype.delete = function (key) {
+    return remove(key, this);
+};
+
+// MULTI:
+const removeValue = exports.removeValue = (key, val, map) => removeHash(map._config.hash(key), key, val, map);
+
+Map.prototype.removeValue = Map.prototype.deleteValue = function (key, val) {
+    return removeValue(key, val, this);
+};
+/* Mutation
+ ******************************************************************************/
+/**
+    Mark `map` as mutable.
+ */
+const beginMutation = exports.beginMutation = map => new Map(map._editable + 1, map._edit + 1, map._config, map._root, map._size, map._start, map._insert);
+
+Map.prototype.beginMutation = function () {
+    return beginMutation(this);
+};
+
+/**
+    Mark `map` as immutable.
+ */
+const endMutation = exports.endMutation = map => {
+    map._editable = map._editable && map._editable - 1;
+    return map;
+};
+
+Map.prototype.endMutation = function () {
+    return endMutation(this);
+};
+
+/**
+    Mutate `map` within the context of `f`.
+    @param f
+    @param map HAMT
+*/
+const mutate = exports.mutate = (f, map) => {
+    const transient = beginMutation(map);
+    f(transient);
+    return endMutation(transient);
+};
+
+Map.prototype.mutate = function (f) {
+    return mutate(f, this);
+};
+
+/* Traversal
+ ******************************************************************************/
+const DONE = {
+    done: true
+};
+
+function MapIterator(root, v, f) {
+    this.root = root;
+    this.f = f;
+    this.v = v;
+}
+
+MapIterator.prototype.next = function () {
+    var v = this.v;
+    if (!v) return DONE;
+    var node = getLeafOrMulti(this.root, v[0], v[1]);
+    if (node.type == MULTI) {
+        node = getLeafFromMulti(node, v[2]);
+        if (!node) return DONE;
+    }
+    this.v = node.next;
+    return { value: this.f(node) };
+};
+
+MapIterator.prototype[Symbol.iterator] = function () {
+    return this;
+};
+
+/**
+    Lazily visit each value in map with function `f`.
+*/
+const visit = (map, f) => new MapIterator(map._root, map._start, f);
+
+/**
+    Get a Javascsript iterator of `map`.
+
+    Iterates over `[key, value]` arrays.
+*/
+const buildPairs = x => [x.key, x.value];
+const entries = exports.entries = map => visit(map, buildPairs);
+
+Map.prototype.entries = Map.prototype[Symbol.iterator] = function () {
+    return entries(this);
+};
+
+/**
+    Get array of all keys in `map`.
+
+    Order is not guaranteed.
+*/
+const buildKeys = x => x.key;
+const keys = exports.keys = map => visit(map, buildKeys);
+
+Map.prototype.keys = function () {
+    return keys(this);
+};
+
+/**
+    Get array of all values in `map`.
+
+    Order is not guaranteed, duplicates are preserved.
+*/
+const buildValues = x => x.value;
+const values = exports.values = Map.prototype.values = map => visit(map, buildValues);
+
+Map.prototype.values = function () {
+    return values(this);
+};
+
+/* Fold
+ ******************************************************************************/
+/**
+    Visit every entry in the map, aggregating data.
+
+    Order of nodes is not guaranteed.
+
+    @param f Function mapping accumulated value, value, and key to new value.
+    @param z Starting value.
+    @param m HAMT
+*/
+const fold = exports.fold = (f, z, m) => {
+    var root = m._root;
+    if (isEmptyNode(root)) return z;
+    var v = m._start;
+    var node;
+    do {
+        node = getLeafOrMulti(root, v[0], v[1]);
+        v = node.next;
+        z = f(z, node.value, node.key);
+    } while (node && node.next);
+    return z;
+};
+
+Map.prototype.fold = Map.prototype.reduce = function (f, z) {
+    return fold(f, z, this);
+};
+
+/**
+    Visit every entry in the map, aggregating data.
+
+    Order of nodes is not guaranteed.
+
+    @param f Function invoked with value and key
+    @param map HAMT
+*/
+const forEach = exports.forEach = (f, map) => fold((_, value, key) => f(value, key, map), null, map);
+
+Map.prototype.forEach = function (f) {
+    return forEach(f, this);
+};
+
+/* Aggregate
+ ******************************************************************************/
+/**
+    Get the number of entries in `map`.
+*/
+const count = exports.count = map => map._size;
+
+Map.prototype.count = function () {
+    return count(this);
+};
+
+Object.defineProperty(Map.prototype, 'size', {
+    get: Map.prototype.count
+});
+},{}],2:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -274,7 +1400,7 @@ function iter(node, f) {
 	}
 	return prev;
 }
-},{"./pretty":6,"./seq":8,"./transducers":9,"./vnode":10}],2:[function(require,module,exports){
+},{"./pretty":7,"./seq":9,"./transducers":10,"./vnode":11}],3:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -282,7 +1408,6 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.nodesList = nodesList;
 exports.nextNode = nextNode;
-exports.previousNode = previousNode;
 function Step(node, depth) {
 	this.node = node;
 	this.nodeName = node.nodeName;
@@ -343,46 +1468,7 @@ function nextNode(node /* Node */) {
 		}
 	}
 }
-
-// FIXME going back means:
-// try previousSibling, else ascend into parentNode
-// if we came from a Step, TODO!!
-function previousNode(node /* Node */) {
-	var type = node.nodeType,
-	    depth = node["@@doc-depth"];
-	//if(index === undefined) index = -1;
-	//index--;
-	if (type != 17 && node.parentNode) {
-		// if we can still go down, return firstChild
-		depth--;
-		node = node.parentNode;
-		node["@@doc-depth"] = depth;
-		node["@@doc-index"] = index;
-		return node;
-	} else {
-		// if there are no more children, return a 'Step' to indicate a close
-		// it means we have to continue one or more steps up the path
-		if (!node.previousSibling) {
-			//inode = parent;
-			depth++;
-			//console.log("found step", inode._name, indexInParent, depth, inode._depth);
-			while (node["@@doc-depth"] != depth) {
-				node = node.firstChild;
-				if (!node) return;
-			}
-			node = new Step(node, depth, index);
-			return node;
-		} else {
-			// return the next child
-			node = node.previousSibling;
-			//console.log("found next", inode._name, index);
-			node["@@doc-depth"] = depth;
-			node["@@doc-index"] = index;
-			return node;
-		}
-	}
-}
-},{}],3:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -523,7 +1609,7 @@ Object.defineProperty(exports, "render", {
     return _render.render;
   }
 });
-},{"./access":1,"./l3":4,"./modify":5,"./render":7,"./vnode":10}],4:[function(require,module,exports){
+},{"./access":2,"./l3":5,"./modify":6,"./render":8,"./vnode":11}],5:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -627,10 +1713,6 @@ function toL3(doc) {
 			out.push(type);
 			out.push(depth);
 			out = str2array(node.value, out);
-		} else if (type == 17) {
-			out.push(0);
-			out.push(type);
-			out.push(depth);
 		}
 	});
 	return _fastintcompression2.default.compress(out);
@@ -651,6 +1733,7 @@ function fromL3(buf) {
 			case 1:
 				{
 					depth = entry[1];
+					if (parents[depth]) parents[depth] = parents[depth].endMutation();
 					let name = names[entry[2]];
 					let node = (0, _vnode.emptyINode)(type, name, depth, (0, _vnode.emptyAttrMap)());
 					let parent = parents[depth - 1];
@@ -682,11 +1765,6 @@ function fromL3(buf) {
 				names[n] = array2str(entry, 1);
 				n++;
 				break;
-			case 17:
-				// close
-				depth = entry[1];
-				parents[depth] = parents[depth].endMutation();
-				break;
 		}
 	}
 	var entry = [];
@@ -701,7 +1779,7 @@ function fromL3(buf) {
 	process(entry);
 	return parents[0].endMutation();
 }
-},{"./access":1,"./vnode":10,"fastintcompression":11}],5:[function(require,module,exports){
+},{"./access":2,"./vnode":11,"fastintcompression":12}],6:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -815,7 +1893,7 @@ function removeChild(node, child) {
 	}
 	return node.path[index];
 }
-},{"./access":1,"./vnode":10}],6:[function(require,module,exports){
+},{"./access":2,"./vnode":11}],7:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -888,7 +1966,7 @@ function prettyXML(text) {
 
 	return str[0] == '\n' ? str.slice(1) : str;
 }
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -908,7 +1986,12 @@ function same(node, vnode) {
 	if (node["@@doc-depth"] !== inode._depth) return false;
 	if (node.nodeValue !== null) {
 		if (node.nodeValue !== vnode.value) return false;
-	} else if (node.nodeName !== (inode._name + '').toUpperCase()) return false;
+	} else {
+		if (vnode.value !== undefined) return false;
+		if (node.nodeName !== (inode._name + '').toUpperCase()) return false;
+		if (node.id && inode._attrs.get("id") !== node.id) return false;
+		if (node.className && inode._attrs.get("class") !== node.className) return false;
+	}
 	return true;
 }
 
@@ -996,380 +2079,7 @@ function render(vnode, root) {
 		if (node.nodeType == 1) node.parentNode.removeChild(node);
 	}
 }
-
-function createProjection(vnode, projectionOptions = {}) {
-	return {
-		update: function (updatedVnode) {
-			if (vnode.vnodeSelector !== updatedVnode.vnodeSelector) {
-				throw new Error('The selector for the root VNode may not be changed. (consider using dom.merge and add one extra level to the virtual DOM)');
-			}
-			updateDom(vnode, updatedVnode, projectionOptions);
-			vnode = updatedVnode;
-		},
-		domNode: vnode._domNode
-	};
-}
-
-function updateDom(previous, vnode, projectionOptions) {
-	let domNode = previous.domNode;
-	let textUpdated = false;
-	if (previous === vnode) {
-		return false;
-	}
-}
-
-function updateDom2(previous, vnode, projectionOptions) {
-	let domNode = previous.domNode;
-	let textUpdated = false;
-	if (previous === vnode) {
-		return false; // By contract, VNode objects may not be modified anymore after passing them to maquette
-	}
-	let updated = false;
-	if (vnode.type == 3) {
-		if (vnode.value !== previous.value) {
-			let newVNode = document.createTextNode(vnode.value);
-			domNode.parentNode.replaceChild(newVNode, domNode);
-			vnode.domNode = newVNode;
-			textUpdated = true;
-			return textUpdated;
-		}
-	} else {
-		// FIXME what type?
-		if (vnode.vnodeSelector.lastIndexOf('svg', 0) === 0) {// lastIndexOf(needle,0)===0 means StartsWith
-			//projectionOptions = extend(projectionOptions, { namespace: NAMESPACE_SVG });
-		}
-		if (previous.value !== vnode.value) {
-			updated = true;
-			if (vnode.value === undefined) {
-				domNode.removeChild(domNode.firstChild); // the only textnode presumably
-			} else {
-				domNode.textContent = vnode.value;
-			}
-		}
-		// FIXME recursion!
-		updated = updateChildren(vnode, domNode, previous.children, vnode.children, projectionOptions) || updated;
-		updated = updateProperties(domNode, previous.properties, vnode.properties, projectionOptions) || updated;
-		if (vnode.properties && vnode.properties.afterUpdate) {
-			vnode.properties.afterUpdate.apply(vnode.properties.bind || vnode.properties, [domNode, projectionOptions, vnode.vnodeSelector, vnode.properties, vnode.children]);
-		}
-	}
-	if (updated && vnode.properties && vnode.properties.updateAnimation) {
-		//vnode.properties.updateAnimation(domNode, vnode.properties, previous.properties);
-	}
-	vnode.domNode = previous.domNode;
-	return textUpdated;
-}
-
-function updateChildren(vnode, domNode, oldChildren, newChildren, projectionOptions) {
-	if (oldChildren === newChildren) {
-		return false;
-	}
-	oldChildren = oldChildren || emptyArray;
-	newChildren = newChildren || emptyArray;
-	let oldChildrenLength = oldChildren.length;
-	let newChildrenLength = newChildren.length;
-	let transitions = projectionOptions.transitions;
-
-	let oldIndex = 0;
-	let newIndex = 0;
-	let i;
-	let textUpdated = false;
-	while (newIndex < newChildrenLength) {
-		let oldChild = oldIndex < oldChildrenLength ? oldChildren[oldIndex] : undefined;
-		let newChild = newChildren[newIndex];
-		if (oldChild !== undefined && same(oldChild, newChild)) {
-			// FIXME recursion!
-			// same node, so... what? update text just in case?
-			textUpdated = updateDom(oldChild, newChild, projectionOptions) || textUpdated;
-			oldIndex++;
-		} else {
-			let findOldIndex = findIndexOfChild(oldChildren, newChild, oldIndex + 1);
-			if (findOldIndex >= 0) {
-				// Remove preceding missing children
-				for (i = oldIndex; i < findOldIndex; i++) {
-					nodeToRemove(oldChildren[i], transitions);
-					checkDistinguishable(oldChildren, i, vnode, 'removed');
-				}
-				// FIXME recusion!
-				textUpdated = updateDom(oldChildren[findOldIndex], newChild, projectionOptions) || textUpdated;
-				oldIndex = findOldIndex + 1;
-			} else {
-				// New child
-				createDom(newChild, domNode, oldIndex < oldChildrenLength ? oldChildren[oldIndex].domNode : undefined, projectionOptions);
-				nodeAdded(newChild, transitions);
-				checkDistinguishable(newChildren, newIndex, vnode, 'added');
-			}
-		}
-		newIndex++;
-	}
-	if (oldChildrenLength > oldIndex) {
-		// Remove child fragments
-		for (i = oldIndex; i < oldChildrenLength; i++) {
-			nodeToRemove(oldChildren[i], transitions);
-			checkDistinguishable(oldChildren, i, vnode, 'removed');
-		}
-	}
-	return textUpdated;
-}
-
-function updateProperties(domNode, previousProperties, properties, projectionOptions) {
-	if (!properties) {
-		return;
-	}
-	let propertiesUpdated = false;
-	let propNames = Object.keys(properties);
-	let propCount = propNames.length;
-	for (let i = 0; i < propCount; i++) {
-		let propName = propNames[i];
-		// assuming that properties will be nullified instead of missing is by design
-		let propValue = properties[propName];
-		let previousValue = previousProperties[propName];
-		if (propName === 'class') {
-			if (previousValue !== propValue) {
-				throw new Error('"class" property may not be updated. Use the "classes" property for conditional css classes.');
-			}
-		} else if (propName === 'classes') {
-			let classList = domNode.classList;
-			let classNames = Object.keys(propValue);
-			let classNameCount = classNames.length;
-			for (let j = 0; j < classNameCount; j++) {
-				let className = classNames[j];
-				let on = !!propValue[className];
-				let previousOn = !!previousValue[className];
-				if (on === previousOn) {
-					continue;
-				}
-				propertiesUpdated = true;
-				if (on) {
-					classList.add(className);
-				} else {
-					classList.remove(className);
-				}
-			}
-		} else if (propName === 'styles') {
-			let styleNames = Object.keys(propValue);
-			let styleCount = styleNames.length;
-			for (let j = 0; j < styleCount; j++) {
-				let styleName = styleNames[j];
-				let newStyleValue = propValue[styleName];
-				let oldStyleValue = previousValue[styleName];
-				if (newStyleValue === oldStyleValue) {
-					continue;
-				}
-				propertiesUpdated = true;
-				if (newStyleValue) {
-					checkStyleValue(newStyleValue);
-					projectionOptions.styleApplyer(domNode, styleName, newStyleValue);
-				} else {
-					projectionOptions.styleApplyer(domNode, styleName, '');
-				}
-			}
-		} else {
-			if (!propValue && typeof previousValue === 'string') {
-				propValue = '';
-			}
-			if (propName === 'value') {
-				// value can be manipulated by the user directly and using event.preventDefault() is not an option
-				if (domNode[propName] !== propValue && domNode['oninput-value'] && domNode['oninput-value'] !== propValue) {
-					domNode[propName] = propValue; // Reset the value, even if the virtual DOM did not change
-					domNode['oninput-value'] = undefined;
-				} // else do not update the domNode, otherwise the cursor position would be changed
-				if (propValue !== previousValue) {
-					propertiesUpdated = true;
-				}
-			} else if (propValue !== previousValue) {
-				let type = typeof propValue;
-				if (type === 'function') {
-					throw new Error('Functions may not be updated on subsequent renders (property: ' + propName + '). Hint: declare event handler functions outside the render() function.');
-				}
-				if (type === 'string' && propName !== 'innerHTML') {
-					if (projectionOptions.namespace === NAMESPACE_SVG && propName === 'href') {
-						domNode.setAttributeNS(NAMESPACE_XLINK, propName, propValue);
-					} else if (propName === 'role' && propValue === '') {
-						domNode.removeAttribute(propName);
-					} else {
-						domNode.setAttribute(propName, propValue);
-					}
-				} else {
-					if (domNode[propName] !== propValue) {
-						// Comparison is here for side-effects in Edge with scrollLeft and scrollTop
-						domNode[propName] = propValue;
-					}
-				}
-				propertiesUpdated = true;
-			}
-		}
-	}
-	return propertiesUpdated;
-}
-
-function createDom(vnode, parentNode, insertBefore, projectionOptions) {
-	let domNode,
-	    i,
-	    c,
-	    start = 0,
-	    type,
-	    found;
-	let vnodeSelector = vnode.vnodeSelector;
-	if (vnodeSelector === '') {
-		domNode = vnode.domNode = document.createTextNode(vnode.text);
-		if (insertBefore !== undefined) {
-			parentNode.insertBefore(domNode, insertBefore);
-		} else {
-			parentNode.appendChild(domNode);
-		}
-	} else {
-		// parse selector
-		for (i = 0; i <= vnodeSelector.length; ++i) {
-			c = vnodeSelector.charAt(i);
-			// if EOS or selector found
-			if (i === vnodeSelector.length || c === '.' || c === '#') {
-				type = vnodeSelector.charAt(start - 1);
-				found = vnodeSelector.slice(start, i);
-				if (type === '.') {
-					domNode.classList.add(found);
-				} else if (type === '#') {
-					domNode.id = found;
-				} else {
-					if (found === 'svg') {
-						projectionOptions = extend(projectionOptions, { namespace: NAMESPACE_SVG });
-					}
-					if (projectionOptions.namespace !== undefined) {
-						domNode = vnode.domNode = document.createElementNS(projectionOptions.namespace, found);
-					} else {
-						domNode = vnode.domNode = document.createElement(found);
-						if (found === 'input' && vnode.properties && vnode.properties.type !== undefined) {
-							// IE8 and older don't support setting input type after the DOM Node has been added to the document
-							domNode.setAttribute("type", vnode.properties.type);
-						}
-					}
-					if (insertBefore !== undefined) {
-						parentNode.insertBefore(domNode, insertBefore);
-					} else {
-						parentNode.appendChild(domNode);
-					}
-				}
-				start = i + 1;
-			}
-		}
-		initPropertiesAndChildren(domNode, vnode, projectionOptions);
-	}
-}
-
-function initPropertiesAndChildren(domNode, vnode, projectionOptions) {
-	addChildren(domNode, vnode.children, projectionOptions); // children before properties, needed for value property of <select>.
-	if (vnode.text) {
-		domNode.textContent = vnode.text;
-	}
-	setProperties(domNode, vnode.properties, projectionOptions);
-	if (vnode.properties && vnode.properties.afterCreate) {
-		vnode.properties.afterCreate.apply(vnode.properties.bind || vnode.properties, [domNode, projectionOptions, vnode.vnodeSelector, vnode.properties, vnode.children]);
-	}
-}
-
-function addChildren(domNode, children, projectionOptions) {
-	if (!children) {
-		return;
-	}
-	for (let i = 0; i < children.length; i++) {
-		createDom(children[i], domNode, undefined, projectionOptions);
-	}
-}
-
-function setProperties(domNode, properties, projectionOptions) {
-	if (!properties) {
-		return;
-	}
-	let eventHandlerInterceptor = projectionOptions.eventHandlerInterceptor;
-	let propNames = Object.keys(properties);
-	let propCount = propNames.length;
-	for (let i = 0; i < propCount; i++) {
-		let propName = propNames[i];
-		let propValue = properties[propName];
-		if (propName === 'className') {
-			throw new Error('Property "className" is not supported, use "class".');
-		} else if (propName === 'class') {
-			propValue.split(/\s+/).forEach(token => domNode.classList.add(token));
-		} else if (propName === 'classes') {
-			// object with string keys and boolean values
-			let classNames = Object.keys(propValue);
-			let classNameCount = classNames.length;
-			for (let j = 0; j < classNameCount; j++) {
-				let className = classNames[j];
-				if (propValue[className]) {
-					domNode.classList.add(className);
-				}
-			}
-		} else if (propName === 'styles') {
-			// object with string keys and string (!) values
-			let styleNames = Object.keys(propValue);
-			let styleCount = styleNames.length;
-			for (let j = 0; j < styleCount; j++) {
-				let styleName = styleNames[j];
-				let styleValue = propValue[styleName];
-				if (styleValue) {
-					checkStyleValue(styleValue);
-					projectionOptions.styleApplyer(domNode, styleName, styleValue);
-				}
-			}
-		} else if (propName !== 'key' && propValue !== null && propValue !== undefined) {
-			let type = typeof propValue;
-			if (type === 'function') {
-				if (propName.lastIndexOf('on', 0) === 0) {
-					// lastIndexOf(,0)===0 -> startsWith
-					if (eventHandlerInterceptor) {
-						propValue = eventHandlerInterceptor(propName, propValue, domNode, properties); // intercept eventhandlers
-					}
-					if (propName === 'oninput') {
-						(function () {
-							// record the evt.target.value, because IE and Edge sometimes do a requestAnimationFrame between changing value and running oninput
-							let oldPropValue = propValue;
-							propValue = function (_this /*HTMLElement*/, evt /*Event*/) {
-								evt.target['oninput-value'] = evt.target /*as HTMLInputElement*/.value; // may be HTMLTextAreaElement as well
-								oldPropValue.apply(_this, [evt]);
-							};
-						})();
-					}
-					domNode[propName] = propValue;
-				}
-			} else if (type === 'string' && propName !== 'value' && propName !== 'innerHTML') {
-				if (projectionOptions.namespace === NAMESPACE_SVG && propName === 'href') {
-					domNode.setAttributeNS(NAMESPACE_XLINK, propName, propValue);
-				} else {
-					domNode.setAttribute(propName, propValue);
-				}
-			} else {
-				domNode[propName] = propValue;
-			}
-		}
-	}
-}
-
-function nodeToRemove(vNode, transitions) {
-	let domNode = vNode.domNode;
-	if (vNode.properties) {
-		let exitAnimation = vNode.properties.exitAnimation;
-		if (exitAnimation) {
-			domNode.style.pointerEvents = 'none';
-			let removeDomNode = function () {
-				if (domNode.parentNode) {
-					domNode.parentNode.removeChild(domNode);
-				}
-			};
-			if (typeof exitAnimation === 'function') {
-				exitAnimation(domNode, removeDomNode, vNode.properties);
-				return;
-			} else {
-				transitions.exit(vNode.domNode, vNode.properties, exitAnimation, removeDomNode);
-				return;
-			}
-		}
-	}
-	if (domNode.parentNode) {
-		domNode.parentNode.removeChild(domNode);
-	}
-}
-},{"./access":1,"./dom":2}],8:[function(require,module,exports){
+},{"./access":2,"./dom":3}],9:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1415,7 +2125,7 @@ LazySeq.prototype.get = function (index) {
 LazySeq.prototype.toString = function () {
 	return "[" + this.iterable + "]";
 };
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1642,7 +2352,7 @@ Iterator.prototype.next = function () {
 Iterator.prototype[Symbol.iterator] = function () {
   return this;
 };
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1662,6 +2372,10 @@ exports.document = document;
 var _ohamt = require("ohamt");
 
 var ohamt = _interopRequireWildcard(_ohamt);
+
+var _rrbVector = require("rrb-vector");
+
+var rrb = _interopRequireWildcard(_rrbVector);
 
 var _pretty = require("./pretty");
 
@@ -1683,7 +2397,7 @@ Value.prototype.count = function () {
 Value.prototype.size = 0;
 
 Value.prototype.toString = function (doc) {
-	return this._value;
+	return this._value + "";
 };
 
 function VNode(inode, type, name, value, path, index, parent, indexInParent) {
@@ -1724,10 +2438,8 @@ Step.prototype.toString = function () {
 	return "Step {depth:" + this._depth + ", closes:" + this.parent.name + "}";
 };
 
-var OrderedMap = ohamt.empty.constructor;
-
 function emptyINode(type, name, depth, attrs) {
-	var inode = ohamt.make().beginMutation();
+	var inode = type == 5 ? rrb.empty.beginMutation() : ohamt.make().beginMutation();
 	inode._type = type;
 	inode._name = name;
 	inode._depth = depth;
@@ -1765,16 +2477,21 @@ function elemToString(e) {
 	return str;
 }
 
+var OrderedMap = ohamt.empty.constructor;
+
 OrderedMap.prototype.toString = function (root = true) {
 	var str = "";
 	var type = this._type;
-	const docAttrFunc = (z, v, k) => {
-		return z += k == "DOCTYPE" ? "<!" + k + " " + v + ">" : "<?" + k + " " + v + "?>";
-	};
+	const docAttrFunc = (z, v, k) => z += k == "DOCTYPE" ? "<!" + k + " " + v + ">" : "<?" + k + " " + v + "?>";
+	const objFunc = (acc, v, k) => acc += "\"" + k + "\":" + v;
 	if (type == 1) {
 		str += elemToString(this);
 	} else if (type == 3) {
 		str += this.toString();
+	} else if (type == 6) {
+		str += "{";
+		str = this.reduce(objFunc, str);
+		str += "}";
 	} else if (type == 9) {
 		str = this._attrs.reduce(docAttrFunc, str);
 		for (let c of this.values()) {
@@ -1782,6 +2499,18 @@ OrderedMap.prototype.toString = function (root = true) {
 		}
 	}
 	return root ? (0, _pretty.prettyXML)(str) : str;
+};
+
+var List = rrb.empty.constructor;
+
+List.prototype.toString = function () {
+	var str = "[";
+	for (var i = 0, l = this.size; i < l;) {
+		str += this.get(i).toString();
+		i++;
+		if (i < l) str += ",";
+	}
+	return str + "]";
 };
 
 function map(name, children) {}
@@ -1841,7 +2570,7 @@ function text(value) {
 function document() {
 	return new VNode(emptyINode(9, "#document", 0, ohamt.empty), 9, "#document", null, [], -1);
 }
-},{"./pretty":6,"./transducers":9,"ohamt":12}],11:[function(require,module,exports){
+},{"./pretty":7,"./transducers":10,"ohamt":1,"rrb-vector":16}],12:[function(require,module,exports){
 /**
  * FastIntegerCompression.js : a fast integer compression library in JavaScript.
  * (c) the authors
@@ -1977,1196 +2706,857 @@ FastIntegerCompression.uncompress = function(input) {
 
 module.exports = FastIntegerCompression;
 
-},{}],12:[function(require,module,exports){
-/**
-    @fileOverview Hash Array Mapped Trie.
+},{}],13:[function(require,module,exports){
+"use strict";
 
-    Code based on: https://github.com/exclipy/pdata
-*/
-const hamt = {}; // export
-
-/* Configuration
- ******************************************************************************/
-const SIZE = 5;
-
-const BUCKET_SIZE = Math.pow(2, SIZE);
-
-const MASK = BUCKET_SIZE - 1;
-
-const MAX_INDEX_NODE = BUCKET_SIZE / 2;
-
-const MIN_ARRAY_NODE = BUCKET_SIZE / 4;
-
-/*
- ******************************************************************************/
-const nothing = ({});
-
-const constant = x => () => x;
-
-/**
-    Get 32 bit hash of string.
-
-    Based on:
-    http://stackoverflow.com/questions/7616461/generate-a-hash-from-string-in-javascript-jquery
-*/
-const hash = hamt.hash = str => {
-    const type = typeof str;
-    if (type === 'number')
-        return str;
-    if (type !== 'string')
-        str += '';
-
-    let hash = 0;
-    for (let i = 0, len = str.length; i < len; ++i) {
-        const c = str.charCodeAt(i);
-        hash = (((hash << 5) - hash) + c) | 0;
-    }
-    return hash;
-};
-
-/* Bit Ops
- ******************************************************************************/
-/**
-    Hamming weight.
-
-    Taken from: http://jsperf.com/hamming-weight
-*/
-const popcount = (v) => {
-    v -= ((v >>> 1) & 0x55555555); // works with signed or unsigned shifts
-    v = (v & 0x33333333) + ((v >>> 2) & 0x33333333);
-    return ((v + (v >>> 4) & 0xF0F0F0F) * 0x1010101) >>> 24;
-};
-
-const hashFragment = (shift, h) =>
-    (h >>> shift) & MASK;
-
-const toBitmap = x =>
-    1 << x;
-
-const fromBitmap = (bitmap, bit) =>
-    popcount(bitmap & (bit - 1));
-
-/* Array Ops
- ******************************************************************************/
-/**
-    Set a value in an array.
-
-    @param mutate Should the input array be mutated?
-    @param at Index to change.
-    @param v New value
-    @param arr Array.
-*/
-const arrayUpdate = (mutate, at, v, arr) => {
-    let out = arr;
-    if (!mutate) {
-        const len = arr.length;
-        out = new Array(len);
-        for (let i = 0; i < len; ++i)
-            out[i] = arr[i];
-    }
-    out[at] = v;
-    return out;
-};
-
-/**
-    Remove a value from an array.
-
-    @param mutate Should the input array be mutated?
-    @param at Index to remove.
-    @param arr Array.
-*/
-const arraySpliceOut = (mutate, at, arr) => {
-    const len = arr.length - 1;
-    let i = 0,
-        g = 0;
-    let out = arr;
-    if (mutate) {
-		g = i = at;
-    } else {
-        out = new Array(len);
-        while (i < at)
-            out[g++] = arr[i++];
-    }
-    ++i;
-    while (i <= len)
-        out[g++] = arr[i++];
-    out.length = len;
-    return out;
-};
-
-/**
-    Insert a value into an array.
-
-    @param mutate Should the input array be mutated?
-    @param at Index to insert at.
-    @param v Value to insert,
-    @param arr Array.
-*/
-const arraySpliceIn = (mutate, at, v, arr) => {
-    const len = arr.length;
-    if (mutate) {
-        let i = len;
-        while (i >= at)
-            arr[i--] = arr[i];
-        arr[at] = v;
-        return arr;
-    }
-    let i = 0, g = 0;
-    const out = new Array(len + 1);
-    while (i < at)
-        out[g++] = arr[i++];
-    out[at] = v;
-    while (i < len)
-        out[++g] = arr[i++];
-    return out;
-};
-
-/* Node Structures
- ******************************************************************************/
-const LEAF = 1;
-const COLLISION = 2;
-const INDEX = 3;
-const ARRAY = 4;
-const MULTI = 5;
-
-/**
-    Empty node.
-*/
-const empty = ({
-    __hamt_isEmpty: true
+Object.defineProperty(exports, "__esModule", {
+	value: true
 });
+exports.concatRoot = concatRoot;
 
-const isEmptyNode = x =>
-    x === empty || (x && x.__hamt_isEmpty);
+var _const = require("./const");
+
+var _util = require("./util");
+
+function concatRoot(a, b, mutate) {
+	var tuple = _concat(a, b, mutate);
+	var a2 = tuple[0],
+	    b2 = tuple[1];
+	var a2Len = a2.length;
+	var b2Len = b2.length;
+
+	if (a2Len === 0) return b2;
+	if (b2Len === 0) return a2;
+
+	// Check if both nodes can be crunched together.
+	if (a2Len + b2Len <= _const.M) {
+		var a2Height = a2.height;
+		var a2Sizes = a2.sizes;
+		var b2Height = b2.height;
+		var b2Sizes = b2.sizes;
+		a2 = a2.concat(b2);
+		a2.height = a2Height;
+		a2.sizes = a2Sizes;
+		// Adjust sizes
+		if (a2Height > 0) {
+			var len = (0, _util.length)(a2);
+			for (var i = 0, l = b2Sizes.length; i < l; i++) {
+				b2Sizes[i] += len;
+			}
+			a2.sizes = a2Sizes.concat(b2Sizes);
+		}
+		return a2;
+	}
+
+	if (a2.height > 0) {
+		var toRemove = calcToRemove(a, b);
+		if (toRemove > _const.E) {
+			let tuple = shuffle(a2, b2, toRemove);
+			a2 = tuple[0];
+			b2 = tuple[1];
+		}
+	}
+
+	return (0, _util.siblise)(a2, b2);
+}
 
 /**
-    Leaf holding a value.
+ * Returns an array of two nodes; right and left. One node _may_ be empty.
+ * @param {Node} a
+ * @param {Node} b
+ * @return {Array<Node>}
+ * @private
+ */
+function _concat(a, b, mutate) {
+	var aHeight = a.height;
+	var bHeight = b.height;
 
-    @member edit Edit of the node.
-    @member hash Hash of key.
-    @member key Key.
-    @member value Value stored.
-*/
-const Leaf = (edit, hash, key, value, prev, id, next) => ({
-    type: LEAF,
-    edit: edit,
-    hash: hash,
-    key: key,
-    value: value,
-    prev: prev,
-    next: next,
-    id:id,
-    _modify: Leaf__modify
+	if (aHeight === 0 && bHeight === 0) {
+		return [a, b];
+	}
+
+	if (aHeight !== 1 || bHeight !== 1) {
+		if (aHeight === bHeight) {
+			a = (0, _util.nodeCopy)(a, mutate);
+			b = (0, _util.nodeCopy)(b, mutate);
+			let tuple = _concat((0, _util.last)(a), (0, _util.first)(b), mutate);
+			let a0 = tuple[0];
+			let b0 = tuple[1];
+			insertRight(a, a0);
+			insertLeft(b, b0);
+		} else if (aHeight > bHeight) {
+			a = (0, _util.nodeCopy)(a, mutate);
+			let tuple = _concat((0, _util.last)(a), b, mutate);
+			let a0 = tuple[0];
+			let b0 = tuple[1];
+			insertRight(a, a0);
+			b = (0, _util.parentise)(b0, b0.height + 1);
+		} else {
+			b = (0, _util.nodeCopy)(b, mutate);
+			var tuple = _concat(a, (0, _util.first)(b), mutate);
+			var left = tuple[0].length === 0 ? 0 : 1;
+			var right = left === 0 ? 1 : 0;
+			insertLeft(b, tuple[left]);
+			a = (0, _util.parentise)(tuple[right], tuple[right].height + 1);
+		}
+	}
+
+	// Check if balancing is needed and return based on that.
+	if (a.length === 0 || b.length === 0) {
+		return [a, b];
+	}
+
+	var toRemove = calcToRemove(a, b);
+	if (toRemove <= _const.E) {
+		return [a, b];
+	}
+	return shuffle(a, b, toRemove);
+}
+
+// Helperfunctions for _concat. Replaces a child node at the side of the parent.
+function insertRight(parent, node) {
+	var index = parent.length - 1;
+	parent[index] = node;
+	parent.sizes[index] = (0, _util.length)(node) + (index > 0 ? parent.sizes[index - 1] : 0);
+}
+
+function insertLeft(parent, node) {
+	var sizes = parent.sizes;
+
+	if (node.length > 0) {
+		parent[0] = node;
+		sizes[0] = (0, _util.length)(node);
+
+		var len = (0, _util.length)(parent[0]);
+		for (let i = 1, l = sizes.length; l > i; i++) {
+			sizes[i] = len = len += (0, _util.length)(parent[i]);
+		}
+	} else {
+		parent.shift();
+		for (let i = 1, l = sizes.length; l > i; i++) {
+			sizes[i] = sizes[i] - sizes[0];
+		}
+		sizes.shift();
+	}
+}
+
+/**
+ * Returns an array of two balanced nodes.
+ * @param {Node} a
+ * @param {Node} b
+ * @param {number} toRemove
+ * @return {Array<Node>}
+ */
+function shuffle(a, b, toRemove) {
+	var newA = allocate(a.height, Math.min(_const.M, a.length + b.length - toRemove));
+	var newB = allocate(a.height, Math.max(0, newA.length - (a.length + b.length - toRemove)));
+
+	// Skip the slots with size M. More precise: copy the slot references
+	// to the new node
+	var read = 0;
+	let aLen = a.length;
+	let either, fromA;
+	let newALen = newA.length;
+	while (fromA = read < aLen, either = fromA ? a[read] : b[read - aLen], either.length % _const.M === 0) {
+		let fromNewA = read < newALen;
+		if (fromNewA) {
+			newA[read] = either;
+		} else {
+			newB[read - newALen] = either;
+		}
+		let size = fromNewA ? a.sizes[read] : b.sizes[read - newALen];
+		if (!size) {
+			size = newA.sizes[read - 1] + (0, _util.length)(either);
+		}
+		if (fromNewA) {
+			newA.sizes[read] = size;
+		} else {
+			newB.sizes[read - newALen] = size;
+		}
+		read++;
+	}
+
+	// Pulling items from left to right, caching in a slot before writing
+	// it into the new nodes.
+	var write = read;
+	var slot = allocate(a.height - 1, 0);
+	var from = 0;
+
+	// If the current slot is still containing data, then there will be at
+	// least one more write, so we do not break this loop yet.
+	while (read - write - (slot.length > 0 ? 1 : 0) < toRemove && read - a.length < b.length) {
+		// Find out the max possible items for copying.
+		var source = getEither(a, b, read);
+		var to = Math.min(_const.M - slot.length, source.length);
+
+		// Copy and adjust size table.
+		var height = slot.height,
+		    sizes = height === 0 ? null : slot.sizes.slice(0);
+		slot = slot.concat(source.slice(from, to));
+		slot.height = height;
+		if (slot.height > 0) {
+			slot.sizes = sizes;
+			var len = sizes.length;
+			for (var i = len; i < len + to - from; i++) {
+				sizes[i] = (0, _util.length)(slot[i]);
+				sizes[i] += i > 0 ? slot.sizes[i - 1] : 0;
+			}
+		}
+
+		from += to;
+
+		// Only proceed to next slots[i] if the current one was
+		// fully copied.
+		if (source.length <= to) {
+			read++;
+			from = 0;
+		}
+
+		// Only create a new slot if the current one is filled up.
+		if (slot.length === _const.M) {
+			saveSlot(newA, newB, write, slot);
+			slot = allocate(a.height - 1, 0);
+			write++;
+		}
+	}
+
+	// Cleanup after the loop. Copy the last slot into the new nodes.
+	if (slot.length > 0) {
+		saveSlot(newA, newB, write, slot);
+		write++;
+	}
+
+	// Shift the untouched slots to the left
+	while (read < a.length + b.length) {
+		saveSlot(newA, newB, write, getEither(a, b, read));
+		read++;
+		write++;
+	}
+
+	return [newA, newB];
+}
+
+// Creates a node or leaf with a given length at their arrays for performance.
+// Is only used by shuffle.
+function allocate(height, length) {
+	var node = new Array(length);
+	node.height = height;
+	if (height > 0) {
+		node.sizes = new Array(length);
+	}
+	return node;
+}
+
+/**
+ * helper for setting picking a slot between to nodes
+ * @param {Node} aList - a non-leaf node
+ * @param {Node} bList - a non-leaf node
+ * @param {number} index
+ * @param {Node} slot
+ */
+function saveSlot(aList, bList, index, slot) {
+	setEither(aList, bList, index, slot);
+
+	var isInFirst = index === 0 || index === aList.sizes.length;
+	var len = isInFirst ? 0 : getEither(aList.sizes, bList.sizes, index - 1);
+
+	setEither(aList.sizes, bList.sizes, index, len + (0, _util.length)(slot));
+}
+
+// getEither, setEither and saveSlot are helpers for accessing elements over two arrays.
+function getEither(a, b, i) {
+	return i < a.length ? a[i] : b[i - a.length];
+}
+
+function setEither(a, b, i, value) {
+	if (i < a.length) {
+		a[i] = value;
+	} else {
+		b[i - a.length] = value;
+	}
+}
+
+/**
+ * Returns the extra search steps for E. Refer to the paper.
+ *
+ * @param {Node} a - a non leaf node
+ * @param {Node} b - a non leaf node
+ * @return {number}
+ */
+function calcToRemove(a, b) {
+	var subLengths = 0;
+	subLengths += a.height === 0 ? 0 : sumOfLengths(a);
+	subLengths += b.height === 0 ? 0 : sumOfLengths(b);
+
+	return a.length + b.length - (Math.floor((subLengths - 1) / _const.M) + 1);
+}
+
+function sumOfLengths(table) {
+	var sum = 0;
+	var len = table.length;
+	for (var i = 0; len > i; i++) sum += table[i].length;
+	return sum;
+}
+},{"./const":14,"./util":17}],14:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
 });
+const B = exports.B = 5;
+const M = exports.M = 1 << B;
+const E = exports.E = 2;
+},{}],15:[function(require,module,exports){
+"use strict";
 
-/**
-    Leaf holding multiple values with the same hash but different keys.
-
-    @member edit Edit of the node.
-    @member hash Hash of key.
-    @member children Array of collision children node.
-*/
-const Collision = (edit, hash, children) => ({
-    type: COLLISION,
-    edit: edit,
-    hash: hash,
-    children: children,
-    _modify: Collision__modify
+Object.defineProperty(exports, "__esModule", {
+	value: true
 });
+exports.sliceRoot = sliceRoot;
 
-/**
-    Internal node with a sparse set of children.
+var _util = require("./util");
 
-    Uses a bitmap and array to pack children.
+function sliceRoot(list, from, to) {
+	if (to === undefined) to = (0, _util.length)(list);
+	return sliceLeft(from, sliceRight(to, list));
+}
 
-  @member edit Edit of the node.
-    @member mask Bitmap that encode the positions of children in the array.
-    @member children Array of child nodes.
-*/
-const IndexedNode = (edit, mask, children) => ({
-    type: INDEX,
-    edit: edit,
-    mask: mask,
-    children: children,
-    _modify: IndexedNode__modify
+function sliceLeft(from, list) {
+	if (from === 0) return list;
+
+	// Handle leaf level.
+	if ((0, _util.isLeaf)(list)) {
+		var node = list.slice(from, list.length + 1);
+		node.height = 0;
+		return node;
+	}
+
+	// Slice the left recursively.
+	var left = (0, _util.getSlot)(from, list);
+	var sliced = sliceLeft(from - (left > 0 ? list.sizes[left - 1] : 0), list[left]);
+
+	// Maybe the a node is not even needed, as sliced contains the whole slice.
+	if (left === list.length - 1) {
+		// elevate!
+		return sliced.height < list.height ? (0, _util.parentise)(sliced, list.height) : sliced;
+	}
+
+	// Create new node.
+	var tbl = list.slice(left, list.length + 1);
+	tbl[0] = sliced;
+	var sizes = new Array(list.length - left);
+	var len = 0;
+	for (var i = 0; i < tbl.length; i++) {
+		len += (0, _util.length)(tbl[i]);
+		sizes[i] = len;
+	}
+	tbl.height = list.height;
+	tbl.sizes = sizes;
+	return tbl;
+}
+
+function sliceRight(to, list) {
+	if (to === (0, _util.length)(list)) return list;
+
+	// Handle leaf level.
+	if ((0, _util.isLeaf)(list)) {
+		let node = list.slice(0, to);
+		node.height = 0;
+		return node;
+	}
+
+	// Slice the right recursively.
+	var right = (0, _util.getSlot)(to, list);
+	var sliced = sliceRight(to - (right > 0 ? list.sizes[right - 1] : 0), list[right]);
+
+	// Maybe the a node is not even needed, as sliced contains the whole slice.
+	if (right === 0) return sliced;
+
+	// Create new node.
+	var sizes = list.sizes.slice(0, right);
+	var tbl = list.slice(0, right);
+	if (sliced.length > 0) {
+		tbl[right] = sliced;
+		sizes[right] = (0, _util.length)(sliced) + (right > 0 ? sizes[right - 1] : 0);
+	}
+	tbl.height = list.height;
+	tbl.sizes = sizes;
+	return tbl;
+}
+},{"./util":17}],16:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
 });
+exports.empty = undefined;
+exports.Tree = Tree;
+exports.push = push;
+exports.get = get;
+exports.set = set;
+exports.concat = concat;
+exports.slice = slice;
+exports.toArray = toArray;
+exports.fromArray = fromArray;
 
-/**
-    Internal node with many children.
+var _const = require("./const");
 
-    @member edit Edit of the node.
-    @member size Number of children.
-    @member children Array of child nodes.
-*/
-const ArrayNode = (edit, size, children) => ({
-    type: ARRAY,
-    edit: edit,
-    size: size,
-    children: children,
-    _modify: ArrayNode__modify
-});
+var _util = require("./util");
 
+var _concat = require("./concat");
 
-const Multi = (edit, hash, key, children) => ({
-    type: MULTI,
-    edit: edit,
-    hash: hash,
-    key: key,
-    children: children,
-    _modify: Multi__modify
-});
+var _slice = require("./slice");
 
+// TODO pvec interop. transients.
 
-/**
-    Is `node` a leaf node?
-*/
-const isLeaf = node =>
-    (node === empty || node.type === LEAF || node.type === COLLISION);
+const EMPTY_LEAF = [];
+EMPTY_LEAF.height = 0;
 
-/* Internal node operations.
- ******************************************************************************/
-/**
-    Expand an indexed node into an array node.
+function Tree(size, root, tail, editable) {
+	this.size = size;
+	this.root = root;
+	this.tail = tail;
+	this.editable = editable;
+}
 
-  @param edit Current edit.
-    @param frag Index of added child.
-    @param child Added child.
-    @param mask Index node mask before child added.
-    @param subNodes Index node children before child added.
-*/
-const expand = (edit, frag, child, bitmap, subNodes) => {
-    const arr = [];
-    let bit = bitmap;
-    let count = 0;
-    for (let i = 0; bit; ++i) {
-        if (bit & 1)
-            arr[i] = subNodes[count++];
-        bit >>>= 1;
-    }
-    arr[frag] = child;
-    return ArrayNode(edit, count + 1, arr);
-};
-
-/**
-    Collapse an array node into a indexed node.
-
-  @param edit Current edit.
-    @param count Number of elements in new array.
-    @param removed Index of removed element.
-    @param elements Array node children before remove.
-*/
-const pack = (edit, count, removed, elements) => {
-    const children = new Array(count - 1);
-    let g = 0;
-    let bitmap = 0;
-    for (let i = 0, len = elements.length; i < len; ++i) {
-        if (i !== removed) {
-            const elem = elements[i];
-            if (elem && !isEmptyNode(elem)) {
-                children[g++] = elem;
-                bitmap |= 1 << i;
-            }
-        }
-    }
-    return IndexedNode(edit, bitmap, children);
-};
-
-/**
-    Merge two leaf nodes.
-
-    @param shift Current shift.
-    @param h1 Node 1 hash.
-    @param n1 Node 1.
-    @param h2 Node 2 hash.
-    @param n2 Node 2.
-*/
-const mergeLeaves = (edit, shift, h1, n1, h2, n2) => {
-    if (h1 === h2)
-        return Collision(edit, h1, [n2, n1]);
-
-    const subH1 = hashFragment(shift, h1);
-    const subH2 = hashFragment(shift, h2);
-    return IndexedNode(edit, toBitmap(subH1) | toBitmap(subH2),
-        subH1 === subH2 ? [mergeLeaves(edit, shift + SIZE, h1, n1, h2, n2)] :
-            subH1 < subH2 ? [n1, n2] : [n2, n1]);
-};
-
-/**
-    Update an entry in a collision list.
-
-    @param mutate Should mutation be used?
-    @param edit Current edit.
-    @param keyEq Key compare function.
-    @param hash Hash of collision.
-    @param list Collision list.
-    @param f Update function.
-    @param k Key to update.
-    @param size Size ref.
-*/
-const updateCollisionList = (mutate, edit, keyEq, h, list, f, k, size, insert, multi) => {
-    const len = list.length;
-    for (let i = 0; i < len; ++i) {
-        const child = list[i];
-        if (keyEq(k, child.key)) {
-            const value = child.value;
-            const newValue = f(value);
-            if (newValue === value)
-                return list;
-
-            if (newValue === nothing) {
-                --size.value;
-                return arraySpliceOut(mutate, i, list);
-            }
-            return arrayUpdate(mutate, i, Leaf(edit, h, k, newValue, insert), list);
-        }
-    }
-
-    const newValue = f();
-    if (newValue === nothing)
-        return list;
-    ++size.value;
-    return arrayUpdate(mutate, len, Leaf(edit, h, k, newValue, insert), list);
-};
-
-const updateMultiList = (mutate, edit, h, list, f, k, size, insert, multi) => {
-    var len = list.length;
-    var newValue = f();
-    if (newValue === nothing) {
-        --size.value;
-        var idx = len - 1;
-        if(multi !== undefined){
-            for(;idx>=0;idx--) if(list[idx].id===multi) break;
-        }
-        return arraySpliceOut(mutate, idx, list);
-    }
-    ++size.value;
-    return arrayUpdate(mutate, len, Leaf(edit, h, k, newValue, insert, list[len - 1].id + 1), list);
-};
+const EMPTY = new Tree(0, null, EMPTY_LEAF, false);
 
 const canEditNode = (edit, node) => edit === node.edit;
 
-/* Editing
- ******************************************************************************/
-const Leaf__modify = function(edit, keyEq, shift, f, h, k, size, insert, multi) {
-    var leaf;
-    if (keyEq(k, this.key)) {
-        let v = f(this.value);
-        if (v === nothing) {
-            --size.value;
-            return empty;
-        }
-        if(multi){
-            leaf = this;
-        } else {
-            if (v === this.value) return this;
-            if (canEditNode(edit, this)) {
-                this.value = v;
-                this.prev = insert || this.prev;
-                return this;
-            }
-            return Leaf(edit, h, k, v, insert || this.prev, 0, this.next);
-        }
-    }
-    let v = f();
-    if (v === nothing) return this;
-    ++size.value;
-    if(multi && leaf) {
-        if(v===leaf.value) throw new Error("Either key or value must be unique in a multimap");
-        return Multi(edit, h, k, [leaf, Leaf(edit, h, k, v, insert, multi)]);
-    }
-    return mergeLeaves(edit, shift, this.hash, this, h, Leaf(edit, h, k, v, insert, 0));
-};
-
-const Collision__modify = function(edit, keyEq, shift, f, h, k, size, insert, multi) {
-    if (h === this.hash) {
-        const canEdit = canEditNode(edit, this);
-        const list = updateCollisionList(canEdit, edit, keyEq, this.hash, this.children, f, k, size, insert);
-        if (list === this.children)
-            return this;
-
-        return list.length > 1 ? Collision(edit, this.hash, list) :
-            list[0]; // collapse single element collision list
-    }
-    const v = f();
-    if (v === nothing)
-        return this;
-    ++size.value;
-    return mergeLeaves(edit, shift, this.hash, this, h, Leaf(edit, h, k, v, insert,0));
-};
-
-const IndexedNode__modify = function(edit, keyEq, shift, f, h, k, size, insert, multi) {
-    const mask = this.mask;
-    const children = this.children;
-    const frag = hashFragment(shift, h);
-    const bit = toBitmap(frag);
-    const indx = fromBitmap(mask, bit);
-    const exists = mask & bit;
-    const current = exists ? children[indx] : empty;
-    const child = current._modify(edit, keyEq, shift + SIZE, f, h, k, size, insert, multi);
-
-    if (current === child)
-        return this;
-
-    const canEdit = canEditNode(edit, this);
-    let bitmap = mask;
-    let newChildren;
-    if (exists && isEmptyNode(child)) { // remove
-        bitmap &= ~bit;
-        if (!bitmap)
-            return empty;
-        if (children.length <= 2 && isLeaf(children[indx ^ 1]))
-            return children[indx ^ 1]; // collapse
-
-        newChildren = arraySpliceOut(canEdit, indx, children);
-    } else if (!exists && !isEmptyNode(child)) { // add
-        if (children.length >= MAX_INDEX_NODE)
-            return expand(edit, frag, child, mask, children);
-
-        bitmap |= bit;
-        newChildren = arraySpliceIn(canEdit, indx, child, children);
-    } else { // modify
-        newChildren = arrayUpdate(canEdit, indx, child, children);
-    }
-
-    if (canEdit) {
-        this.mask = bitmap;
-        this.children = newChildren;
-        return this;
-    }
-    return IndexedNode(edit, bitmap, newChildren);
-};
-
-const ArrayNode__modify = function(edit, keyEq, shift, f, h, k, size, insert, multi) {
-    let count = this.size;
-    const children = this.children;
-    const frag = hashFragment(shift, h);
-    const child = children[frag];
-    const newChild = (child || empty)._modify(edit, keyEq, shift + SIZE, f, h, k, size);
-
-    if (child === newChild)
-        return this;
-
-    const canEdit = canEditNode(edit, this);
-    let newChildren;
-    if (isEmptyNode(child) && !isEmptyNode(newChild)) { // add
-        ++count;
-        newChildren = arrayUpdate(canEdit, frag, newChild, children);
-    } else if (!isEmptyNode(child) && isEmptyNode(newChild)) { // remove
-        --count;
-        if (count <= MIN_ARRAY_NODE)
-            return pack(edit, count, frag, children);
-        newChildren = arrayUpdate(canEdit, frag, empty, children);
-    } else { // modify
-        newChildren = arrayUpdate(canEdit, frag, newChild, children);
-    }
-
-    if (canEdit) {
-        this.size = count;
-        this.children = newChildren;
-        return this;
-    }
-    return ArrayNode(edit, count, newChildren);
-};
-
-
-const Multi__modify = function(edit, keyEq, shift, f, h, k, size, insert, multi) {
-    if (keyEq(k,this.key)) {
-        // modify
-        const canEdit = canEditNode(edit, this);
-        var list = this.children;
-        // if Multi exists, find leaf
-        list = updateMultiList(canEdit, edit, h, list, f, k, size, insert, multi);
-        if (list === this.children) return this;
-
-        if(list.length > 1) return Multi(edit, h, k, list);
-        // collapse single element collision list
-        return list[0];
-    }
-    let v = f();
-    if (v === nothing) return this;
-    ++size.value;
-    return mergeLeaves(edit, shift, this.hash, this, h, Leaf(edit, h, k, v, insert, 0));
-};
-
-empty._modify = (edit, keyEq, shift, f, h, k, size, insert) => {
-    const v = f();
-    if (v === nothing)
-        return empty;
-    ++size.value;
-    return Leaf(edit, h, k, v, insert, 0);
-};
-
-/* Ordered / Multi helpers
- ******************************************************************************/
-
-function getLeafOrMulti(node,hash,key){
-    var s = 0, len = 0;
-    while(node && node.type > 1) {
-        if(node.type == 2){
-            len = node.children.length;
-            for(var i=0;i<len;i++) {
-                var c = node.children[i];
-                if(c.key === key) {
-                    node = c;
-                    break;
-                }
-            }
-        } else if(node.type == 3) {
-            var frag = hashFragment(s, hash);
-            var bit = toBitmap(frag);
-            if (node.mask & bit) {
-                node = node.children[fromBitmap(node.mask, bit)];
-            } else {
-                return;
-            }
-            s += SIZE;
-        } else if(node.type == 4) {
-            node = node.children[hashFragment(s, hash)];
-            s += SIZE;
-        } else {
-            // just return
-            if(node.key === key) {
-                return node;
-            } else {
-                return;
-            }
-        }
-    }
-    if(node.key === key) return node;
+function push(tree, val) {
+	if (tree.tail.length < _const.M) {
+		// push to tail
+		let newTail = (0, _util.createLeafFrom)(tree.tail, tree.editable);
+		newTail.push(val);
+		tree.size++;
+		if (!tree.editable) return new Tree(tree.size, tree.root, newTail);
+		tree.tail = newTail;
+		return tree;
+	}
+	// else push to root if space
+	// else create new root
+	let newTail = [val];
+	newTail.height = 0;
+	let newRoot = tree.root ? (0, _util.sinkTailIfSpace)(tree.tail, tree.root, tree.editable) || (0, _util.siblise)(tree.root, (0, _util.parentise)(tree.tail, tree.root.height)) : (0, _util.parentise)(tree.tail, 1);
+	tree.size++;
+	if (!tree.editable) return new Tree(tree.size, newRoot, newTail);
+	tree.root = newRoot;
+	tree.tail = newTail;
+	return tree;
 }
 
-function getLeafFromMulti(node,id){
-    for(var i = 0, len = node.children.length; i < len; i++){
-        var c = node.children[i];
-        if(c.id === id) return c;
-    }
+// Gets the value at index i recursively.
+function get(tree, i) {
+	if (i < 0 || i >= tree.size) {
+		throw new Error('Index ' + i + ' is out of range');
+	}
+	var offset = (0, _util.tailOffset)(tree);
+	if (i >= offset) {
+		return tree.tail[i - offset];
+	}
+	return (0, _util.getRoot)(i, tree.root);
 }
 
-function getLeafFromMultiV(node,val){
-    for(var i = 0, len = node.children.length; i < len; i++){
-        var c = node.children[i];
-        if(c.value === val) return c;
-    }
+// Sets the value at the index i. Only the nodes leading to i will get
+// copied and updated.
+function set(tree, i, item) {
+	var len = tree.size;
+	if (i < 0 || len < i) {
+		throw new Error("Index " + i + " out of range!");
+	}
+	if (i === len) return push(tree, item);
+	var offset = (0, _util.tailOffset)(tree);
+	if (i >= offset) {
+		var newTail = (0, _util.createLeafFrom)(tree.tail, tree.editable);
+		newTail[i - offset] = item;
+		if (!tree.editable) return new Tree(tree.size, tree.root, newTail);
+		tree.tail = newTail;
+		return tree;
+	}
+	var newRoot = (0, _util.setRoot)(i, item, tree.root, tree.editable);
+	if (!tree.editable) return new Tree(tree.size, newRoot, tree.tail);
+	tree.root = newRoot;
+	return tree;
 }
 
-function updatePosition(parent,edit,entry,val,prev = false,s = 0){
-    var len = 0, type = parent.type, node = null, idx = 0, hash = entry[0], key = entry[1], id = entry[2];
-    if(type == 1) {
-        return Leaf(edit, parent.hash, parent.key, parent.value, prev ? val : parent.prev, parent.id, prev ? parent.next : val);
-    }
-    var children = parent.children;
-    if(type == 2) {
-        len = children.length;
-        for (; idx < len; ++idx) {
-            node = children[idx];
-            if (key === node.key) break;
-        }
-    } else if(type == 3) {
-        var frag = hashFragment(s, hash);
-        var bit = toBitmap(frag);
-        if (parent.mask & bit) {
-            idx = fromBitmap(parent.mask, bit);
-            node = children[idx];
-            s += SIZE;
-        }
-    } else if(type == 4) {
-        idx = hashFragment(s, hash);
-        node = children[idx];
-        s += SIZE;
-    } else if(type == 5){
-        // assume not in use
-        len = children.length;
-        for(;idx<len;) {
-            node = children[idx];
-            if(node.id === id) break;
-            idx++;
-        }
-
-    }
-    if(node){
-        children = arrayUpdate(canEditNode(edit, node), idx, updatePosition(node,edit,entry,val,prev,s), children);
-        if(type == 2){
-            return Collision(edit, parent.hash, children);
-        } else if(type == 3){
-            return IndexedNode(edit, parent.mask, children);
-        } else if(type == 4){
-            return ArrayNode(edit, parent.size, children);
-        } else if(type == 5){
-            return Multi(edit, hash, key, children);
-        }
-    }
-    return parent;
-}
-
-function last(arr){
-    return arr[arr.length - 1];
-}
-
-
-/*
- ******************************************************************************/
-function Map(editable, edit, config, root, size, start, insert) {
-    this._editable = editable;
-    this._edit = edit;
-    this._config = config;
-    this._root = root;
-    this._size = size;
-    this._start = start;
-    this._insert = insert;
-}
-
-Map.prototype.setTree = function(newRoot, newSize, insert) {
-    var start = newSize == 1 ? insert : this._start;
-    if (this._editable) {
-        this._root = newRoot;
-        this._size = newSize;
-        this._insert = insert;
-        this._start = start;
-        return this;
-    }
-    return newRoot === this._root ? this :
-        new Map(this._editable, this._edit, this._config, newRoot, newSize, start, insert);
-};
-
-/* Queries
- ******************************************************************************/
 /**
-    Lookup the value for `key` in `map` using a custom `hash`.
-
-    Returns the value or `alt` if none.
-*/
-const tryGetHash = hamt.tryGetHash = (alt, hash, key, map) => {
-    let node = map._root;
-    let shift = 0;
-    const keyEq = map._config.keyEq;
-    while (true) switch (node.type) {
-        case LEAF:
-        {
-            return keyEq(key, node.key) ? node.value : alt;
-        }
-        case COLLISION:
-        {
-            if (hash === node.hash) {
-                const children = node.children;
-                for (let i = 0, len = children.length; i < len; ++i) {
-                    const child = children[i];
-                    if (keyEq(key, child.key))
-                        return child.value;
-                }
-            }
-            return alt;
-        }
-        case INDEX:
-        {
-            const frag = hashFragment(shift, hash);
-            const bit = toBitmap(frag);
-            if (node.mask & bit) {
-                node = node.children[fromBitmap(node.mask, bit)];
-                shift += SIZE;
-                break;
-            }
-            return alt;
-        }
-        case ARRAY:
-        {
-            node = node.children[hashFragment(shift, hash)];
-            if (node) {
-                shift += SIZE;
-                break;
-            }
-            return alt;
-        }
-        case MULTI:
-        {
-            var ret = [];
-            for(let i=0, len=node.children.length;i<len; i++){
-                var c = node.children[i];
-                ret.push(c.value);
-            }
-            return ret;
-        }
-        default:
-            return alt;
-    }
-};
-
-Map.prototype.tryGetHash = function(alt, hash, key) {
-    return tryGetHash(alt, hash, key, this);
-};
-
-/**
-    Lookup the value for `key` in `map` using internal hash function.
-
-    @see `tryGetHash`
-*/
-const tryGet = hamt.tryGet = (alt, key, map) =>
-    tryGetHash(alt, map._config.hash(key), key, map);
-
-Map.prototype.tryGet = function(alt, key) {
-    return tryGet(alt, key, this);
-};
-
-/**
-    Lookup the value for `key` in `map` using a custom `hash`.
-
-    Returns the value or `undefined` if none.
-*/
-const getHash = hamt.getHash = (hash, key, map) =>
-    tryGetHash(undefined, hash, key, map);
-
-Map.prototype.getHash = function(hash, key) {
-    return getHash(hash, key, this);
-};
-
-/**
-    Lookup the value for `key` in `map` using internal hash function.
-
-    @see `get`
-*/
-const get = hamt.get = (key, map) =>
-    tryGetHash(undefined, map._config.hash(key), key, map);
-
-Map.prototype.get = function(key, alt) {
-    return tryGet(alt, key, this);
-};
-
-Map.prototype.first = function(){
-    var start = this._start;
-    var node = getLeafOrMulti(this._root, start[0], start[1]);
-    if(node.type == MULTI) node = getLeafFromMulti(node,start[2]);
-    return node.value;
-};
-
-Map.prototype.last = function(){
-    var end = this._init;
-    var node = getLeafOrMulti(this._root, end[0], end[1]);
-    if(node.type == MULTI) node = getLeafFromMulti(node,end[2]);
-    return node.value;
-};
-
-Map.prototype.next = function (key, val) {
-    var node = getLeafOrMulti(this._root, hash(key), key);
-    if(node.type == MULTI) {
-        node = getLeafFromMultiV(node,val);
-    }
-    if(node.next === undefined) return;
-    var next = getLeafOrMulti(this._root, node.next[0], node.next[1]);
-    if(next.type == MULTI) {
-        next = getLeafFromMulti(next,node.next[2]);
-    }
-    return next.value;
-};
-
-/**
-    Does an entry exist for `key` in `map`? Uses custom `hash`.
-*/
-const hasHash = hamt.has = (hash, key, map) =>
-    tryGetHash(nothing, hash, key, map) !== nothing;
-
-Map.prototype.hasHash = function(hash, key) {
-    return hasHash(hash, key, this);
-};
-
-/**
-    Does an entry exist for `key` in `map`? Uses internal hash function.
-*/
-const has = hamt.has = (key, map) =>
-    hasHash(map._config.hash(key), key, map);
-
-Map.prototype.has = function(key) {
-    return has(key, this);
-};
-
-const defKeyCompare = (x, y) => x === y;
-
-/**
-    Create an empty map.
-
-    @param config Configuration.
-*/
-hamt.make = (config) =>
-    new Map(0, 0, {
-        keyEq: (config && config.keyEq) || defKeyCompare,
-        hash: (config && config.hash) || hash
-    }, empty, 0);
-
-/**
-    Empty map.
-*/
-hamt.empty = hamt.make();
-
-/**
-    Does `map` contain any elements?
-*/
-const isEmpty = hamt.isEmpty = (map) =>
-    map && !!isEmptyNode(map._root);
-
-Map.prototype.isEmpty = function() {
-    return isEmpty(this);
-};
-
-/* Updates
- ******************************************************************************/
-/**
-    Alter the value stored for `key` in `map` using function `f` using
-    custom hash.
-
-    `f` is invoked with the current value for `k` if it exists,
-    or no arguments if no such value exists. `modify` will always either
-    update or insert a value into the map.
-
-    Returns a map with the modified value. Does not alter `map`.
-*/
-const modifyHash = hamt.modifyHash = (f, hash, key, insert, multi, map) => {
-    const size = { value: map._size };
-    const newRoot = map._root._modify(
-        map._editable ? map._edit : NaN,
-        map._config.keyEq,
-        0,
-        f,
-        hash,
-        key,
-        size,
-        insert,
-        multi);
-    return map.setTree(newRoot, size.value, insert || !map._size ? [hash,key,multi] : map._insert);
-};
-
-Map.prototype.modifyHash = function(hash, key, f) {
-    return modifyHash(f, hash, key, this.has(key), false, this);
-};
-
-/**
-    Alter the value stored for `key` in `map` using function `f` using
-    internal hash function.
-
-    @see `modifyHash`
-*/
-const modify = hamt.modify = (f, key, map) =>
-    modifyHash(f, map._config.hash(key), key, map.has(key), false, map);
-
-Map.prototype.modify = function(key, f) {
-    return modify(f, key, this);
-};
-
-/**
-    Store `value` for `key` in `map` using custom `hash`.
-
-    Returns a map with the modified value. Does not alter `map`.
-*/
-const setHash = hamt.setHash = (hash, key, value, map) =>
-    appendHash(hash, key, value, map.has(key), map);
-
-Map.prototype.setHash = function(hash, key, value) {
-    return setHash(hash, key, value, this);
-};
-
-const appendHash = hamt.appendHash = function(hash, key, value, exists, map){
-    var insert = map._insert;
-    map = modifyHash(constant(value), hash, key, exists ? null : insert, 0, map);
-    if(insert && !exists) {
-        const edit = map._editable ? map._edit : NaN;
-        map._root = updatePosition(map._root,edit,insert,[hash,key]);
-        if(map._start[1] === key) {
-            var node = getLeafOrMulti(map._root,hash,key);
-            var next = node.next;
-            map._root = updatePosition(map._root,edit,[hash,key],undefined);
-            map._root = updatePosition(map._root,edit,node.next,undefined,true);
-            map._start = node.next;
-        }
-    }
-    return map;
-};
-
-
-Map.prototype.append = function (key, value) {
-    return appendHash(hash(key), key, value, false, this);
-};
-
-/**
-    Store `value` for `key` in `map` using internal hash function.
-
-    @see `setHash`
-*/
-const set = hamt.set = (key, value, map) =>
-    setHash(map._config.hash(key), key, value, map);
-
-Map.prototype.set = function(key, value) {
-    return set(key, value, this);
-};
-
-/**
- * multi-map
- * - create an extra bucket for each entry with same key
+ * join to lists together(concat)
+ *
+ * @param {Node} a
+ * @param {Node} b
+ * @return {Node}
  */
-const addHash = hamt.addHash = function(hash, key, value, map){
-    var insert = map._insert;
-    var node = getLeafOrMulti(map._root,hash,key);
-    var multi = node ? node.type == MULTI ? last(node.children).id+1 : node.type == LEAF ? node.id+1 : 0 : 0;
-    var newmap = modifyHash(constant(value), hash, key, insert, multi, map);
-    if(insert) {
-        const edit = map._editable ? map._edit : NaN;
-        newmap._root = updatePosition(newmap._root,edit,insert,[hash,key,multi]);
-    }
-    return newmap;
-};
+function concat(a, b) {
+	var aLen = a.size;
+	var bLen = b.size;
+	var newLen = aLen + bLen;
 
-// single push, like arrays
-Map.prototype.push = function (kv) {
-    var key = kv[0], value = kv[1];
-    return addHash(hash(key), key, value, this);
-};
+	if (aLen === 0) return b;
+	if (bLen === 0) return a;
 
-
-/**
-    Remove the entry for `key` in `map`.
-
-    Returns a map with the value removed. Does not alter `map`.
-*/
-const del = constant(nothing);
-const removeHash = hamt.removeHash = (hash, key, val, map) => {
-    // in case of collision, we need a leaf
-    var node = getLeafOrMulti(map._root, hash, key);
-    if(node === undefined) return map;
-    var prev = node.prev, next = node.next;
-    var insert = map._insert;
-    var leaf;
-    if(node.type == MULTI){
-        // last will be removed
-        leaf = val!==undefined ? getLeafFromMultiV(node,val) : last(node.children);
-        prev = leaf.prev;
-        next = leaf.next;
-    }
-    map = modifyHash(del, hash, key, null, leaf ? leaf.id : undefined, map);
-    const edit = map._editable ? map._edit : NaN;
-    var id = leaf ? leaf.id : 0;
-    if(prev !== undefined) {
-        map._root = updatePosition(map._root,edit,prev,next);
-        if(insert && insert[1] === key && insert[2] === id) map._insert = prev;
-    }
-    if(next !== undefined) {
-        map._root = updatePosition(map._root,edit,next,prev,true);
-        if(map._start[1] === key && map._start[2] === id) {
-            //next = node.next;
-            map._root = updatePosition(map._root,edit,next,undefined,true);
-            map._start = next;
-        }
-    }
-    if(next === undefined && prev === undefined){
-        map._insert = map._start = undefined;
-    }
-    return map;
-};
-
-Map.prototype.removeHash = Map.prototype.deleteHash = function(hash, key) {
-    return removeHash(hash, key, this);
-};
-
-/**
-    Remove the entry for `key` in `map` using internal hash function.
-
-    @see `removeHash`
-*/
-const remove = hamt.remove = (key, map) =>
-    removeHash(map._config.hash(key), key, undefined, map);
-
-Map.prototype.remove = Map.prototype.delete = function(key) {
-    return remove(key, this);
-};
-
-// MULTI:
-const removeValue = hamt.removeValue = (key, val, map) =>
-    removeHash(map._config.hash(key), key, val, map);
-
-Map.prototype.removeValue = Map.prototype.deleteValue = function(key,val) {
-    return removeValue(key, val, this);
-};
-/* Mutation
- ******************************************************************************/
- /**
-     Mark `map` as mutable.
-  */
-const beginMutation = hamt.beginMutation = (map) =>
-    new Map(
-        map._editable + 1,
-        map._edit + 1,
-        map._config,
-        map._root,
-        map._size,
-        map._start,
-        map._insert);
-
-Map.prototype.beginMutation = function() {
-    return beginMutation(this);
-};
+	if (!a.root || !b.root) {
+		if (aLen + bLen <= _const.M) {
+			let newTail = a.tail.concat(b.tail);
+			newTail.height = 0;
+			if (!a.editable) return new Tree(newLen, null, newTail);
+			a.size = newLen;
+			a.root = null;
+			a.tail = newTail;
+			return a;
+		}
+		if (!a.root && !b.root) {
+			// newTail will overflow, but newRoot can't be over M
+			let newRoot = a.tail.concat(b.tail.slice(0, _const.M - aLen));
+			newRoot.height = 0;
+			let newTail = b.tail.slice(_const.M - aLen);
+			newTail.height = 0;
+			if (!a.editable) return new Tree(newLen, newRoot, newTail);
+			a.size = newLen;
+			a.root = newRoot;
+			a.tail = newTail;
+			return a;
+		}
+		// else either a has a root or b does
+		if (!b.root) {
+			// b has no root
+			let aTailLen = a.tail.length;
+			let bTailLen = b.tail.length;
+			// size left over in last root node in a
+			let rightCut = _const.M - aTailLen;
+			// create a new tail by concatting b until cut
+			let newTail = a.tail.concat(b.tail.slice(0, rightCut));
+			newTail.height = 0;
+			let newRoot;
+			// if tail would overflow, sink it and make leftover newTail
+			if (aTailLen + bTailLen > _const.M) {
+				newRoot = (0, _util.sinkTailIfSpace)(newTail, a.root, a.editable);
+				newTail = b.tail.slice(rightCut);
+				newTail.height = 0;
+			} else {
+				newRoot = a.root.slice(0);
+				newRoot.sizes = a.root.sizes.slice(0);
+				newRoot.height = a.root.height;
+			}
+			if (!a.editable) return new Tree(newLen, newRoot, newTail);
+			a.size = newLen;
+			a.root = newRoot;
+			a.tail = newTail;
+			return a;
+		}
+		// else a has no root
+		// make a.tail a.root and concat b.root
+		let newRoot = (0, _concat.concatRoot)((0, _util.parentise)(a.tail, 1), b.root, a.editable);
+		let newTail = (0, _util.createLeafFrom)(b.tail, a.editable);
+		if (!a.editable) return new Tree(newLen, newRoot, newTail);
+		a.size = newLen;
+		a.root = newRoot;
+		a.tail = newTail;
+		return a;
+	} else {
+		// both a and b have roots
+		// if have a.tail, just sink a.tail and make b.tail new tail...
+		let aRoot = a.tail.length === 0 ? a.root : (0, _util.sinkTailIfSpace)(a.tail, a.root, a.editable) || (0, _util.siblise)(a.root, (0, _util.parentise)(a.tail, a.root.height));
+		let newRoot = (0, _concat.concatRoot)(aRoot, b.root, a.editable);
+		let newTail = (0, _util.createLeafFrom)(b.tail, a.editable);
+		if (!a.editable) return new Tree(newLen, newRoot, newTail);
+		a.size = newLen;
+		a.root = newRoot;
+		a.tail = newTail;
+		return a;
+	}
+}
 
 /**
-    Mark `map` as immutable.
+ * return a shallow copy of a portion of a list, with supplied "from" and "to"("to" not included)
+ *
+ * @param from
+ * @param to
+ * @param list
  */
-const endMutation = hamt.endMutation = (map) => {
-    map._editable = map._editable && map._editable - 1;
-    return map;
+function slice(tree, from, to) {
+	var max = tree.size;
+
+	if (to === undefined) to = max;
+
+	if (from >= max) {
+		return EMPTY;
+	}
+
+	if (to > max) {
+		to = max;
+	}
+	//invert negative numbers
+	function confine(i) {
+		return i < 0 ? i + max : i;
+	}
+	from = confine(from);
+	to = confine(to);
+	var offset = (0, _util.tailOffset)(tree);var newRoot, newTail;
+	if (from >= offset) {
+		newRoot = null;
+		newTail = tree.tail.slice(from - offset, to - offset);
+	} else if (to <= offset) {
+		newRoot = (0, _slice.sliceRoot)(tree.root, from, to);
+		newTail = [];
+	} else {
+		newRoot = (0, _slice.sliceRoot)(tree.root, from, offset);
+		newTail = tree.tail.slice(0, to - offset);
+	}
+	newTail.height = 0;
+	return new Tree(to - from, newRoot, newTail);
+}
+
+// Converts an array into a list.
+function toArray(tree) {
+	var out = [];
+	if (tree.root) {
+		rootToArray(tree.root, out);
+	}
+	return out.concat(tree.tail);
+}
+function fromArray(jsArray) {
+	var len = jsArray.length;
+	if (len === 0) return EMPTY;
+
+	return _fromArray(jsArray, Math.floor(Math.log(len) / Math.log(_const.M)), 0, len);
+
+	function _fromArray(jsArray, h, from, to) {
+		if (h === 0) {
+			var node = (0, _slice.sliceRoot)((0, _util.createLeafFrom)(jsArray), from, to);
+			node.height = 0;
+			return node;
+		}
+
+		var step = Math.pow(_const.M, h);
+		var len = Math.ceil((to - from) / step);
+		var table = new Array(len);
+		var lengths = new Array(len);
+		for (var i = 0; len > i; i++) {
+			//todo: trampoline?
+			table[i] = _fromArray(jsArray, h - 1, from + i * step, Math.min(from + (i + 1) * step, to));
+			lengths[i] = (0, _util.length)(table[i]) + (i > 0 ? lengths[i - 1] : 0);
+		}
+		table.height = h;
+		table.sizes = lengths;
+		return table;
+	}
+}
+
+exports.empty = EMPTY;
+
+
+Tree.prototype.push = function (val) {
+	return push(this, val);
 };
 
-Map.prototype.endMutation = function() {
-    return endMutation(this);
+Tree.prototype.pop = function () {
+	return slice(this, 0, this.size - 1);
 };
 
-/**
-    Mutate `map` within the context of `f`.
-    @param f
-    @param map HAMT
-*/
-const mutate = hamt.mutate = (f, map) => {
-    const transient = beginMutation(map);
-    f(transient);
-    return endMutation(transient);
+Tree.prototype.get = function (i) {
+	return get(this, i);
 };
 
-Map.prototype.mutate = function(f) {
-    return mutate(f, this);
+Tree.prototype.set = function (i, val) {
+	return set(this, i, val);
 };
 
-/* Traversal
- ******************************************************************************/
- const DONE = {
-     done: true
- };
-
- function MapIterator(root,v,f) {
-     this.root = root;
-     this.f = f;
-     this.v = v;
- }
-
- MapIterator.prototype.next = function () {
-     var v = this.v;
-     if (!v) return DONE;
-     var node = getLeafOrMulti(this.root,v[0], v[1]);
-     if(node.type == MULTI) {
-         node = getLeafFromMulti(node,v[2]);
-         if(!node) return DONE;
-     }
-     this.v = node.next;
-     return { value: this.f(node) };
- };
-
- MapIterator.prototype[Symbol.iterator] = function () {
-     return this;
- };
-
- /**
-     Lazily visit each value in map with function `f`.
- */
-const visit = (map, f) => new MapIterator(map._root, map._start, f);
-
-/**
-    Get a Javascsript iterator of `map`.
-
-    Iterates over `[key, value]` arrays.
-*/
-const buildPairs = (x) => [x.key, x.value];
-const entries = hamt.entries = (map) =>
-    visit(map, buildPairs);
-
-Map.prototype.entries = Map.prototype[Symbol.iterator] = function() {
-    return entries(this);
+Tree.prototype.concat = function (other) {
+	return concat(this, other);
 };
 
-/**
-    Get array of all keys in `map`.
-
-    Order is not guaranteed.
-*/
-const buildKeys = (x) => x.key;
-const keys = hamt.keys = (map) =>
-    visit(map, buildKeys);
-
-Map.prototype.keys = function() {
-    return keys(this);
+Tree.prototype.slice = function (from, to) {
+	return slice(this, from, to);
 };
 
-/**
-    Get array of all values in `map`.
-
-    Order is not guaranteed, duplicates are preserved.
-*/
-const buildValues = x => x.value;
-const values = hamt.values = Map.prototype.values = map =>
-    visit(map, buildValues);
-
-Map.prototype.values = function() {
-    return values(this);
+Tree.prototype.beginMutation = function () {
+	return new Tree(this.size, this.root, this.tail, true);
 };
 
-/* Fold
- ******************************************************************************/
-/**
-    Visit every entry in the map, aggregating data.
-
-    Order of nodes is not guaranteed.
-
-    @param f Function mapping accumulated value, value, and key to new value.
-    @param z Starting value.
-    @param m HAMT
-*/
-const fold = hamt.fold = (f, z, m) => {
-    var root = m._root;
-    if(isEmptyNode(root)) return z;
-    var v = m._start;
-    var node;
-    do {
-        node = getLeafOrMulti(root,v[0],v[1]);
-        v = node.next;
-        z = f(z, node.value, node.key);
-    } while(node && node.next);
-    return z;
+Tree.prototype.endMutation = function () {
+	this.editable = false;
+	return this;
 };
+},{"./concat":13,"./const":14,"./slice":15,"./util":17}],17:[function(require,module,exports){
+"use strict";
 
-Map.prototype.fold = Map.prototype.reduce = function (f, z) {
-    return fold(f, z, this);
-};
-
-/**
-    Visit every entry in the map, aggregating data.
-
-    Order of nodes is not guaranteed.
-
-    @param f Function invoked with value and key
-    @param map HAMT
-*/
-const forEach = hamt.forEach = (f, map) =>
-    fold((_, value, key) => f(value, key, map), null, map);
-
-Map.prototype.forEach = function(f) {
-    return forEach(f, this);
-};
-
-/* Aggregate
- ******************************************************************************/
-/**
-    Get the number of entries in `map`.
-*/
-const count = hamt.count = map =>
-    map._size;
-
-Map.prototype.count = function() {
-    return count(this);
-};
-
-Object.defineProperty(Map.prototype, 'size', {
-    get: Map.prototype.count
+Object.defineProperty(exports, "__esModule", {
+	value: true
 });
+exports.createRoot = createRoot;
+exports.nodeCopy = nodeCopy;
+exports.createLeafFrom = createLeafFrom;
+exports.tailOffset = tailOffset;
+exports.sinkTailIfSpace = sinkTailIfSpace;
+exports.getRoot = getRoot;
+exports.setRoot = setRoot;
+exports.parentise = parentise;
+exports.siblise = siblise;
+exports.last = last;
+exports.first = first;
+exports.isLeaf = isLeaf;
+exports.length = length;
+exports.getSlot = getSlot;
+exports.rootToArray = rootToArray;
 
-/* Export
- ******************************************************************************/
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = hamt;
-} else if (typeof define === 'function' && define.amd) {
-    define('hamt', [], () => hamt);
-} else {
-    this.hamt = hamt;
+var _const = require("./const");
+
+// Helper functions
+function createRoot(tail) {
+	let list = [tail];
+	list.height = 1;
+	list.sizes = [tail.length];
+	return list;
 }
 
-},{}]},{},[3])(3)
+function nodeCopy(list, mutate) {
+	var height = list.height;
+	if (height === 0) return createLeafFrom(list);
+	if (mutate) return list;
+	var sizes = list.sizes.slice(0);
+	list = list.slice(0);
+	list.height = height;
+	list.sizes = sizes;
+	return list;
+}
+
+function createLeafFrom(list) {
+	list = list.slice(0);
+	list.height = 0;
+	return list;
+}
+
+function tailOffset(tree) {
+	return tree.root ? length(tree.root) : 0;
+}
+
+function sinkTailIfSpace(tail, list, mutate) {
+	// Handle resursion stop at leaf level.
+	var newA,
+	    tailLen = tail.length;
+	if (list.height == 1) {
+		if (list.length < _const.M) {
+			newA = nodeCopy(list, mutate);
+			newA.push(tail);
+			newA.sizes.push(last(newA.sizes) + tail.length);
+			return newA;
+		} else {
+			return null;
+		}
+	}
+
+	// Recursively push
+	var pushed = sinkTailIfSpace(tail, last(list), mutate);
+
+	// There was space in the bottom right tree, so the slot will
+	// be updated.
+	if (pushed !== null) {
+		newA = nodeCopy(list);
+		newA[newA.length - 1] = pushed;
+		newA.sizes[newA.sizes.length - 1] += tailLen;
+		return newA;
+	}
+
+	// When there was no space left, check if there is space left
+	// for a new slot with a tree which contains only the item
+	// at the bottom.
+	if (list.length < _const.M) {
+		var newSlot = parentise(tail, list.height - 1);
+		newA = nodeCopy(list, mutate);
+		newA.push(newSlot);
+		newA.sizes.push(last(newA.sizes) + length(newSlot));
+		return newA;
+	} else {
+		return null;
+	}
+}
+
+// Calculates in which slot the item probably is, then
+// find the exact slot in the sizes. Returns the index.
+function getRoot(i, list) {
+	for (var x = list.height; x > 0; x--) {
+		var slot = i >> x * _const.B;
+		while (list.sizes[slot] <= i) {
+			slot++;
+		}
+		if (slot > 0) {
+			i -= list.sizes[slot - 1];
+		}
+		list = list[slot];
+	}
+	return list[i];
+}
+
+function setRoot(i, item, list, mutate) {
+	var len = length(list);
+	list = nodeCopy(list, mutate);
+	if (isLeaf(list)) {
+		list[i] = item;
+	} else {
+		var slot = getSlot(i, list);
+		if (slot > 0) {
+			i -= list.sizes[slot - 1];
+		}
+		list[slot] = setRoot(i, item, list[slot], mutate);
+	}
+	return list;
+}
+
+// Recursively creates a tree that contains the given tree.
+function parentise(tree, height) {
+	if (height == tree.height) {
+		return tree;
+	} else {
+		var list = [parentise(tree, height - 1)];
+		list.height = height;
+		list.sizes = [length(tree)];
+		return list;
+	}
+}
+
+// Emphasizes blood brotherhood beneath two trees.
+function siblise(a, b) {
+	var list = [a, b];
+	list.height = a.height + 1;
+	list.sizes = [length(a), length(a) + length(b)];
+	return list;
+}
+
+function last(list) {
+	return list[list.length - 1];
+}
+
+function first(a) {
+	return a[0];
+}
+
+// determine if this is a leaf vs container node
+function isLeaf(node) {
+	return node.height === 0;
+}
+
+// get the # of elements in a rrb list
+function length(list) {
+	return isLeaf(list) ? list.length : last(list.sizes);
+}
+
+function getSlot(i, list) {
+	var slot = i >> _const.B * list.height;
+	while (list.sizes[slot] <= i) {
+		slot++;
+	}
+	return slot;
+}
+
+function rootToArray(a, out = []) {
+	for (var i = 0; i < a.length; i++) {
+		if (a.height === 0) {
+			out.push(a[i]);
+		} else {
+			rootToArray(a[i], out);
+		}
+	}
+	return out;
+}
+},{"./const":14}]},{},[4])(4)
 });
