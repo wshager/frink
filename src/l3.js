@@ -12,7 +12,6 @@ function str2array(str, ar = []){
     return ar;
 }
 
-
 function array2str(ar,i){
 	var str = "",l = ar.length;
     for (; i<l; i++) {
@@ -86,10 +85,6 @@ export function toL3(doc){
 			out.push(type);
 			out.push(depth);
 			out = str2array(node.value,out);
-		} else if(type == 17) {
-            out.push(0);
-			out.push(type);
-            out.push(depth);
         }
 	});
 	return FastIntCompression.compress(out);
@@ -111,6 +106,7 @@ export function fromL3(buf) {
 			case 1:
 			{
 				depth = entry[1];
+                if(parents[depth]) parents[depth] = parents[depth].endMutation();
 				let name = names[entry[2]];
 				let node = emptyINode(type, name, depth, emptyAttrMap());
 				let parent = parents[depth - 1];
@@ -142,11 +138,6 @@ export function fromL3(buf) {
 				names[n] = array2str(entry,1);
 				n++;
 				break;
-            case 17:
-                // close
-                depth = entry[1];
-                parents[depth] = parents[depth].endMutation();
-                break;
 		}
 	}
 	var entry = [];
