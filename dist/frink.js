@@ -283,14 +283,13 @@ Object.defineProperty(exports, "__esModule", {
 exports.nodesList = nodesList;
 exports.nextNode = nextNode;
 exports.previousNode = previousNode;
-function Step(node, depth, index) {
+function Step(node, depth) {
 	this.node = node;
 	this.nodeName = node.nodeName;
 	this.parentNode = node.parentNode;
 	this.nextSibling = node.nextSibling;
 	this.previousSibling = node.previousSibling;
 	this["@@doc-depth"] = depth;
-	this["@@doc-index"] = index;
 }
 
 Step.prototype.nodeType = 17;
@@ -305,49 +304,54 @@ function nodesList(node) {
 	return list;
 }
 
+// nextNode means:
+// descend into firstChild or nextSibling
+// if no more siblings, go back up using Step
+// if Step, firstChild will be skipped, so nextSibling will be retried
 function nextNode(node /* Node */) {
 	var type = node.nodeType,
-	    depth = node["@@doc-depth"] || 0,
-	    index = node["@@doc-index"];
-	if (index === undefined) index = -1;
-	index++;
+	    depth = node["@@doc-depth"] || 0;
+	//index = node["@@doc-index"],
+	//indexInParent = 0;
+	//if(index === undefined) index = -1;
+	//index++;
 	if (type != 17 && node.firstChild) {
 		// if we can still go down, return firstChild
-		depth++;
 		node = node.firstChild;
-		node["@@doc-depth"] = depth;
-		node["@@doc-index"] = index;
+		//indexInParent = node.indexInParent = 0;
+		node["@@doc-depth"] = ++depth;
+		//node["@@doc-index"] = index;
 		return node;
 	} else {
 		// if there are no more children, return a 'Step' to indicate a close
 		// it means we have to continue one or more steps up the path
+		// FIXME we could also directly return the parent's nextSibling
 		if (!node.nextSibling) {
 			//inode = parent;
 			depth--;
 			//console.log("found step", inode._name, indexInParent, depth, inode._depth);
-			while (node["@@doc-depth"] != depth) {
-				node = node.parentNode;
-				if (!node) return;
-			}
-			node = new Step(node, depth, index);
+			node = node.parentNode;
+			if (!node || node["@@doc-depth"] !== depth) return;
+			node = new Step(node, depth);
 			return node;
 		} else {
 			// return the next child
 			node = node.nextSibling;
 			//console.log("found next", inode._name, index);
 			node["@@doc-depth"] = depth;
-			node["@@doc-index"] = index;
 			return node;
 		}
 	}
 }
 
+// FIXME going back means:
+// try previousSibling, else ascend into parentNode
+// if we came from a Step, TODO!!
 function previousNode(node /* Node */) {
 	var type = node.nodeType,
-	    depth = node["@@doc-depth"],
-	    index = node["@@doc-index"];
+	    depth = node["@@doc-depth"];
 	//if(index === undefined) index = -1;
-	index--;
+	//index--;
 	if (type != 17 && node.parentNode) {
 		// if we can still go down, return firstChild
 		depth--;
@@ -897,11 +901,14 @@ var _access = require("./access");
 var _dom = require("./dom");
 
 function same(node, vnode) {
+	if (node === vnode) return true;
+	if (node === undefined || vnode === undefined) return false;
 	var inode = vnode.inode;
 	if (node.nodeType !== vnode.type) return false;
-	//if (node["@@doc-index"] !== vnode.index) return false;
 	if (node["@@doc-depth"] !== inode._depth) return false;
-	if (node.nodeName !== (inode._name + '').toUpperCase()) return false;
+	if (node.nodeValue !== null) {
+		if (node.nodeValue !== vnode.value) return false;
+	} else if (node.nodeName !== (inode._name + '').toUpperCase()) return false;
 	return true;
 }
 
@@ -912,7 +919,9 @@ function render(vnode, root) {
 	// ensure paths by calling iter
 	var domNodes = (0, _dom.nodesList)(root);
 	var i = 0;
-	var skipDepth = 0, append = false;
+	var skipDepth = 0,
+	    append = false,
+	    nextSame = false;
 	var handleNode = function (node) {
 		// TODO this won't work when pushed from server
 		// we could diff an L3 buffer and update the tree (stateless)
@@ -920,43 +929,47 @@ function render(vnode, root) {
 		var type = node.type,
 		    inode = node.inode,
 		    domNode = node.domNode,
-		    prev = domNodes[i];
-		if (prev && same(prev, node)) {
+		    cur = domNodes[i],
+		    next = domNodes[i + 1],
+		    nn = (0, _access.nextNode)(node);
+		var curSame = nextSame || same(cur, node);
+		nextSame = same(next, nn);
+		if (cur && curSame && nextSame) {
 			// skip until next
-			// console.log("same",prev,prev["@@doc-depth"],node.name,inode._depth);
-			node.domNode = prev;
-			skipDepth = prev["@@doc-depth"];
+			// console.log("same",cur,cur["@@doc-depth"],node.name,inode._depth);
+			node.domNode = cur;
+			skipDepth = cur["@@doc-depth"];
 			if (type == 1) parents[inode._depth] = node;
 		} else {
-			if (prev) {
-				if (prev["@@doc-depth"] == inode._depth - 1) {
-					//console.log("append",prev);
+			if (cur) {
+				if (cur["@@doc-depth"] == inode._depth - 1) {
+					//console.log("append",cur);
 					append = true;
-				} else if (prev["@@doc-depth"] == inode._depth + 1) {
-					// console.log("remove",prev);
+				} else if (cur["@@doc-depth"] == inode._depth + 1) {
+					// console.log("remove",cur);
 					// don't remove text, it will be garbage collected
-					if (prev.nodeType == 1) prev.parentNode.removeChild(prev);
+					if (cur.nodeType == 1) cur.parentNode.removeChild(cur);
 					// remove from dom, retry this node
 					// keep node untill everything is removed
 					i++;
 					return handleNode(node);
 				} else {
-					if(type == 1){
-						if (prev.nodeType != 17) prev.parentNode.removeChild(prev);
+					if (type == 1) {
+						if (cur.nodeType != 17) cur.parentNode.removeChild(cur);
 						// remove from dom, retry this node
 						i++;
 						return handleNode(node);
 					} else if (type == 3) {
 						// if we're updating a text node, we should be sure it's the same parent
-						if(prev["@@doc-depth"] == skipDepth + 1){
-							prev.nodeValue = node.value;
+						if (cur["@@doc-depth"] == skipDepth + 1) {
+							cur.nodeValue = node.value;
 						} else {
 							append = true;
 						}
 					}
 				}
 			}
-			if(!prev || append){
+			if (!cur || append) {
 				//console.log("empty",type, append)
 				if (type == 1) {
 					domNode = document.createElement(node.name);
@@ -970,7 +983,7 @@ function render(vnode, root) {
 				node.domNode = domNode;
 			}
 		}
-		if(!append) {
+		if (!append) {
 			i++;
 		} else {
 			append = false;
