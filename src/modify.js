@@ -1,4 +1,6 @@
-import { Node, Value, Step } from './vnode';
+import { Node, Value, Step, restoreNode } from './vnode';
+
+import { lastNode, parent } from './access';
 
 function assertPath(node) {
 	if (node.index < 0) return node;
@@ -9,7 +11,7 @@ function assertPath(node) {
 		let next = nextNode(node);
 		while (next) {
 			next = nextNode(next);
-			if (next.vnode === node.vnode) {
+			if (next.inode === node.inode) {
 				return next;
 			}
 		}
@@ -30,32 +32,32 @@ export function appendChild(node, child) {
 	// check if path to node is set
 	node = assertPath(node);
 	let last = lastNode(node);
-	if(node.type == 9 && node.vnode.size > 0) {
+	if(node.type == 9 && node.inode.size > 0) {
 		throw new Error("Document can only contain one child.");
 	}
 	let index = node.index;
 	// create shallow copy of path down to lastchild of node
 	let path = last.path.slice(0, last.index + 1);
-	//node = cloneNode(node);
+	node = node.clone();
 	node.path = path;
-	if (typeof child.vnode === "function") {
-		child = child.vnode(node);
+	if (typeof child.inode === "function") {
+		child = child.inode(node);
 	} else {
 		child = assertNotInPath(child);
 	}
 	// overwrite parent in prevNode
-	node.vnode = restoreNode(child.parent,node.vnode);
+	node.inode = restoreNode(child.parent,node.inode);
 	if(node.index < 0) return node;
-	node.parent = restoreNode(node.parent.push(node.vnode),node.parent);
+	node.parent = restoreNode(node.parent.set(node.name,node.inode),node.parent);
 	node.path[node.index] = node;
 	child = node;
-	while (node.vnode._depth > 0) {
+	while (node.inode._depth > 1) {
 		// overwrite parent in prevNode
-		node = parent(node);
-		node.vnode = child.parent;
+		node = parent(node).clone();
+		node.inode = child.parent;
 		node.path = path;
 		node.path[node.index] = node;
-		node.parent = restoreNode(node.parent.push(node.vnode),node.parent);
+		node.parent = restoreNode(node.parent.set(node.name,node.inode),node.parent);
 		if(node.parent._type == 9) break;
 		child = node;
 	}
@@ -71,5 +73,33 @@ function insertBefore(node,elem){
 	node.path = path;
 	// create elem from parent
 	// pass insertBefore index
-	if(typeof elem.vnode == "function") elem = elem.vnode(node.parent,index);
+	if(typeof elem.inode == "function") elem = elem.inode(node.parent,index);
+}
+
+export function removeChild(node,child){
+	node = assertPath(node);
+	child = assertPath(child);
+	let index = node.index;
+	// shallow copy up to, but not including, child
+	let path = child.path.slice(0, child.index);
+	let inode = node.inode.removeValue(child.name,child.inode);
+	node = node.clone();
+	node.path = path;
+	// overwrite parent in prevNode
+	node.inode = restoreNode(inode,node.inode);
+	if(node.index < 0) return node;
+	node.parent = restoreNode(node.parent.set(node.name,node.inode),node.parent);
+	node.path[node.index] = node;
+	child = node;
+	while (node.inode._depth > 1) {
+		// overwrite parent in prevNode
+		node = parent(node).clone();
+		node.inode = child.parent;
+		node.path = path;
+		node.path[node.index] = node;
+		node.parent = restoreNode(node.parent.set(node.name,node.inode),node.parent);
+		if(node.parent._type == 9) break;
+		child = node;
+	}
+	return node.path[index];
 }
