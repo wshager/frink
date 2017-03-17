@@ -2,7 +2,7 @@ import * as sax from 'sax';
 
 import { EventEmitter } from 'events';
 
-import { Node, Value, Step, emptyVNode, emptyAttrMap, restoreNode } from './vnode';
+import { Value, emptyINode, emptyAttrMap } from './vnode';
 
 import { stripBOM } from "./bom";
 
@@ -20,7 +20,7 @@ export class Parser extends EventEmitter {
 		this.reset();
 	}
 	reset() {
-		var doc = emptyVNode(9,"#document",-1,emptyAttrMap()), depth = 0;
+		var doc = emptyINode(9,"#document",0,emptyAttrMap()), depth = 0;
 		var last = doc, parents = [];
 		this.removeAllListeners();
 		saxParser.errThrown = false;
@@ -68,9 +68,9 @@ export class Parser extends EventEmitter {
 				//ret = ret.concat(attribute(attr.uri ? qname(attr.uri, attr.name) : attr.name, attr.value));
 				attrMap = attrMap.set(attr.name,attr.value);
 			}
-			let n = emptyVNode(nodeType,nodeName,depth,attrMap.endMutation(true));
+			let n = emptyINode(nodeType,nodeName,depth,attrMap.endMutation(true));
 			if(last) {
-				last = last.push(nodeName,n);
+				last = last.push([nodeName,n]);
 				parents.push(last);
 			}
 			last = n;
@@ -93,7 +93,7 @@ export class Parser extends EventEmitter {
 			if (/\S/.test(value)) {
 				let name = last.count() + 1;
 				let n = new Value(type,name,value,depth+1);
-				last = last.push(name,n);
+				last = last.push([name,n]);
 			}
 		};
 		saxParser.ontext = ontext;
@@ -157,7 +157,7 @@ function _inherits(subClass, superClass) {
 	Object.setPrototypeOf(subClass, superClass);
 }
 
-_inherits(VNode,OrderedMap);
+_inherits(INode,OrderedMap);
  */
 
  /*
