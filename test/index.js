@@ -2,56 +2,59 @@ const fs = require("fs");
 const WebSocket = require('ws');
 const microtime = require("microtime");
 
-const xvptree = require("../lib/index");
+const frink = require("../lib/index");
 
 var xml = fs.readFileSync(__dirname+"/test.xml",'utf-8',function(err){
     if(err) throw new Error(err);
 });
 
-var html = `<html>
-    <head>
-        <title>Title</title>
-    </head>
-    <body>
-        <p>dit is een alinea</p>
-        <p>dit is nog een alinea</p>
-        <p>dit is nog een alinea</p>
-    </body>
-</html>`;
+var html = fs.readFileSync(__dirname+"/test.html",'utf-8',function(err){
+    if(err) throw new Error(err);
+});
+
+
 var e,s = microtime.now();
-xvptree.parseString(xml,function(err,out){
+frink.parseString(html,function(err,out){
 	if(err) console.error(err);
     e = microtime.now();
     console.log((e - s)/1000);
     var str = "";
     var x;
+    //var iter = frink.docIter(out);
+    frink.iter(out,function(n){
+        //if(n.type==17) console.log("closing ",n.inode._name); else console.log("node:",n.name,n.value, n.inode && n.inode._attrs ? n.inode._attrs.fold((z,x) => z += x,"") : "");
+    });
     s = microtime.now();
-    var iter = xvptree.docIter(out);
-    for(let n of iter) {
-        if(n.type==17) console.log("closing ",n.vnode._name); else console.log("node:",n.name);
-    }
-    //console.log(out.toString())
-    //console.log((microtime.now() - s)/1000);
-    return;
-    //return;
-    //console.log(out.toString())
-    //var root = iter.next().value;
-    s = microtime.now();
-    //var c = xvptree.firstChild(root);
-    //var d = xvptree.childrenByName(root,"body");
+    str = out.toString();
     e = microtime.now();
-//    console.log(d.toString());
-    console.log((e - s)/1000);
-    //var elm = xvptree.elem("test",[xvptree.text("text")]);
-    //d = xvptree.appendChild(d.get(0),elm);
+    console.log("tostr",(e - s)/1000);
+    //let next = frink.appendChild(frink.firstChild(out),frink.elem("div",[frink.text("NEW TEXT")]));
+    s = microtime.now();
+    //str = frink.stringify(out);
+    e = microtime.now();
+    //console.log(str);
+    console.log("frinkify",(e - s)/1000);
+    //return;
+    //console.log(next.toString())
+    //var root = frink.firstChild(out);
+    //var c = frink.firstChild(root);
+    //root = frink.removeChild(root, c);
+    //s = microtime.now();
+    //root.children;
+    //var d = frink.childrenByName(c,"journal-meta");
+    //e = microtime.now();
+    //console.log("c",(e - s)/1000);
+    //var elm = frink.elem("p",[frink.text("text")]);
+    //var d = frink.appendChild(root,elm);
     //console.log(d.toString());
     s = microtime.now();
-    var l3 = xvptree.toL3(out);
+    //console.log(out)
+    var l3 = frink.toL3(out);
     e = microtime.now();
     console.log((e - s)/1000);
     console.log(l3);
     s = microtime.now();
-    var ret = xvptree.fromL3(l3);
+    var ret = frink.fromL3(l3);
     e = microtime.now();
     //console.log(ret.toString());
     console.log((e - s)/1000);
@@ -67,17 +70,18 @@ ws.on('open', function open() {
   }),function(res){
     console.log("has shaked",res);
     ws.send(l3);
+    ws.close();
   });
 });
     //console.log(node.type == 17 ? "closing "+node.vnode.name : node.nameOrValue);
     //console.log(out.get("html").get("body").toString())
     //console.log(out.get("html").getByIndex(1).toString())
 
-    //console.log(xvptree.stringify(out))
+    //console.log(frink.stringify(out))
     //console.log(out.toString())
     //console.log(c._parent.toString());
-    //var b = xvptree.firstChild(out2);
-    //b = xvptree.nextSibling(b);
+    //var b = frink.firstChild(out2);
+    //b = frink.nextSibling(b);
 
     //console.log(x);
 	//console.log((e - s)/1000);
