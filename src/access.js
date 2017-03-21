@@ -21,53 +21,44 @@ export function* docIter(node, reverse = false) {
 export function nextNode(node /* VNode */) {
 	var type = node.type,
 		inode = node.inode,
-		path = node.path,
-		index = node.index,
 		parent = node.parent,
-		indexInParent = node.indexInParent;
+		indexInParent = node.indexInParent || 0;
 	var depth = inode._depth;
-	index++;
-	if(path[index]) {
-		return path[index];
-	}
 	if(type != 17 && inode.count() > 0) {
 		// if we can still go down, return firstChild
 		depth++;
 		indexInParent = 0;
-		parent = inode;
+		parent = node;
 		inode = inode.first();
 		// TODO handle arrays
 		//console.log("found first", inode._name,index);
-		node = new VNode(inode, inode._type, inode._name, inode._value, path, index, parent, indexInParent);
-		node.path.push(node);
+		node = new VNode(inode, inode._type, inode._name, inode._value, parent, indexInParent);
+		//node.path.push(node);
 		return node;
 	} else {
 		indexInParent++;
 		// if there are no more children, return a 'Step' to indicate a close
 		// it means we have to continue one or more steps up the path
-		if (parent.count() == indexInParent) {
+		if (parent.inode.count() == indexInParent) {
 			//inode = parent;
 			depth--;
 			//console.log("found step", inode._name, indexInParent, depth, inode._depth);
-			let i = index;
-			while(inode._depth != depth){
-				node = path[--i];
-				if(!node) return;
-				inode = node.inode;
-			}
-			node = new Step(inode, path, index, node.parent, node.indexInParent);
-			node.path.push(node);
+			node = node.parent;
+			if (depth === 0 || !node) return;
+			inode = node.inode;
+			node = new Step(inode, node.parent, node.indexInParent);
+			//node.path.push(node);
 			return node;
 		} else {
 			// return the next child
-			inode = parent.next(inode._name, inode, path[index-1]);
+			inode = parent.inode.next(inode._name, inode);
 			if (inode) {
 				//console.log("found next", inode._name, index);
-				node = new VNode(inode, inode._type, inode._name, inode._value, path, index, parent, indexInParent);
-				node.path.push(node);
+				node = new VNode(inode, inode._type, inode._name, inode._value, parent, indexInParent);
+				//node.path.push(node);
 				return node;
 			}
-			throw new Error("Node "+parent._name+" hasn't been completely traversed. Found "+ indexInParent + ", contains "+ parent.count());
+			throw new Error("Node "+parent.name+" hasn't been completely traversed. Found "+ indexInParent + ", contains "+ parent.inode.count());
 		}
 	}
 }
@@ -142,12 +133,11 @@ export function nextSibling(node){
 }
 */
 export function nextSibling(node){
-	var pvnode = node.parent,
-		i = node.indexInParent+1;
-	var next = pvnode.next(node.name,node.inode);
+	var parent = node.parent;
+	var next = parent.inode.next(node.name,node.inode);
 	// create a new node
 	// very fast, but now we haven't updated path, so we have no index!
-	if(next) return new VNode(next,next.type,next.name,node.path,-1,pvnode,i);
+	if(next) return new VNode(next,next.type,next.name,next.value,parent,node.indexInParent+1);
 }
 
 export function* children(node){
@@ -155,7 +145,7 @@ export function* children(node){
 	var i = 0, iter = inode.values();
 	while(!iter.done){
 		let c = iter.next().value;
-		yield new VNode(c,c.type,c.name,node.path,-1,inode,i);
+		yield new VNode(c,c.type,c.name,c.value,node,i);
 		i++;
 	}
 }
@@ -164,28 +154,30 @@ export function childrenByName(node, name) {
 	var hasWildcard = /\*/.test(name);
 	if (hasWildcard) {
 		var regex = new RegExp(name.replace(/\*/, "(\\w[\\w0-9-_]*)"));
-		var xf = compose(filter(c => regex.test(c.name),forEach((c, i) => new VNode(c, c._type, c._name, c._value, node.path, -1, node.inode, i))));
+		var xf = compose(filter(c => regex.test(c.name),forEach((c, i) => new VNode(c, c._type, c._name, c._value, node, i))));
 		return new LazySeq(transform(node.inode,xf));
 	} else {
 		let entry = node.inode.get(name);
 		if(entry === undefined) return new LazySeq();
 		if (entry.constructor == Array) {
-			return new LazySeq(forEach(c => new VNode(c, c._type, c._name, c._value, node.path, -1, node.inode)));
+			return new LazySeq(forEach(c => new VNode(c, c._type, c._name, c._value, node.inode)));
 		} else {
-			return new LazySeq([new VNode(entry, entry._type, entry._name, entry._value, node.path, -1, node.inode)]);
+			return new LazySeq([new VNode(entry, entry._type, entry._name, entry._value, node.inode)]);
 		}
 	}
 }
 
 
 export function getRoot(node) {
-	return node.path[0];
+	do {
+		node = node.parent;
+	} while(node.parent);
+	return node;
 }
 
 export function getDoc(node) {
-	if(node.index < 0) return node;
-	var inode = getRoot(node).parent;
-	return new VNode(inode, inode._type, inode._name, null, node.path, -1);
+	if(!node.inode) return ensureRoot(node).parent;
+	return getRoot(node);
 }
 
 export function lastNode(node){
@@ -203,33 +195,12 @@ export function lastNode(node){
 }
 
 export function parent(node) {
-	// path walking version of parent
-	if(!node.inode) return;
-	var inode = node.inode,
-	    path = node.path,
-	    i = node.index - 1;
-	var depth = inode._depth - 1;
-	// run up path
-	while (inode._depth != depth) {
-		node = path[i--];
-		if (!node || node.parent._type==9) break;
-		if (node.type == 17) continue;
-		inode = node.inode;
-	}
-	return node;
-}
-
-export function doc(node){
-	while(node.parent){
-		node = node.parent;
-	}
-	return node;
+	return node.parent;
 }
 
 function ensureRoot(node){
 	let root = node.first();
-	node = new VNode(root, root._type, root._name, root._value, [], 0, node, 0);
-	node.path.push(node);
+	node = new VNode(root, root._type, root._name, root._value, new VNode(node,node._type,node._name), 0);
 	return node;
 }
 
