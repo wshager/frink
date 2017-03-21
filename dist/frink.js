@@ -291,8 +291,9 @@ const pack = (edit, count, removed, elements) => {
     @param n2 Node 2.
 */
 const mergeLeaves = (edit, shift, h1, n1, h2, n2) => {
-    if (h1 === h2) return Collision(edit, h1, [n2, n1]);
-
+    if (h1 === h2) {
+        return Collision(edit, h1, [n2, n1]);
+    }
     const subH1 = hashFragment(shift, h1);
     const subH2 = hashFragment(shift, h2);
     return IndexedNode(edit, toBitmap(subH1) | toBitmap(subH2), subH1 === subH2 ? [mergeLeaves(edit, shift + SIZE, h1, n1, h2, n2)] : subH1 < subH2 ? [n1, n2] : [n2, n1]);
@@ -531,7 +532,7 @@ function getLeafOrMulti(node, hash, key) {
             }
         }
     }
-    if (node.key === key) return node;
+    if (!!node && node.key === key) return node;
 }
 
 function getLeafFromMulti(node, id) {
@@ -1124,6 +1125,7 @@ Map.prototype.count = function () {
 Object.defineProperty(Map.prototype, 'size', {
     get: Map.prototype.count
 });
+
 },{}],2:[function(require,module,exports){
 "use strict";
 
@@ -1474,6 +1476,7 @@ function nextNode(node /* Node */) {
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+exports.uncompress = exports.compress = exports.render = exports.toL3 = exports.fromL3 = exports.childrenByName = exports.children = exports.parent = exports.nextSibling = exports.firstChild = exports.nextNode = exports.docIter = exports.removeChild = exports.insertBefore = exports.appendChild = exports.qname = exports.processingInstruction = exports.comment = exports.cdata = exports.text = exports.attr = exports.elem = undefined;
 
 var _vnode = require("./vnode");
 
@@ -1609,24 +1612,36 @@ Object.defineProperty(exports, "render", {
     return _render.render;
   }
 });
-},{"./access":2,"./l3":5,"./modify":6,"./render":8,"./vnode":11}],5:[function(require,module,exports){
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-	value: true
-});
-exports.toL3 = toL3;
-exports.fromL3 = fromL3;
 
 var _fastintcompression = require("fastintcompression");
 
 var _fastintcompression2 = _interopRequireDefault(_fastintcompression);
 
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+const compress = _fastintcompression2.default.compress;
+const uncompress = _fastintcompression2.default.uncompress;
+
+exports.compress = compress;
+exports.uncompress = uncompress;
+},{"./access":2,"./l3":5,"./modify":6,"./render":8,"./vnode":11,"fastintcompression":12}],5:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+exports.str2array = str2array;
+exports.array2str = array2str;
+exports.convert = convert;
+exports.toL3 = toL3;
+exports.fromL3 = fromL3;
+
 var _vnode = require("./vnode");
 
 var _access = require("./access");
 
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+// optional:
+//import FastIntCompression from "fastintcompression";
 
 function str2array(str, ar = []) {
 	for (var i = 0, strLen = str.length; i < strLen; i++) {
@@ -1642,6 +1657,13 @@ function array2str(ar, i) {
 		str += String.fromCodePoint(ar[i]);
 	}
 	return str;
+}
+
+function convert(v) {
+	var i = parseFloat(v);
+	if (!isNaN(i)) return i;
+	if (v === "true" || v === "false") return v !== "false";
+	return v;
 }
 
 function docAttrType(k) {
@@ -1681,7 +1703,8 @@ function toL3(doc) {
 		    inode = node.inode,
 		    depth = inode._depth,
 		    name = node.name;
-		if (type == 1) {
+		var nameIndex = 0;
+		if (typeof name === "string") {
 			if (!names[name]) {
 				names[name] = i;
 				i++;
@@ -1689,10 +1712,13 @@ function toL3(doc) {
 				out.push(15);
 				out = str2array(name, out);
 			}
-			out.push(0);
-			out.push(type);
-			out.push(depth);
-			out.push(names[name]);
+			nameIndex = names[name];
+		}
+		out.push(0);
+		out.push(type);
+		out.push(depth);
+		if (nameIndex) out.push(nameIndex);
+		if (type == 1) {
 			for (let attr of inode._attrs.entries()) {
 				let name = attr[0],
 				    attrname = "@" + name;
@@ -1708,65 +1734,53 @@ function toL3(doc) {
 				out.push(names[attrname]);
 				out = str2array(attr[1], out);
 			}
-		} else if (type == 3) {
-			out.push(0);
-			out.push(type);
-			out.push(depth);
-			out = str2array(node.value, out);
+		} else if (type == 3 || type == 12) {
+			out = str2array(node.value + "", out);
 		}
 	});
-	return _fastintcompression2.default.compress(out);
+	// remove first 0
+	out.shift();
+	return out;
 }
 
-function fromL3(buf) {
-	var l3 = _fastintcompression2.default.uncompress(buf);
+function fromL3(l3) {
 	var names = {},
-	    n = 1,
+	    n = 0,
 	    parents = [],
-	    depth = 0,
-	    c = 0;
+	    depth = 0;
 	var doc = (0, _vnode.emptyINode)(9, "#document", 0, (0, _vnode.emptyAttrMap)());
 	parents[0] = doc;
-	function process(entry) {
-		var type = entry[0];
-		switch (type) {
-			case 1:
-				{
-					depth = entry[1];
-					if (parents[depth]) parents[depth] = parents[depth].endMutation();
-					let name = names[entry[2]];
-					let node = (0, _vnode.emptyINode)(type, name, depth, (0, _vnode.emptyAttrMap)());
-					let parent = parents[depth - 1];
-					if (parent) parent = parent.push([name, node]);
-					parents[depth] = node;
-					break;
-				}
-			case 2:
-				{
-					let name = names[entry[1]];
-					let parent = parents[depth];
-					parent._attrs = parent._attrs.push([name, array2str(entry, 2)]);
-					break;
-				}
-			case 3:
-				{
-					depth = entry[1];
-					let parent = parents[depth - 1];
-					let name = parent.count();
-					let node = new _vnode.Value(type, name, array2str(entry, 2), depth);
-					parent = parent.push([name, node]);
-					break;
-				}
-			case 7:
-			case 10:
-				doc._attrs = doc._attrs.push([entry[1], array2str(entry, 2)]);
-				break;
-			case 15:
-				names[n] = array2str(entry, 1);
-				n++;
-				break;
+	const process = function (entry) {
+		let type = entry[0];
+		// TODO have attributes accept any type
+		if (type == 2) {
+			let parent = parents[depth];
+			let name = names[entry[1]];
+			parent._attrs = parent._attrs.push([name, array2str(entry, 2)]);
+		} else if (type == 7 || type == 10) {
+			doc._attrs = doc._attrs.push([entry[1], array2str(entry, 2)]);
+		} else if (type == 15) {
+			n++;
+			names[n] = array2str(entry, 1);
+		} else {
+			depth = entry[1];
+			let parent = parents[depth - 1];
+			let isArray = !!parent && parent._type == 5;
+			let valIndex = isArray ? 2 : 3;
+			let name = isArray ? parent.count() : names[entry[2]];
+			var node;
+			if (type == 1 || type == 5 || type == 6) {
+				if (parents[depth]) parents[depth] = parents[depth].endMutation();
+				node = (0, _vnode.emptyINode)(type, name, depth, (0, _vnode.emptyAttrMap)());
+				parents[depth] = node;
+			} else if (type == 3) {
+				node = new _vnode.Value(type, name, array2str(entry, valIndex), depth);
+			} else if (type == 12) {
+				node = new _vnode.Value(type, name, convert(array2str(entry, valIndex)), depth);
+			}
+			if (parent) parent = !isArray ? parent.push([name, node]) : parent.push(node);
 		}
-	}
+	};
 	var entry = [];
 	for (var i = 0, l = l3.length; i < l; i++) {
 		if (l3[i] === 0) {
@@ -1779,7 +1793,7 @@ function fromL3(buf) {
 	process(entry);
 	return parents[0].endMutation();
 }
-},{"./access":2,"./vnode":11,"fastintcompression":12}],6:[function(require,module,exports){
+},{"./access":2,"./vnode":11}],6:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -1989,6 +2003,7 @@ function same(node, vnode) {
 	} else {
 		if (vnode.value !== undefined) return false;
 		if (node.nodeName !== (inode._name + '').toUpperCase()) return false;
+		if (node.children.length !== inode.count()) return false;
 		if (node.id && inode._attrs.get("id") !== node.id) return false;
 		if (node.className && inode._attrs.get("class") !== node.className) return false;
 	}
@@ -2396,8 +2411,10 @@ Value.prototype.count = function () {
 
 Value.prototype.size = 0;
 
-Value.prototype.toString = function (doc) {
-	return this._value + "";
+Value.prototype.toString = function (root = true, json = false) {
+	var str = this._value + "";
+	if (this._type == 3 && json) return '"' + str + '"';
+	return str;
 };
 
 function VNode(inode, type, name, value, path, index, parent, indexInParent) {
@@ -2479,18 +2496,18 @@ function elemToString(e) {
 
 var OrderedMap = ohamt.empty.constructor;
 
-OrderedMap.prototype.toString = function (root = true) {
+OrderedMap.prototype.toString = function (root = true, json = false) {
 	var str = "";
 	var type = this._type;
 	const docAttrFunc = (z, v, k) => z += k == "DOCTYPE" ? "<!" + k + " " + v + ">" : "<?" + k + " " + v + "?>";
-	const objFunc = (acc, v, k) => acc += "\"" + k + "\":" + v;
+	const objFunc = kv => "\"" + kv[0] + "\":" + kv[1].toString(false, true);
 	if (type == 1) {
 		str += elemToString(this);
-	} else if (type == 3) {
+	} else if (type == 3 || type == 12) {
 		str += this.toString();
 	} else if (type == 6) {
 		str += "{";
-		str = this.reduce(objFunc, str);
+		str += (0, _transducers.into)(this, (0, _transducers.forEach)(objFunc), []).join(",");
 		str += "}";
 	} else if (type == 9) {
 		str = this._attrs.reduce(docAttrFunc, str);
@@ -2503,10 +2520,10 @@ OrderedMap.prototype.toString = function (root = true) {
 
 var List = rrb.empty.constructor;
 
-List.prototype.toString = function () {
+List.prototype.toString = function (root = true, json = false) {
 	var str = "[";
 	for (var i = 0, l = this.size; i < l;) {
-		str += this.get(i).toString();
+		str += this.get(i).toString(false, true);
 		i++;
 		if (i < l) str += ",";
 	}
@@ -3377,6 +3394,19 @@ Tree.prototype.endMutation = function () {
 	this.editable = false;
 	return this;
 };
+
+Tree.prototype.count = function(){
+	return this.size;
+};
+
+Tree.prototype.first = function(){
+	return this.get(0);
+};
+
+Tree.prototype.next = function(idx){
+	return this.get(idx+1);
+};
+
 },{"./concat":13,"./const":14,"./slice":15,"./util":17}],17:[function(require,module,exports){
 "use strict";
 
