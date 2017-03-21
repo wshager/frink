@@ -12,6 +12,7 @@ function same(node,vnode){
 	} else {
 		if(vnode.value !== undefined) return false;
 		if(node.nodeName !== (inode._name+'').toUpperCase()) return false;
+		if(node.children.length !== inode.count()) return false;
 		if(node.id && inode._attrs.get("id") !== node.id) return false;
 		if(node.className && inode._attrs.get("class") !== node.className) return false;
 	}
