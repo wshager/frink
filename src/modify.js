@@ -30,38 +30,32 @@ function assertNotInPath(child) {
 
 export function appendChild(node, child) {
 	// check if path to node is set
-	node = assertPath(node);
+	//node = assertPath(node);
 	let last = lastNode(node);
 	if(node.type == 9 && node.inode.size > 0) {
 		throw new Error("Document can only contain one child.");
 	}
 	let index = node.index;
 	// create shallow copy of path down to lastchild of node
-	let path = last.path.slice(0, last.index + 1);
+	//let path = last.path.slice(0, last.index + 1);
 	node = node.clone();
-	node.path = path;
+	//node.path = path;
 	if (typeof child.inode === "function") {
-		child = child.inode(node);
+		child.inode(node);
 	} else {
-		child = assertNotInPath(child);
+		// TODO FIXME check if child exists as-is
+		//child = assertNotInPath(child);
+		//child = child.clone();
 	}
 	// overwrite parent in prevNode
-	node.inode = restoreNode(child.parent,node.inode);
-	if(node.index < 0) return node;
-	node.parent = restoreNode(node.parent.set(node.name,node.inode),node.parent);
-	node.path[node.index] = node;
-	child = node;
-	while (node.inode._depth > 1) {
-		// overwrite parent in prevNode
-		node = parent(node).clone();
-		node.inode = child.parent;
-		node.path = path;
-		node.path[node.index] = node;
-		node.parent = restoreNode(node.parent.set(node.name,node.inode),node.parent);
-		if(node.parent._type == 9) break;
+	//node.inode = restoreNode(child.parent,node.inode);
+	//if(node.index < 0) return node;
+	while (node.parent.type != 9) {
 		child = node;
+		node = node.parent.clone();
+		node.inode = restoreNode(node.inode.set(child.name,child.inode),node.inode);
 	}
-	return node.path[index];
+	return node;
 }
 
 function insertBefore(node,elem){
