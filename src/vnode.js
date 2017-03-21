@@ -19,8 +19,10 @@ Value.prototype.count = function(){
 
 Value.prototype.size = 0;
 
-Value.prototype.toString = function(doc) {
-	return this._value + "";
+Value.prototype.toString = function(root = true, json = false) {
+	var str = this._value + "";
+	if(this._type == 3 && json) return '"'+str+'"';
+	return str;
 };
 
 export function VNode(inode,type,name,value,path,index,parent,indexInParent){
@@ -102,19 +104,19 @@ function elemToString(e){
 
 var OrderedMap = ohamt.empty.constructor;
 
-OrderedMap.prototype.toString = function(root = true){
+OrderedMap.prototype.toString = function(root = true, json = false){
 	var str = "";
 	var type = this._type;
 	const docAttrFunc = (z,v,k) =>
 		z += k=="DOCTYPE" ? "<!"+k+" "+v+">" : "<?"+k+" "+v+"?>";
-	const objFunc = (acc,v,k) => acc += "\""+k+"\":"+v;
+	const objFunc = (kv) => "\""+kv[0]+"\":"+kv[1].toString(false,true);
 	if(type==1) {
 		str += elemToString(this);
-	} else if(type==3){
+	} else if(type==3 || type == 12){
 		str += this.toString();
 	} else  if(type == 6){
 		str += "{";
-		str = this.reduce(objFunc,str);
+		str += into(this,forEach(objFunc),[]).join(",");
 		str += "}";
 	} else if(type==9){
 		str = this._attrs.reduce(docAttrFunc,str);
@@ -127,10 +129,10 @@ OrderedMap.prototype.toString = function(root = true){
 
 var List = rrb.empty.constructor;
 
-List.prototype.toString = function(){
+List.prototype.toString = function(root = true, json = false){
 	var str = "[";
 	for(var i=0,l = this.size; i < l; ){
-		str += this.get(i).toString();
+		str += this.get(i).toString(false,true);
 		i++;
 		if(i<l) str += ",";
 	}
