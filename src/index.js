@@ -13,4 +13,4 @@ export { iter, docIter, nextNode, firstChild, nextSibling, parent, children, chi
 
 export { fromL3, toL3 } from "./l3";
 
-export { fromJS, toJS } from "./json";
+export { fromJS, toJS, iter as iterJS, toL3 as jsToL3, fromL3 as jsFromL3 } from "./json";
