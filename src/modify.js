@@ -15,7 +15,6 @@ export function appendChild(node, child) {
 	} else {
 		// TODO make protective clone (of inode)
 	}
-
 	while (node.parent) {
 		child = node;
 		node = node.parent;
@@ -25,16 +24,20 @@ export function appendChild(node, child) {
 	return node.type == 9 ? firstChild(node) : node;
 }
 
-function insertBefore(node,elem){
-	node = assertPath(node);
-	// find indexInParent
-	let index = node.indexInParent;
-	// discard path from node down
-	let path = node.path.slice(0, node.index + 1);
-	node.path = path;
-	// create elem from parent
-	// pass insertBefore index
-	if(typeof elem.inode == "function") elem = elem.inode(node.parent,index);
+export function insertBefore(node,ins){
+	node = ensureRoot(node);
+	let parent = node.parent;
+	if(typeof ins.inode == "function") {
+		ins.inode(parent,node);
+	}
+	node = parent;
+	while (node.parent) {
+		ins = node;
+		node = node.parent;
+		node.inode = restoreNode(node.inode.set(ins.name,ins.inode),node.inode);
+	}
+	// this ensures immutability
+	return node.type == 9 ? firstChild(node) : node;
 }
 
 export function removeChild(node,child){

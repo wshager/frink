@@ -32,7 +32,7 @@
     "bufferutil": "^3.0.0",
     "events": "^1.1.1",
     "fastintcompression": "0.0.1",
-    "ohamt": "0.0.3",
+    "ohamt": "*",
     "rrb-vector": "*",
     "sax": "*"
   },
