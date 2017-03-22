@@ -40,11 +40,12 @@ export function VNode(inode,type,name,value,parent,indexInParent){
 }
 
 VNode.prototype.toString = function(){
-	return this.inode.toString();
+	var root = ensureRoot(this);
+	return root.inode.toString();
 };
 
 VNode.prototype.clone = function(){
-	return new VNode(this.inode,this.type,this.name,this.value,this.this.parent,this.indexInParent);
+	return new VNode(this.inode,this.type,this.name,this.value,this.parent,this.indexInParent);
 };
 
 export function Step(inode,parent,indexInParent){
@@ -146,13 +147,11 @@ export function map(name,children){
  * @return {[type]}          [description]
  */
 export function elem(name, children) {
-	var node = new VNode(function (parent, insertIndex = -1) {
+	var node = new VNode(function (parent, ref) {
 		var attrMap = ohamt.empty.beginMutation();
 		let pinode = parent.inode;
 		let inode = emptyINode(1, name, pinode._depth + 1, attrMap);
 		node.inode = inode;
-		// TODO remove indexInParent
-		node.indexInParent = pinode.count();
 		for (let i = 0; i < children.length; i++) {
 			let child = children[i];
 			if (child.type == 2) {
@@ -168,8 +167,8 @@ export function elem(name, children) {
 		// insert into the parent means: update all parents until we come to the root
 		// but the parents of my parent will be updated elsewhere
 		// we just mutate the parent, because it was either cloned or newly created
-		if (insertIndex > -1) {
-			//pinode = pinode.insert(insertIndex, node.inode);
+		if (ref !== undefined) {
+			parent.inode = restoreNode(pinode.insertBefore([ref.name,ref.inode],[node.name,node.inode]), pinode);
 		} else {
 			// FIXME check the parent type
 			parent.inode = restoreNode(pinode.push([node.name,node.inode]), pinode);
@@ -197,5 +196,17 @@ export function text(value) {
 }
 
 export function document() {
-	return new VNode(emptyINode(9,"#document",0,ohamt.empty), 9, "#document", null, [], -1);
+	return new VNode(emptyINode(9,"#document",0,ohamt.empty), 9, "#document");
+}
+
+export function ensureRoot(node){
+	if(!node.inode) {
+		let root = node.first();
+		return new VNode(root, root._type, root._name, root._value, new VNode(node,node._type,node._name), 0);
+	}
+	if(typeof node.inode === "function") {
+		node.inode(document());
+		return node;
+	}
+	return node;
 }
