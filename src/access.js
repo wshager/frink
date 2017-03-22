@@ -1,4 +1,4 @@
-import { VNode, Step } from './vnode';
+import { VNode, Step, ensureRoot } from './vnode';
 
 import { compose, transform, forEach, filter } from "./transducers";
 
@@ -7,14 +7,11 @@ import { LazySeq } from "./seq";
 import { prettyXML } from "./pretty";
 
 export function* docIter(node, reverse = false) {
+	node = ensureRoot(node);
+	yield node;
 	while (node) {
-		if (!node.inode) {
-			node = ensureRoot(node);
-			yield node;
-		} else {
-			node = nextNode(node);
-			if(node) yield node;
-		}
+		node = nextNode(node);
+		if(node) yield node;
 	}
 }
 
@@ -109,7 +106,8 @@ export function stringify(input){
 }
 
 export function firstChild(node, fltr = 0) {
-	if(!node.inode) return ensureRoot(node);
+	// FIXME return root if doc (or something else?)
+	node = ensureRoot(node);
 	var next = nextNode(node);
 	if (node.inode._depth == next.inode._depth - 1) return next;
 }
@@ -133,6 +131,7 @@ export function nextSibling(node){
 }
 */
 export function nextSibling(node){
+	node = ensureRoot(node);
 	var parent = node.parent;
 	var next = parent.inode.next(node.name,node.inode);
 	// create a new node
@@ -176,7 +175,7 @@ export function getRoot(node) {
 }
 
 export function getDoc(node) {
-	if(!node.inode) return ensureRoot(node).parent;
+
 	return getRoot(node);
 }
 
@@ -198,25 +197,16 @@ export function parent(node) {
 	return node.parent;
 }
 
-function ensureRoot(node){
-	let root = node.first();
-	node = new VNode(root, root._type, root._name, root._value, new VNode(node,node._type,node._name), 0);
-	return node;
-}
-
 export function iter(node, f) {
 	// FIXME pass doc?
 	var i=0,prev;
 	if(!f) f = (node) => {prev = node;};
+	node = ensureRoot(node);
+	f(node,i++);
 	while (node) {
-		if (!node.inode) {
-			node = ensureRoot(node);
+		node = nextNode(node);
+		if(node) {
 			f(node,i++);
-		} else {
-			node = nextNode(node);
-			if(node) {
-				f(node,i++);
-			}
 		}
 	}
 	return prev;
