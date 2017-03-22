@@ -1155,14 +1155,11 @@ var _seq = require("./seq");
 var _pretty = require("./pretty");
 
 function* docIter(node, reverse = false) {
+	node = (0, _vnode.ensureRoot)(node);
+	yield node;
 	while (node) {
-		if (!node.inode) {
-			node = ensureRoot(node);
-			yield node;
-		} else {
-			node = nextNode(node);
-			if (node) yield node;
-		}
+		node = nextNode(node);
+		if (node) yield node;
 	}
 }
 
@@ -1257,7 +1254,8 @@ function stringify(input) {
 }
 
 function firstChild(node, fltr = 0) {
-	if (!node.inode) return ensureRoot(node);
+	// FIXME return root if doc (or something else?)
+	node = (0, _vnode.ensureRoot)(node);
 	var next = nextNode(node);
 	if (node.inode._depth == next.inode._depth - 1) return next;
 }
@@ -1281,6 +1279,7 @@ export function nextSibling(node){
 }
 */
 function nextSibling(node) {
+	node = (0, _vnode.ensureRoot)(node);
 	var parent = node.parent;
 	var next = parent.inode.next(node.name, node.inode);
 	// create a new node
@@ -1324,7 +1323,7 @@ function getRoot(node) {
 }
 
 function getDoc(node) {
-	if (!node.inode) return ensureRoot(node).parent;
+
 	return getRoot(node);
 }
 
@@ -1346,12 +1345,6 @@ function parent(node) {
 	return node.parent;
 }
 
-function ensureRoot(node) {
-	let root = node.first();
-	node = new _vnode.VNode(root, root._type, root._name, root._value, new _vnode.VNode(node, node._type, node._name), 0);
-	return node;
-}
-
 function iter(node, f) {
 	// FIXME pass doc?
 	var i = 0,
@@ -1359,15 +1352,12 @@ function iter(node, f) {
 	if (!f) f = node => {
 		prev = node;
 	};
+	node = (0, _vnode.ensureRoot)(node);
+	f(node, i++);
 	while (node) {
-		if (!node.inode) {
-			node = ensureRoot(node);
+		node = nextNode(node);
+		if (node) {
 			f(node, i++);
-		} else {
-			node = nextNode(node);
-			if (node) {
-				f(node, i++);
-			}
 		}
 	}
 	return prev;
@@ -1776,60 +1766,27 @@ var _vnode = require('./vnode');
 
 var _access = require('./access');
 
-function assertPath(node) {
-	if (node.index < 0) return node;
-	var lastIndex = node.path.length - 1;
-	if (node.index > lastIndex) {
-		console.log("Node not in path");
-		var last = node.path[lastIndex];
-		let next = nextNode(node);
-		while (next) {
-			next = nextNode(next);
-			if (next.inode === node.inode) {
-				return next;
-			}
-		}
-	}
-	return node;
-}
-
-function assertNotInPath(child) {
-	var check = assertPath(child);
-	if (check) {
-		console.log("child exists");
-		// TODO clone child
-	}
-	return child;
-}
-
 function appendChild(node, child) {
-	// check if path to node is set
-	//node = assertPath(node);
+	node = (0, _vnode.ensureRoot)(node);
 	let last = (0, _access.lastNode)(node);
 	if (node.type == 9 && node.inode.size > 0) {
 		throw new Error("Document can only contain one child.");
 	}
 	let index = node.index;
 	// create shallow copy of path down to lastchild of node
-	//let path = last.path.slice(0, last.index + 1);
-	node = node.clone();
-	//node.path = path;
 	if (typeof child.inode === "function") {
 		child.inode(node);
-	} else {}
-	// TODO FIXME check if child exists as-is
-	//child = assertNotInPath(child);
-	//child = child.clone();
+	} else {
+		// TODO make protective clone (of inode)
+	}
 
-	// overwrite parent in prevNode
-	//node.inode = restoreNode(child.parent,node.inode);
-	//if(node.index < 0) return node;
-	while (node.parent.type != 9) {
+	while (node.parent) {
 		child = node;
-		node = node.parent.clone();
+		node = node.parent;
 		node.inode = (0, _vnode.restoreNode)(node.inode.set(child.name, child.inode), node.inode);
 	}
-	return node;
+	// this ensures immutability
+	return node.type == 9 ? (0, _access.firstChild)(node) : node;
 }
 
 function insertBefore(node, elem) {
@@ -1845,31 +1802,15 @@ function insertBefore(node, elem) {
 }
 
 function removeChild(node, child) {
-	node = assertPath(node);
-	child = assertPath(child);
-	let index = node.index;
-	// shallow copy up to, but not including, child
-	let path = child.path.slice(0, child.index);
+	node = (0, _vnode.ensureRoot)(node);
 	let inode = node.inode.removeValue(child.name, child.inode);
-	node = node.clone();
-	node.path = path;
-	// overwrite parent in prevNode
 	node.inode = (0, _vnode.restoreNode)(inode, node.inode);
-	if (node.index < 0) return node;
-	node.parent = (0, _vnode.restoreNode)(node.parent.set(node.name, node.inode), node.parent);
-	node.path[node.index] = node;
-	child = node;
-	while (node.inode._depth > 1) {
-		// overwrite parent in prevNode
-		node = (0, _access.parent)(node).clone();
-		node.inode = child.parent;
-		node.path = path;
-		node.path[node.index] = node;
-		node.parent = (0, _vnode.restoreNode)(node.parent.set(node.name, node.inode), node.parent);
-		if (node.parent._type == 9) break;
+	while (node.parent) {
 		child = node;
+		node = node.parent;
+		node.inode = (0, _vnode.restoreNode)(node.inode.set(child.name, child.inode), node.inode);
 	}
-	return node.path[index];
+	return node.type == 9 ? (0, _access.firstChild)(node) : node;
 }
 },{"./access":2,"./vnode":11}],7:[function(require,module,exports){
 'use strict';
@@ -2347,6 +2288,7 @@ exports.map = map;
 exports.elem = elem;
 exports.text = text;
 exports.document = document;
+exports.ensureRoot = ensureRoot;
 
 var _ohamt = require("ohamt");
 
@@ -2396,11 +2338,12 @@ function VNode(inode, type, name, value, parent, indexInParent) {
 }
 
 VNode.prototype.toString = function () {
-	return this.inode.toString();
+	var root = ensureRoot(this);
+	return root.inode.toString();
 };
 
 VNode.prototype.clone = function () {
-	return new VNode(this.inode, this.type, this.name, this.value, this.this.parent, this.indexInParent);
+	return new VNode(this.inode, this.type, this.name, this.value, this.parent, this.indexInParent);
 };
 
 function Step(inode, parent, indexInParent) {
@@ -2499,13 +2442,11 @@ function map(name, children) {}
  * @return {[type]}          [description]
  */
 function elem(name, children) {
-	var node = new VNode(function (parent, insertIndex = -1) {
+	var node = new VNode(function (parent, ref) {
 		var attrMap = ohamt.empty.beginMutation();
 		let pinode = parent.inode;
 		let inode = emptyINode(1, name, pinode._depth + 1, attrMap);
 		node.inode = inode;
-		// TODO remove indexInParent
-		node.indexInParent = pinode.count();
 		for (let i = 0; i < children.length; i++) {
 			let child = children[i];
 			if (child.type == 2) {
@@ -2521,8 +2462,8 @@ function elem(name, children) {
 		// insert into the parent means: update all parents until we come to the root
 		// but the parents of my parent will be updated elsewhere
 		// we just mutate the parent, because it was either cloned or newly created
-		if (insertIndex > -1) {
-			//pinode = pinode.insert(insertIndex, node.inode);
+		if (ref !== undefined) {
+			parent.inode = restoreNode(pinode.insertBefore([ref.name, ref.inode], [node.name, node.inode]), pinode);
 		} else {
 			// FIXME check the parent type
 			parent.inode = restoreNode(pinode.push([node.name, node.inode]), pinode);
@@ -2550,7 +2491,19 @@ function text(value) {
 }
 
 function document() {
-	return new VNode(emptyINode(9, "#document", 0, ohamt.empty), 9, "#document", null, [], -1);
+	return new VNode(emptyINode(9, "#document", 0, ohamt.empty), 9, "#document");
+}
+
+function ensureRoot(node) {
+	if (!node.inode) {
+		let root = node.first();
+		return new VNode(root, root._type, root._name, root._value, new VNode(node, node._type, node._name), 0);
+	}
+	if (typeof node.inode === "function") {
+		node.inode(document());
+		return node;
+	}
+	return node;
 }
 },{"./pretty":7,"./transducers":10,"ohamt":1,"rrb-vector":16}],12:[function(require,module,exports){
 /**
