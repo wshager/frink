@@ -1,211 +1,206 @@
 // very basic stuff, not really transducers but less code
 
+
 export function isIterable(obj) {
-  return !!obj && typeof obj[Symbol.iterator] === 'function';
+    return !!obj && typeof obj[Symbol.iterator] === 'function';
 }
 
 export function compose(...funcs) {
-  const l = funcs.length;
-  return (v,i,iterable,z) => {
-    for (var j = l; --j >= 0;) {
-      let ret = funcs[j].call(null,v,i,iterable,z);
-      // if it's a step, continue processing
-      if(ret["@@step"]) {
-          v = ret.v;
-          z = ret.z;
-      } else {
-          z = ret;
-      }
+    const l = funcs.length;
+    var f = (v, i, iterable, z) => {
+        let reset = false, c = _append;
+        for (var j = 0; j < l; j++) {
+            let ret = funcs[j].call(null, v, i, iterable, z);
+            if (ret === undefined) {
+                reset = true;
+                continue;
+            }
+            // if it's a step, continue processing
+            if (ret["@@step"]) {
+                v = ret.v;
+                z = ret.z;
+                c = ret.f;
+            } else {
+                reset = true;
+                z = ret;
+            }
+        }
+        // append at the end
+        return !reset ? c(z, v) : z;
+    };
+    for (var j = 0; j < l; j++) {
+        if(funcs[j]["@@get"]){
+            f["@@get"] = true;
+            f.$1 = funcs[j].$1;
+        }
     }
-    // append at the end
-    return _append(z,v);
-  };
+    return f;
 }
 
-/*
-function _iterate(wrapped, z) {
-  return function (iterable) {
-    if (z === undefined) z = _new(iterable);
-    var i = 0;
-    // iterate anything
-    var iter = isIterable(iterable) ? iterable[Symbol.iterator]() : typeof iterable.next === "function" ? iterable : {
-      next: function () {
-        return { value: iterable, done: true };
-      }
-    };
-    let next;
-    while (next = iter.next(), !next.done) {
-      let v = next.value;
-      let ret = wrapped(v, i, iterable, z);
-      if(ret["@@step"]) {
-          z = _append(ret.z,ret.v);
-      } else {
-          z = ret;
-      }
-      //yield z;
-      i++;
-    }
-    return z;
-  };
-}
-*/
+// TODO pass control function to the point where a value would be yielded
+// use that to control a custom iterator
 function _iterate(iterable, f, z) {
     if (z === undefined) z = _new(iterable);
     var i = 0;
     // iterate anything
     var iter = isIterable(iterable) ? iterable[Symbol.iterator]() : typeof iterable.next === "function" ? iterable : {
-      next: function () {
-        return { value: iterable, done: true };
-      }
+        next: function () {
+            return { value: iterable, done: true };
+        }
     };
     let next;
     while (next = iter.next(), !next.done) {
-      let v = next.value;
-      let ret = f(v, i, iterable, z);
-      if(ret["@@step"]) {
-          z = _append(ret.z,ret.v);
-      } else {
-          z = ret;
-      }
-      i++;
+        let v = next.value;
+        let ret = f(v, i, iterable, z);
+        if(ret !== undefined){
+            if (ret["@@step"]) {
+                z = ret.f(ret.z, ret.v);
+            } else {
+                z = ret;
+            }
+        }
+        i++;
     }
     return z;
 }
 
 function _new(iterable) {
-  return iterable.hasOwnProperty("@@empty") ? iterable["@@empty"]() : new iterable.constructor();
+    return iterable.hasOwnProperty("@@empty") ? iterable["@@empty"]() : new iterable.constructor();
 }
 
 // memoized
 function _append(iterable, appendee) {
-  try {
-    return iterable["@@append"](appendee);
-  } catch (e) {
     try {
-      let appended = iterable.push(appendee);
-      // stateful stuff
-      if (appended !== iterable) {
-        iterable["@@append"] = appendee => {
-          this.push(appendee);
-          return this;
-        };
-        return iterable;
-      }
-      iterable["@@append"] = appendee => {
-        return this.push(appendee);
-      };
-      return appended;
+        return iterable["@@append"](appendee);
     } catch (e) {
-      let appended = iterable.set(appendee[0], appendee[1]);
-      // stateful stuff
-      if (appended === iterable) {
-        iterable["@@append"] = appendee => {
-          this.set(appendee[0], appendee[1]);
-          return this;
-        };
-        return iterable;
-      }
-      iterable["@@append"] = appendee => {
-        return this.set(appendee[0], appendee[1]);
-      };
-      return appended;
-      // badeet badeet bathatsallfolks!
-      // if you want more generics, use a library
+        try {
+            let appended = iterable.push(appendee);
+            // stateful stuff
+            if (appended !== iterable) {
+                iterable["@@append"] = appendee => {
+                    this.push(appendee);
+                    return this;
+                };
+                return iterable;
+            }
+            iterable["@@append"] = appendee => {
+                return this.push(appendee);
+            };
+            return appended;
+        } catch (e) {
+            let appended = iterable.set(appendee[0], appendee[1]);
+            // stateful stuff
+            if (appended === iterable) {
+                iterable["@@append"] = appendee => {
+                    this.set(appendee[0], appendee[1]);
+                    return this;
+                };
+                return iterable;
+            }
+            iterable["@@append"] = appendee => {
+                return this.set(appendee[0], appendee[1]);
+            };
+            return appended;
+            // badeet badeet bathatsallfolks!
+            // if you want more generics, use a library
+        }
     }
-  }
 }
 
-function step(z,v){
+// introduce a step so we can reuse _iterate for foldLeft
+function step(z, v, f) {
     // we're going to process this further
     return {
-        z:z,
-        v:v,
-        "@@step":true
+        z: z,
+        v: v,
+        f: f,
+        "@@step": true
     };
 }
 
-export function forEach$1(f) {
-  return function (v, i, iterable, z) {
-    return step(z, f(v, i, iterable));
-  };
+export function cat(v, i, iterable, z) {
+    return step(z, v, function(z,v){
+        return foldLeft(v,_append,z);
+    });
 }
 
-export function filter$1(f) {
-  return function (v, i, iterable, z) {
-    if (f(v, i, iterable)) {
-      return step(z, v);
-    }
-    return z;
-  };
+function forEach$1(f) {
+    return function (v, i, iterable, z) {
+        return step(z, f(v, i, iterable), _append);
+    };
 }
 
-export function foldLeft$1(f, z) {
-  return function (v, i, iterable, z) {
-    return f(z, v, i, iterable);
-  };
+function filter$1(f) {
+    return function (v, i, iterable, z) {
+        if (f(v, i, iterable)) {
+            return step(z, v, _append);
+        }
+        return z;
+    };
+}
+
+function get$1(idx) {
+    // FIXME dirty hack, move somewhere else
+    var f = function (v, i, iterable, z) {
+        if (idx === v[0]) return step(z, v, _append);
+    };
+    f["@@get"] = true;
+    f.$1 = idx;
+    return f;
+}
+
+function foldLeft$1(f, z) {
+    return function (v, i, iterable, z) {
+        return f(z, v, i, iterable);
+    };
 }
 
 export function forEach(iterable, f) {
-    if(arguments.length == 1) return forEach$1(iterable);
-  return _iterate(iterable,forEach$1(f),_new(iterable));
+    if (arguments.length == 1) return forEach$1(iterable);
+    return _iterate(iterable, forEach$1(f), _new(iterable));
 }
 
 export function filter(iterable, f) {
-    if(arguments.length == 1) return filter$1(iterable);
-  return _iterate(iterable, filter$1(f),_new(iterable));
+    if (arguments.length == 1) return filter$1(iterable);
+    return _iterate(iterable, filter$1(f), _new(iterable));
 }
 
+// non-composables!
 export function foldLeft(iterable, f, z) {
-  return _iterate(iterable, foldLeft$1(f), z);
+    return _iterate(iterable, foldLeft$1(f), z);
+}
+
+export function get(iterable, idx) {
+    if (arguments.length == 1) return get$1(iterable);
+    return _iterate(iterable, get$1(idx));
 }
 
 // FIXME always return a collection, iterate by overriding _append to just return the value
-export function transform(iterable,f){
-    return _iterate(iterable,f);
-//    return new Iterator(iterable, f);
+export function transform(iterable, f) {
+    if(f["@@get"] && typeof iterable.get === "function") return iterable.get(f.$1);
+    return _iterate(iterable, f);
 }
 
-export function into(iterable,f,z){
-    return _iterate(iterable,f,z);
+export function into(iterable, f, z) {
+    if (f["@@get"] && typeof iterable.get === "function") {
+        var ret = iterable.get(f.$1);
+        if(ret === undefined) return z;
+        iterable = ret.constructor === Array ? ret : [[f.$1,ret]];
+    }
+    return _iterate(iterable, f, z);
 }
 
+export function range(n,s=0) {
+    var arr = new Array(n - s);
+    for(var i=s; i<n; i++) {
+        arr[i] = i;
+    }
+    return arr;
+}
+
+export function first(iterable){
+    return get(iterable,0);
+}
 // TODO:
-// add Take/Nth/dropWhile/Range
+// add Take/dropWhile
 // rewindable/fastforwardable iterators
-
-const DONE = {
-    done: true
-};
-
-function Iterator(iterable, f, z) {
-    this.iterable = iterable;
-    // iterate anything
-    this.iter = isIterable(iterable) ? iterable[Symbol.iterator]() : typeof iterable.next === "function" ? iterable : {
-      next: function () {
-        return { value: iterable, done: true };
-      }
-    };
-    this.f = f;
-    this.z = (z === undefined) ? _new(iterable) : z;
-    this.i = 0;
-}
-
-Iterator.prototype.next = function () {
-    let next = this.iter.next();
-    if(next.done) return DONE;
-      let v = next.value;
-      let z = this.z;
-      let ret = this.f(v, this.i, this.iterable, z);
-      if(ret["@@step"]) {
-          z = _append(ret.z,ret.v);
-      } else {
-          z = ret;
-      }
-      this.z = z;
-      this.i++;
-    return { value: this.z };
-};
-
-Iterator.prototype[Symbol.iterator] = function () {
-    return this;
-};
