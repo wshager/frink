@@ -6,12 +6,22 @@ import { prettyXML } from "./pretty";
 
 import { forEach, into } from "./transducers";
 
+import { seq } from "./seq";
+
 export function Value(type, name, value, depth) {
 	this._type = type;
 	this._name = name;
 	this._value = value;
 	this._depth = depth;
 }
+
+Value.prototype.get = function(){
+	return this._value;
+};
+
+Value.prototype[Symbol.iterator] = function*(){
+	yield this._value;
+};
 
 Value.prototype.count = function(){
 	return 0;
@@ -33,19 +43,25 @@ export function VNode(inode,type,name,value,parent,indexInParent){
 	this.parent = parent;
 	this.indexInParent = indexInParent;
 	Object.defineProperty(this,"children",{
-		"get": () => {
-			return into(this.inode,forEach((c,i) => new VNode(c,c._type,c._name,c._value,this.inode)), []);
+		get: () => {
+			return into(this.inode,forEach((c,i) => new VNode(c,c._type,c._name,c._value,this.inode)), seq());
 		}
 	});
 }
+
+VNode.prototype.__is_VNode = true;
 
 VNode.prototype.toString = function(){
 	var root = ensureRoot(this);
 	return root.inode.toString();
 };
 
-VNode.prototype.clone = function(){
-	return new VNode(this.inode,this.type,this.name,this.value,this.parent,this.indexInParent);
+VNode.prototype[Symbol.iterator] = function(){
+	return this.inode[Symbol.iterator]();
+};
+
+VNode.prototype.get = function(idx){
+	return this.inode.get(idx);
 };
 
 export function Step(inode,parent,indexInParent){
@@ -146,7 +162,7 @@ export function map(name,children){
  * @param  {[type]} children [description]
  * @return {[type]}          [description]
  */
-export function elem(name, children) {
+export function e(name, children) {
 	var node = new VNode(function (parent, ref) {
 		var attrMap = ohamt.empty.beginMutation();
 		let pinode = parent.inode;
@@ -179,7 +195,21 @@ export function elem(name, children) {
 	return node;
 }
 
-export function text(value) {
+export function a(name, value) {
+	var node = new VNode(function (parent, ref) {
+		let attrMap = parent._attrs;
+		if (ref !== undefined) {
+			parent._attrs = attrMap.insertBefore([ref.name,ref.value],[name,value]);
+		} else {
+			parent._attrs = attrMap.push([name,value]);
+		}
+		node.parent = parent;
+		return node;
+	}, 2, name, value);
+	return node;
+}
+
+export function t(value) {
 	var node = new VNode(function (parent, insertIndex = -1) {
 		let pinode = parent.inode;
 		// reuse insertIndex here to create a named map entry
@@ -195,7 +225,7 @@ export function text(value) {
 	return node;
 }
 
-export function document() {
+export function d() {
 	return new VNode(emptyINode(9,"#document",0,ohamt.empty), 9, "#document");
 }
 
@@ -205,8 +235,20 @@ export function ensureRoot(node){
 		return new VNode(root, root._type, root._name, root._value, new VNode(node,node._type,node._name), 0);
 	}
 	if(typeof node.inode === "function") {
-		node.inode(document());
+		node.inode(d());
 		return node;
 	}
 	return node;
+}
+
+export function _isQName(maybe){
+	return !!(maybe && maybe.__is_QName);
+}
+
+export function QName(uri, name) {
+    return {
+        __is_QName: true,
+		name: name,
+        uri: uri
+    };
 }
