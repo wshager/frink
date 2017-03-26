@@ -6,11 +6,10 @@ import { VNode, Value, emptyINode, emptyAttrMap } from './vnode';
 import { iter } from "./access";
 
 
-export function str2array(str, ar = []){
+export function str2array(str, ar){
     for (var i=0, strLen=str.length; i<strLen; i++) {
-      ar.push(str.codePointAt(i));
+        ar.push(str.codePointAt(i));
     }
-    return ar;
 }
 
 export function array2str(ar,i){
@@ -28,26 +27,25 @@ export function convert(v){
 	return v;
 }
 
-export function toNative(v,i){
-    if(v.length == 1) return v[i] == 2;
-    var int = new Uint32Array([v[i]-1,v[i+1]-1]);
-    return new Float64Array(int.buffer);
+export function toNative1(val){
+    if(val === 1) return false;
+    if(val === 2) return true;
+    if(val === 3) return 0;
+    if(val === 4) return null;
 }
 
-export function fromNative(v,arr = []){
-    if(v === false) {
-        arr.push(1);
-        return arr;
-    }
-    if(v === true) {
-        arr.push(2);
-        return arr;
-    }
-    var f = Float64Array.from([v]);
+export function toNative(v,i){
+    if(v.length == 1) return new Float64Array(new Uint32Array([0,v[i]]))[0];
+    return new Float64Array(new Uint32Array([v[i],v[i+1]]))[0];
+}
+
+
+export function fromNative(v,arr){
+    var f = new Float64Array(1);
+    f[0] = v;
     var i = new Uint32Array(f.buffer);
-    arr.push(i[0]+1);
-    arr.push(i[1]+1);
-    return arr;
+    if(i[0]) arr.push(i[0]);
+    arr.push(i[1]);
 }
 
 function docAttrType(k) {
@@ -73,11 +71,11 @@ export function toL3(doc){
 			i++;
 			out.push(0);
 			out.push(15);
-			out = str2array(name,out);
+			str2array(name,out);
 		}
 		out.push(docAttrType(attr[0]));
-		out = str2array(attr[0],out);
-		out = str2array(attr[1],out);
+		str2array(attr[0],out);
+		str2array(attr[1],out);
 	}
 	iter(doc, function (node) {
 		let type = node.type,
@@ -91,7 +89,7 @@ export function toL3(doc){
 				i++;
 				out.push(0);
 				out.push(15);
-				out = str2array(name,out);
+				str2array(name,out);
 			}
 			nameIndex = names[name];
 		}
@@ -107,18 +105,17 @@ export function toL3(doc){
 					i++;
 					out.push(0);
 					out.push(15);
-					out = str2array(name,out);
+					str2array(name,out);
 				}
 				out.push(0);
 				out.push(2);
 				out.push(names[attrname]);
-				out = str2array(attr[1],out);
+				str2array(attr[1],out);
 			}
 		} else if (type == 3) {
-			out = str2array(node.value,out);
+			str2array(node.value,out);
         } else if(type == 12){
-            out = str2array(node.value+"",out);
-            //out = fromNative(node.value,out);
+            str2array(node.value+"",out);
         }
 	});
     // remove first 0
@@ -161,7 +158,6 @@ export function fromL3(l3) {
     			node = new Value(type,name,array2str(entry,valIndex),depth);
             } else  if(type == 12){
                 node = new Value(type,name,convert(array2str(entry,valIndex)),depth);
-                //node = new Value(type,name,toNative(entry,valIndex),depth);
             }
             if (parent) parent = !isArray ? parent.push([name, node]) : parent.push(node);
         }
