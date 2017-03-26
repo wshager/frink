@@ -1,5 +1,5 @@
 import { VNode, Value, emptyINode, emptyAttrMap } from './vnode';
-import { array2str, str2array, convert, fromNative, toNative } from "./l3";
+import { array2str, str2array, convert } from "./l3";
 
 function process(entry, parent, depth, key) {
 	var cc = entry.constructor;
@@ -187,7 +187,6 @@ export function fromL3(l3) {
 			if(type == 3){
 				val = array2str(entry,index);
 			} else if(type == 12){
-				//val = toNative(entry,index);
 				val = convert(array2str(entry,index));
 			} else if(type == 5){
 				val = [];
@@ -236,7 +235,7 @@ export function toL3(doc){
 				i++;
 				out.push(0);
 				out.push(15);
-				out = str2array(name,out);
+				str2array(name,out);
 			}
 			nameIndex = names[name];
 		}
@@ -245,10 +244,9 @@ export function toL3(doc){
 		out.push(depth);
 		if(nameIndex) out.push(nameIndex);
 		if (type == 3) {
-			out = str2array(val,out);
+			str2array(val,out);
 		} else if(type == 12) {
-			out = str2array(val+"",out);
-			//out = fromNative(val,out);
+			str2array(val+"",out);
 		}
 	};
 	iter(doc, process);
