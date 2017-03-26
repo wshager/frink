@@ -1,8 +1,8 @@
-import { VNode, Step, ensureRoot } from './vnode';
+import { Value, VNode, Step, ensureRoot } from './vnode';
 
-import { compose, transform, forEach, filter } from "./transducers";
+import { compose, into, transform, forEach, filter, cat, first, get } from "./transducers";
 
-import { LazySeq } from "./seq";
+import { seq, toSeq, isSeq } from "./seq";
 
 import { prettyXML } from "./pretty";
 
@@ -107,36 +107,19 @@ export function stringify(input){
 
 export function firstChild(node, fltr = 0) {
 	// FIXME return root if doc (or something else?)
-	node = ensureRoot(node);
-	var next = nextNode(node);
+	var next = ensureRoot(node);
+	if(!node.inode) return next;
+	next = nextNode(next);
 	if (node.inode._depth == next.inode._depth - 1) return next;
 }
 
-/*
-export function nextSibling(node){
-	// SLOW version, but we have a path+index
-	var inode = node.inode,
-		path = node.path,
-		i = node.index;
-	var depth = inode._depth;
-	// run down path
-	inode = {};
-	while(inode._depth != depth) {
-		node = nextNode(node);
-		if(node.type==17) continue;
-		if(!node) break;
-		inode = node.inode;
-	}
-	return node;
-}
-*/
 export function nextSibling(node){
 	node = ensureRoot(node);
 	var parent = node.parent;
 	var next = parent.inode.next(node.name,node.inode);
 	// create a new node
 	// very fast, but now we haven't updated path, so we have no index!
-	if(next) return new VNode(next,next.type,next.name,next.value,parent,node.indexInParent+1);
+	if(next) return new VNode(next,next._type,next._name,next._value,parent,node.indexInParent+1);
 }
 
 export function* children(node){
@@ -153,15 +136,14 @@ export function childrenByName(node, name) {
 	var hasWildcard = /\*/.test(name);
 	if (hasWildcard) {
 		var regex = new RegExp(name.replace(/\*/, "(\\w[\\w0-9-_]*)"));
-		var xf = compose(filter(c => regex.test(c.name),forEach((c, i) => new VNode(c, c._type, c._name, c._value, node, i))));
-		return new LazySeq(transform(node.inode,xf));
+		return into(node.inode,compose(filter(c => regex.test(c.name),forEach((c, i) => new VNode(c, c._type, c._name, c._value, node)))),seq());
 	} else {
 		let entry = node.inode.get(name);
-		if(entry === undefined) return new LazySeq();
+		if(entry === undefined) return seq();
 		if (entry.constructor == Array) {
-			return new LazySeq(forEach(c => new VNode(c, c._type, c._name, c._value, node.inode)));
+			return into(entry,forEach(c => new VNode(c, c._type, c._name, c._value, node.inode)),seq());
 		} else {
-			return new LazySeq([new VNode(entry, entry._type, entry._name, entry._value, node.inode)]);
+			return toSeq([new VNode(entry, entry._type, entry._name, entry._value, node.inode)]);
 		}
 	}
 }
@@ -210,4 +192,101 @@ export function iter(node, f) {
 		}
 	}
 	return prev;
+}
+
+const _isElement = (n) => !!n && n.__is_VNode && n.type === 1;
+
+const _isAttribute = (n) => !!n && n.__is_VNode && n.type === 2;
+
+const _isTextNode = (n) => !!n && n.__is_VNode && n.type === 3;
+
+function _nodeTest(qname,attr){
+	if(qname === undefined){
+		if(attr) return compose.bind(null,filter(n => true));
+		return compose.bind(null,filter(n => !!n && n[1]._type == 1));
+	} else {
+		var hasWildcard = /\*/.test(qname);
+		if (hasWildcard) {
+			var regex = new RegExp(qname.replace(/\*/, "(\\w[\\w0-9-_]*)"));
+			if(attr) return compose.bind(null,filter(n => regex.test(n[0])));
+			return compose.bind(null,filter(n => !!n && n[1]._type == 1 && regex.test(n[0])));
+		} else {
+			return compose.bind(null,get(qname),filter(n => !!n && n[1]._type == 1));
+		}
+	}
+}
+
+export function element(qname){
+	return _nodeTest(qname);
+}
+
+
+export function attribute(qname){
+	return _nodeTest(qname,true);
+}
+
+// FIXME should this be in document order?
+function _getTextNodes(n) {
+    //if (isSeq(n)) return into(n, compose(filter(_ => _isElement(_)), forEach(_ => _getTextNodes(_), cat)), seq());
+    return ;
+}
+
+export function text() {
+	return n => _isTextNode(n) && !!n.value;
+}
+
+// TODO create axis functions that return a function
+// child(element(qname))
+// works like a filter: filter(children(node|nodelist),n => element(qname,n))
+// nextSibling(element()): filter(nextSibling(node|nodelist),n => element(undefined,n))
+// filterOrGet: when f is called, and null or wildcard match was supplied as its qname parameter, call filter
+// else call get
+// if it is a seq, apply the function iteratively:
+// we don't want to filter all elements from a seq, we want to retrieve all elements from elements in a seq
+// final edge case: when node is of type array, and name is not an integer: filter
+export function child(f){
+	return f;
+}
+
+// make sure all paths are transducer-funcs
+export function select(node, ...paths) {
+    // usually we have a sequence
+    var cur = node, path;
+    while (paths.length > 0) {
+        path = paths.shift();
+        cur = _selectImpl(cur, path);
+    }
+    return cur;
+}
+
+export function selectAttribute(node, ...paths) {
+    // usually we have a sequence
+    var cur = node, path;
+    while (paths.length > 0) {
+        path = paths.shift();
+        cur = _selectImpl(cur, path,true);
+    }
+    return cur;
+}
+
+function vnode(inode, parent, indexInParent){
+	return new VNode(inode, inode._type, inode._name, inode._value, parent, indexInParent);
+}
+
+// TODO use direct functions as much as passible, e.g. _isNode instead of node
+function _selectImpl(node, path, attr) {
+    if(typeof path == "string") {
+		var at = /^@/.test(path);
+		if(at) path = path.substring(1);
+		attr = attr || at;
+		path = child(attr ? attribute(path) : element(path));
+	}
+	const processNode = n => {
+		return _isElement(n) ? into(n, path(forEach(_ => vnode(_[1],n))), seq()) : seq();
+	};
+	const processAttr = n => _isElement(n) ? into(n.inode._attrs, compose(
+		path,
+		forEach(_ => vnode(new Value(2,_[0],_[1],n.inode._depth+1),n))
+	), seq()) : seq();
+	return isSeq(node) ? transform(node,compose(forEach(attr ? processAttr : processNode),cat)) : attr ? processAttr(node) : processNode(node);
 }
