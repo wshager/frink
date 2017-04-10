@@ -1,10 +1,11 @@
 import { Node, Value, Step, restoreNode, ensureRoot } from './vnode';
 
-import { firstChild, lastNode, parent } from './access';
+import { firstChild, lastChild } from './access';
 
 export function appendChild(node, child) {
 	node = ensureRoot(node);
-	let last = lastNode(node);
+	//if(!node || !node.size) return;
+	let last = lastChild(node);
 	if(node.type == 9 && node.inode.size > 0) {
 		throw new Error("Document can only contain one child.");
 	}
@@ -26,6 +27,7 @@ export function appendChild(node, child) {
 
 export function insertBefore(node,ins){
 	node = ensureRoot(node);
+	//if(!node || !node.size) return;
 	let parent = node.parent;
 	if(typeof ins.inode == "function") {
 		ins.inode(parent,node);
@@ -42,6 +44,9 @@ export function insertBefore(node,ins){
 
 export function removeChild(node,child){
 	node = ensureRoot(node);
+	//if(!node || !node.size || !child) return;
+	// TODO error
+	if(child.parent.inode !== node.inode) return;
 	let inode = node.inode.removeValue(child.name,child.inode);
 	node.inode = restoreNode(inode,node.inode);
 	while (node.parent) {
