@@ -5,6 +5,23 @@ export function isIterable(obj) {
     return !!obj && typeof obj[Symbol.iterator] === 'function';
 }
 
+function Singleton(val) {
+    this.val = val;
+}
+
+Singleton.prototype.next = function(){
+    if(this.val !== undefined) {
+        var val = this.val;
+        this.val = undefined;
+        return { value:val };
+    }
+    return { done: true };
+};
+
+function _getIter(iterable) {
+    return isIterable(iterable) ? iterable[Symbol.iterator]() : typeof iterable.next === "function" ? iterable : new Singleton(iterable);
+}
+
 export function compose(...funcs) {
     const l = funcs.length;
     var f = (v, i, iterable, z) => {
@@ -20,20 +37,18 @@ export function compose(...funcs) {
                 v = ret.v;
                 z = ret.z;
                 c = ret.f;
+                if(ret.d) i = 0;
+                if(ret.t == i) return !reset ? step(z, v, c) : z;
             } else {
+                // stop processing current iteration
                 reset = true;
                 z = ret;
             }
         }
         // append at the end
-        return !reset ? c(z, v) : z;
+        //return !reset ? step(z, v, c) : z;
+        return !reset ? step(z, v, c) : z;
     };
-    for (var j = 0; j < l; j++) {
-        if(funcs[j]["@@get"]){
-            f["@@get"] = true;
-            f.$1 = funcs[j].$1;
-        }
-    }
     return f;
 }
 
@@ -43,11 +58,7 @@ function _iterate(iterable, f, z) {
     if (z === undefined) z = _new(iterable);
     var i = 0;
     // iterate anything
-    var iter = isIterable(iterable) ? iterable[Symbol.iterator]() : typeof iterable.next === "function" ? iterable : {
-        next: function () {
-            return { value: iterable, done: true };
-        }
-    };
+    var iter = _getIter(iterable);
     let next;
     while (next = iter.next(), !next.done) {
         let v = next.value;
@@ -55,6 +66,8 @@ function _iterate(iterable, f, z) {
         if(ret !== undefined){
             if (ret["@@step"]) {
                 z = ret.f(ret.z, ret.v);
+                if(ret.d) i = 0;
+                if(ret.t == i) return z;
             } else {
                 z = ret;
             }
@@ -88,19 +101,23 @@ function _append(iterable, appendee) {
             };
             return appended;
         } catch (e) {
-            let appended = iterable.set(appendee[0], appendee[1]);
-            // stateful stuff
-            if (appended === iterable) {
+            try {
+                let appended = iterable.set(appendee[0], appendee[1]);
+                // stateful stuff
+                if (appended === iterable) {
+                    iterable["@@append"] = appendee => {
+                        this.set(appendee[0], appendee[1]);
+                        return this;
+                    };
+                    return iterable;
+                }
                 iterable["@@append"] = appendee => {
-                    this.set(appendee[0], appendee[1]);
-                    return this;
+                    return this.set(appendee[0], appendee[1]);
                 };
-                return iterable;
+                return appended;
+            } catch(e) {
+                return new iterable.constructor(appendee);
             }
-            iterable["@@append"] = appendee => {
-                return this.set(appendee[0], appendee[1]);
-            };
-            return appended;
             // badeet badeet bathatsallfolks!
             // if you want more generics, use a library
         }
@@ -108,13 +125,37 @@ function _append(iterable, appendee) {
 }
 
 // introduce a step so we can reuse _iterate for foldLeft
-function step(z, v, f) {
+function step(z, v, f, t, d) {
     // we're going to process this further
     return {
         z: z,
         v: v,
         f: f,
+        t:t,
+        d:d,
         "@@step": true
+    };
+}
+
+function _contains(iterable, value, comp){
+    // FIXME how to prevent iteration?
+    let iter = _getIter(iterable);
+    let next;
+    while (next = iter.next(), !next.done) {
+        if(next.value === value) return true;
+    }
+    return false;
+}
+
+export function distinctCat$1(f) {
+    // FIXME how to optimize?
+    return function transDistinctCat(v, i, iterable, z) {
+        return step(z, v, function (z, v) {
+            return foldLeft(v, function(z,v){
+                if (f(z, v)) return _append(z,v);
+                return z;
+            }, z);
+        });
     };
 }
 
@@ -125,13 +166,13 @@ export function cat(v, i, iterable, z) {
 }
 
 function forEach$1(f) {
-    return function (v, i, iterable, z) {
+    return function transForEach(v, i, iterable, z) {
         return step(z, f(v, i, iterable), _append);
     };
 }
 
 function filter$1(f) {
-    return function (v, i, iterable, z) {
+    return function transFilter(v, i, iterable, z) {
         if (f(v, i, iterable)) {
             return step(z, v, _append);
         }
@@ -139,20 +180,38 @@ function filter$1(f) {
     };
 }
 
-function get$1(idx) {
-    // FIXME dirty hack, move somewhere else
-    var f = function (v, i, iterable, z) {
-        if (idx === v[0]) return step(z, v, _append);
-    };
-    f["@@get"] = true;
-    f.$1 = idx;
-    return f;
-}
-
 function foldLeft$1(f, z) {
-    return function (v, i, iterable, z) {
+    return function transFoldLeft(v, i, iterable, z) {
         return f(z, v, i, iterable);
     };
+}
+
+function take$1(idx){
+    return function transTake(v, i, iterable, z) {
+        if (i < idx) {
+            return step(z, v, _append, idx);
+        }
+        return z;
+    };
+}
+
+function drop$1(idx){
+    return function transDrop(v, i, iterable, z) {
+        if (i >= idx) {
+            return step(z, v, _append, 0, true);
+        }
+        return z;
+    };
+}
+
+export function drop(iterable, i){
+    if (arguments.length == 1) return drop$1(iterable);
+    return _iterate(iterable, drop$1(i), _new(iterable));
+}
+
+export function take(iterable, i){
+    if (arguments.length == 1) return take$1(iterable);
+    return _iterate(iterable, take$1(i), _new(iterable));
 }
 
 export function forEach(iterable, f) {
@@ -165,28 +224,23 @@ export function filter(iterable, f) {
     return _iterate(iterable, filter$1(f), _new(iterable));
 }
 
+export function distinctCat(iterable, f) {
+    if (arguments.length < 2) return distinctCat$1(iterable || _contains);
+    return _iterate(iterable, distinctCat$1(f), _new(iterable));
+}
+
 // non-composables!
 export function foldLeft(iterable, f, z) {
     return _iterate(iterable, foldLeft$1(f), z);
 }
 
-export function get(iterable, idx) {
-    if (arguments.length == 1) return get$1(iterable);
-    return _iterate(iterable, get$1(idx));
-}
 
 // FIXME always return a collection, iterate by overriding _append to just return the value
 export function transform(iterable, f) {
-    if(f["@@get"] && typeof iterable.get === "function") return iterable.get(f.$1);
     return _iterate(iterable, f);
 }
 
 export function into(iterable, f, z) {
-    if (f["@@get"] && typeof iterable.get === "function") {
-        var ret = iterable.get(f.$1);
-        if(ret === undefined) return z;
-        iterable = ret.constructor === Array ? ret : [[f.$1,ret]];
-    }
     return _iterate(iterable, f, z);
 }
 
@@ -198,9 +252,5 @@ export function range(n,s=0) {
     return arr;
 }
 
-export function first(iterable){
-    return get(iterable,0);
-}
 // TODO:
-// add Take/dropWhile
 // rewindable/fastforwardable iterators
