@@ -1,8 +1,8 @@
-import { Value, VNode, Step, ensureRoot } from './vnode';
+import { Value, VNode, Step, ensureRoot, vnode, VNodeIterator } from './vnode';
 
-import { compose, into, transform, forEach, filter, cat, first, get } from "./transducers";
+import { compose, into, transform, forEach, filter, cat, distinctCat } from "./transducers";
 
-import { seq, toSeq, isSeq } from "./seq";
+import { seq, isSeq } from "./seq";
 
 import { prettyXML } from "./pretty";
 
@@ -29,7 +29,7 @@ export function nextNode(node /* VNode */) {
 		inode = inode.first();
 		// TODO handle arrays
 		//console.log("found first", inode._name,index);
-		node = new VNode(inode, inode._type, inode._name, inode._value, parent, indexInParent);
+		node = vnode(inode, parent, indexInParent);
 		//node.path.push(node);
 		return node;
 	} else {
@@ -51,7 +51,7 @@ export function nextNode(node /* VNode */) {
 			inode = parent.inode.next(inode._name, inode);
 			if (inode) {
 				//console.log("found next", inode._name, index);
-				node = new VNode(inode, inode._type, inode._name, inode._value, parent, indexInParent);
+				node = vnode(inode, parent, indexInParent);
 				//node.path.push(node);
 				return node;
 			}
@@ -119,7 +119,7 @@ export function nextSibling(node){
 	var next = parent.inode.next(node.name,node.inode);
 	// create a new node
 	// very fast, but now we haven't updated path, so we have no index!
-	if(next) return new VNode(next,next._type,next._name,next._value,parent,node.indexInParent+1);
+	if(next) return vnode(next,parent,node.indexInParent+1);
 }
 
 export function* children(node){
@@ -127,27 +127,10 @@ export function* children(node){
 	var i = 0, iter = inode.values();
 	while(!iter.done){
 		let c = iter.next().value;
-		yield new VNode(c,c.type,c.name,c.value,node,i);
+		yield vnode(c,node,i);
 		i++;
 	}
 }
-
-export function childrenByName(node, name) {
-	var hasWildcard = /\*/.test(name);
-	if (hasWildcard) {
-		var regex = new RegExp(name.replace(/\*/, "(\\w[\\w0-9-_]*)"));
-		return into(node.inode,compose(filter(c => regex.test(c.name),forEach((c, i) => new VNode(c, c._type, c._name, c._value, node)))),seq());
-	} else {
-		let entry = node.inode.get(name);
-		if(entry === undefined) return seq();
-		if (entry.constructor == Array) {
-			return into(entry,forEach(c => new VNode(c, c._type, c._name, c._value, node.inode)),seq());
-		} else {
-			return toSeq([new VNode(entry, entry._type, entry._name, entry._value, node.inode)]);
-		}
-	}
-}
-
 
 export function getRoot(node) {
 	do {
@@ -157,26 +140,18 @@ export function getRoot(node) {
 }
 
 export function getDoc(node) {
-
 	return getRoot(node);
 }
 
-export function lastNode(node){
-	var depth = node.inode._depth;
-	if(depth < 0) return node;
-	var inode = {};
-	var last;
-	while(inode._depth != depth) {
-		if(node.type<17) last = node;
-		node = nextNode(node);
-		if(!node) break;
-		inode = node.inode;
-	}
-	return last;
+export function lastChild(node){
+	node = ensureRoot(node);
+	var last = node.inode.last();
+	return vnode(last,node);
 }
 
 export function parent(node) {
-	return node.parent;
+	if(!arguments.length) return Axis(parent);
+	return node.parent ? seq(new VNodeIterator([node.parent.inode][Symbol.iterator](),node.parent.parent, vnode)) : seq();
 }
 
 export function iter(node, f) {
@@ -194,24 +169,42 @@ export function iter(node, f) {
 	return prev;
 }
 
-const _isElement = (n) => !!n && n.__is_VNode && n.type === 1;
+const _isVNode = n => !!n && n.__is_VNode;
 
-const _isAttribute = (n) => !!n && n.__is_VNode && n.type === 2;
+const _isElement = n => _isVNode(n) && n.type == 1;
 
-const _isTextNode = (n) => !!n && n.__is_VNode && n.type === 3;
+const _isAttribute = n => _isVNode(n) && n.type == 2;
 
-function _nodeTest(qname,attr){
+const _isText = n => _isVNode(n) && n.type == 3;
+
+const _isList = n => _isVNode(n) && n.type == 5;
+
+const _isMap = n => _isVNode(n) && n.type == 6;
+
+const _isLiteral = n => _isVNode(n) && n.type == 12;
+
+function _get(idx, type){
+	return {
+		__is_Accessor: true,
+		f: filter(n => n.name===idx),
+		__type: type,
+		__index: idx
+	};
+}
+
+export const position = n => n.indexInParent;
+
+// TODO convert qname to integer when parent is array
+function _nodeTest(qname){
 	if(qname === undefined){
-		if(attr) return compose.bind(null,filter(n => true));
-		return compose.bind(null,filter(n => !!n && n[1]._type == 1));
+		return filter(_isElement);
 	} else {
 		var hasWildcard = /\*/.test(qname);
 		if (hasWildcard) {
 			var regex = new RegExp(qname.replace(/\*/, "(\\w[\\w0-9-_]*)"));
-			if(attr) return compose.bind(null,filter(n => regex.test(n[0])));
-			return compose.bind(null,filter(n => !!n && n[1]._type == 1 && regex.test(n[0])));
+			return seq(filter(_isElement),filter(n => regex.test(n.name)));
 		} else {
-			return compose.bind(null,get(qname),filter(n => !!n && n[1]._type == 1));
+			return seq(_get(qname,1),filter(_isElement));
 		}
 	}
 }
@@ -220,9 +213,28 @@ export function element(qname){
 	return _nodeTest(qname);
 }
 
+function _attrGet(node,key){
+	var iter;
+	if(key !== undefined){
+		var val =  node.inode._attrs.get(key);
+		if(!val) return [];
+		iter = [[key,val]];
+	} else {
+		iter = node.inode._attrs;
+	}
+	return new VNodeIterator(iter[Symbol.iterator](), node, (v, parent, index) => vnode(new Value(2, v[0], v[1], node.inode._depth + 1), parent, index));
+}
 
-export function attribute(qname){
-	return _nodeTest(qname,true);
+// TODO make axis default, process node here, return seq(VNodeIterator)
+// TODO maybe have Axis receive post-process func/seq
+export function attribute(qname,node){
+	if(arguments.length < 2) return Axis(attribute.bind(null,qname),2);
+	var hasWildcard = /\*/.test(qname);
+	if (hasWildcard) {
+		var regex = new RegExp(qname.replace(/\*/, "(\\w[\\w0-9-_]*)"));
+		return into(_attrGet(node), filter(n => regex.test(n.name)), seq());
+	}
+	return seq(_attrGet(node,qname));
 }
 
 // FIXME should this be in document order?
@@ -232,7 +244,11 @@ function _getTextNodes(n) {
 }
 
 export function text() {
-	return n => _isTextNode(n) && !!n.value;
+	return n => _isText(n) && !!n.value;
+}
+
+export function node() {
+	return filter(n => _isElement(n) || _isText(n));
 }
 
 // TODO create axis functions that return a function
@@ -244,8 +260,49 @@ export function text() {
 // if it is a seq, apply the function iteratively:
 // we don't want to filter all elements from a seq, we want to retrieve all elements from elements in a seq
 // final edge case: when node is of type array, and name is not an integer: filter
-export function child(f){
-	return f;
+function Axis(f,type){
+	return {
+		__is_Axis: true,
+		__type: type || 1,
+		f:f
+	};
+}
+export function child(){
+	return Axis(x => seq(x));
+}
+
+const _isSiblingIterator = n => !!n && n.__is_SiblingIterator;
+
+const _isVNodeIterator = n => !!n && n.__is_VNodeIterator;
+
+function SiblingIterator(inode, parent, index, dir){
+	this.inode = inode;
+	this.parent = parent;
+	this.index = index;
+	this.dir = dir;
+	this.__is_SiblingIterator = true;
+}
+
+const DONE = {
+    done: true
+};
+
+SiblingIterator.prototype.next = function(){
+	var v = this.dir.call(this.parent.inode,this.inode._name,this.inode);
+	this.index++;
+	if (!v) return DONE;
+	this.inode = v;
+	return { value: vnode(v, this.parent, this.index) };
+};
+
+SiblingIterator.prototype[Symbol.iterator] = function () {
+    return this;
+};
+
+export function followingSibling(node) {
+	if (arguments.length === 0) return Axis(followingSibling);
+	node = ensureRoot(node);
+	return seq(new SiblingIterator(node.inode, node.parent, node.indexInParent, node.inode.next));
 }
 
 // make sure all paths are transducer-funcs
@@ -269,24 +326,66 @@ export function selectAttribute(node, ...paths) {
     return cur;
 }
 
-function vnode(inode, parent, indexInParent){
-	return new VNode(inode, inode._type, inode._name, inode._value, parent, indexInParent);
+function _comparer() {
+	// dirty preserve state on function
+	var f = function (seq, node) {
+		var has = f._checked.has(node.inode);
+		if (!has) f._checked.set(node.inode,true);
+		return !has;
+	};
+	f._checked = new WeakMap();
+	return f;
 }
 
 // TODO use direct functions as much as passible, e.g. _isNode instead of node
-function _selectImpl(node, path, attr) {
+function _selectImpl(node, path) {
     if(typeof path == "string") {
 		var at = /^@/.test(path);
 		if(at) path = path.substring(1);
-		attr = attr || at;
-		path = child(attr ? attribute(path) : element(path));
+		path = at ? attribute(path) : element(path);
 	}
-	const processNode = n => {
-		return _isElement(n) ? into(n, path(forEach(_ => vnode(_[1],n))), seq()) : seq();
-	};
-	const processAttr = n => _isElement(n) ? into(n.inode._attrs, compose(
-		path,
-		forEach(_ => vnode(new Value(2,_[0],_[1],n.inode._depth+1),n))
-	), seq()) : seq();
-	return isSeq(node) ? transform(node,compose(forEach(attr ? processAttr : processNode),cat)) : attr ? processAttr(node) : processNode(node);
+	var pathArr, len = 1;
+	if(isSeq(path)) {
+		pathArr = path.toArray();
+		len = pathArr.length;
+	} else {
+		pathArr = [path];
+	}
+	var filtered = [], axis = child(), directAccess;
+	for(var i = 0; i < len; i++){
+		let path = pathArr[i];
+		if(path.__is_Axis) {
+			axis = path;
+		} else if(path.__is_Accessor){
+			directAccess = path.__index;
+			filtered.push(path.f);
+		} else {
+			filtered.push(path);
+		}
+	}
+	var attr = axis.__type == 2;
+	var composed = compose.apply(null,filtered);
+	const process = n => into(directAccess && !_isVNodeIterator(n) && !_isSiblingIterator(n) ? n.get(directAccess) : n, composed, seq());
+	//var nodeFilter = n => _isElement(n) || _isVNodeIterator(n) || _isSiblingIterator(n) || _isMap(n) || _isList(n);
+	// if seq, apply axis to seq first
+	// FIXME to filter or not to filter?
+	var nodelist = isSeq(node) ? node = transform(node, compose(forEach(n => axis.f(n)), cat)) : axis.f(node);
+	return transform(nodelist,compose(/*filter(nodeFilter),*/forEach(process), attr ? cat : distinctCat(_comparer())));
+}
+
+
+export function isEmptyNode(node){
+	if(!_isVNode(node)) return false;
+	if(_isText(node) || _isLiteral(node) || _isAttribute(node)) return node.value === undefined;
+	return !node.count();
+}
+
+export const isNode = _isVNode;
+
+
+export function name($a) {
+	return forEach($a,function(_){
+        if(!_isVNode(_)) throw new Error("This is not a node");
+        return _.name;
+	});
 }
