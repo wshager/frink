@@ -4,13 +4,13 @@ Parse XML into a DOM level 4 compatible, persistent (AKA immutable) virtual tree
 
 Traverse trees with speed-optimized functions reminiscent of XPath.
 
-Parse JSON into a similar, traversable trees or mix with XML.
+Parse JSON into similar, traversable trees, or mix with XML.
 
-Generate L3, a lightweight, flat representation of both XML and JSON trees (or mixed) for fast storage and retrieval.
+Generate L3, a lightweight, flat representation of XML or JSON trees (or mixed) for fast storage and retrieval.
 
 Construct trees with a coherent set of functions, to create persistent HTML, XML or JSON documents.
 
-Render persistent trees or L3 as HTML in the browser. Super-simple, lightning-fast tree diffing algorithm.
+Render persistent trees or L3 as HTML in the browser. Uses a super-simple, lightning-fast tree diffing algorithm.
 
 Validate both XML and JSON using a custom extension of JSON Schema v0.4.
 
