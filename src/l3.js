@@ -6,10 +6,12 @@ import { VNode, Value, emptyINode, emptyAttrMap } from './vnode';
 import { iter } from "./access";
 
 
-export function str2array(str, ar){
+export function str2array(str, ar, idx){
     for (var i=0, strLen=str.length; i<strLen; i++) {
-        ar.push(str.codePointAt(i));
+        //ar.push(str.codePointAt(i));
+        ar[idx++] = str.codePointAt(i);
     }
+    return idx;
 }
 
 export function array2str(ar,i){
@@ -61,21 +63,22 @@ function docAttrType(k) {
  * @return {ArrayBuffer}  A flat buffer
  */
 export function toL3(doc){
-	var out = [],
+    var block = 1024 * 1024 * 8;
+	var out = new Uint32Array(block),
 	    names = {},
-	    i = 1;
+	    i = 0,
+        j = 0;
 	for (let attr of doc._attrs.entries()) {
 		let name = attr[0], attrname = "@"+name;
 		if (!names[attrname]) {
-			names[attrname] = i;
-			i++;
-			out.push(0);
-			out.push(15);
-			str2array(name,out);
+			names[attrname] = ++j;
+			out[i++] = 0;
+			out[i++] = 15;
+			i = str2array(name,out,i);
 		}
-		out.push(docAttrType(attr[0]));
-		str2array(attr[0],out);
-		str2array(attr[1],out);
+		out[i++] = docAttrType(attr[0]);
+		i = str2array(attr[0],out,i);
+		i = str2array(attr[1],out,i);
 	}
 	iter(doc, function (node) {
 		let type = node.type,
@@ -85,44 +88,106 @@ export function toL3(doc){
         var nameIndex = 0;
         if (typeof name === "string") {
 			if(!names[name]) {
-				names[name] = i;
-				i++;
-				out.push(0);
-				out.push(15);
-				str2array(name,out);
+				names[name] = ++j;
+				out[i++] = 0;
+				out[i++] = 15;
+				i = str2array(name,out,i);
 			}
 			nameIndex = names[name];
 		}
-        out.push(0);
-        out.push(type);
-        out.push(depth);
-        if(nameIndex) out.push(nameIndex);
+        out[i++] = 0;
+        out[i++] = type;
+        out[i++] = depth;
+        if(nameIndex) out[i++] = nameIndex;
 		if (type == 1) {
 			for (let attr of inode._attrs.entries()) {
 				let name = attr[0], attrname = "@"+name;
 				if (!names[attrname]) {
-					names[attrname] = i;
-					i++;
-					out.push(0);
-					out.push(15);
-					str2array(name,out);
+					names[attrname] = ++j;
+					out[i++] = 0;
+					out[i++] = 15;
+					i = str2array(name,out,i);
 				}
-				out.push(0);
-				out.push(2);
-				out.push(names[attrname]);
-				str2array(attr[1],out);
+				out[i++] = 0;
+				out[i++] = 2;
+				out[i++] = names[attrname];
+				i = str2array(attr[1],out,i);
 			}
 		} else if (type == 3) {
-			str2array(node.value,out);
+			i = str2array(node.value,out,i);
         } else if(type == 12){
-            str2array(node.value+"",out);
+            i = str2array(node.value+"",out,i);
         }
 	});
     // remove first 0
-    out.shift();
-	return out;
+    //out.shift();
+	return out.subarray(1,i+1);
 }
+/*
 
+export function toL3(doc){
+   var out = [],
+       names = {},
+       i = 1;
+   for (let attr of doc._attrs.entries()) {
+       let name = attr[0], attrname = "@"+name;
+       if (!names[attrname]) {
+           names[attrname] = i;
+           i++;
+           out.push(0);
+           out.push(15);
+           str2array(name,out);
+       }
+       out.push(docAttrType(attr[0]));
+       str2array(attr[0],out);
+       str2array(attr[1],out);
+   }
+   iter(doc, function (node) {
+       let type = node.type,
+           inode = node.inode,
+           depth = inode._depth,
+           name = node.name;
+       var nameIndex = 0;
+       if (typeof name === "string") {
+           if(!names[name]) {
+               names[name] = i;
+               i++;
+               out.push(0);
+               out.push(15);
+               str2array(name,out);
+           }
+           nameIndex = names[name];
+       }
+       out.push(0);
+       out.push(type);
+       out.push(depth);
+       if(nameIndex) out.push(nameIndex);
+       if (type == 1) {
+           for (let attr of inode._attrs.entries()) {
+               let name = attr[0], attrname = "@"+name;
+               if (!names[attrname]) {
+                   names[attrname] = i;
+                   i++;
+                   out.push(0);
+                   out.push(15);
+                   str2array(name,out);
+               }
+               out.push(0);
+               out.push(2);
+               out.push(names[attrname]);
+               str2array(attr[1],out);
+           }
+       } else if (type == 3) {
+           str2array(node.value,out);
+       } else if(type == 12){
+           str2array(node.value+"",out);
+       }
+   });
+   // remove first 0
+   out.shift();
+   return out;
+}
+ */
 
 export function fromL3(l3) {
 	var names = {},
@@ -143,23 +208,39 @@ export function fromL3(l3) {
         } else if(type == 15){
             n++;
             names[n] = array2str(entry,1);
-        } else {
+        } else if(type != 17){
             depth = entry[1];
             let parent = parents[depth - 1];
-            let isArray = !!parent && parent._type == 5;
-    		let valIndex = isArray ? 2 : 3;
-    		let name = isArray ? parent.count() : names[entry[2]];
-            var node;
+            let parentType = !!parent && parent._type;
+            var node, name, valIndex;
     		if(type == 1 || type == 5 || type == 6) {
-                if(parents[depth]) parents[depth] = parents[depth].endMutation();
+                name = names[entry[2]];
+                if(parents[depth]) {
+                    if(parents[depth]._attrs) parents[depth]._attrs.endMutation();
+                    parents[depth] = parents[depth].endMutation();
+                }
     			node = emptyINode(type, name, depth, emptyAttrMap());
     			parents[depth] = node;
     		} else if(type == 3){
+                if(parentType == 1 || parentType == 9){
+                    name = parent.count();
+                    valIndex = 2;
+                } else {
+                    name = names[entry[2]];
+                    valIndex = 3;
+                }
     			node = new Value(type,name,array2str(entry,valIndex),depth);
             } else  if(type == 12){
+                if(parentType == 1 || parentType == 9){
+                    name = parent.count();
+                    valIndex = 2;
+                } else {
+                    name = names[entry[2]];
+                    valIndex = 3;
+                }
                 node = new Value(type,name,convert(array2str(entry,valIndex)),depth);
             }
-            if (parent) parent = !isArray ? parent.push([name, node]) : parent.push(node);
+            if (parent) parent = parentType == 5 ? parent.push(node) : parentType == 6 ? parent.set(name, node) : parent.push([name, node]);
         }
 	};
 	var entry = [];
