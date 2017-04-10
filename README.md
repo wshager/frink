@@ -1,6 +1,8 @@
 # Frink: everything but the kitchen sink
 
-Parse XML into a DOM level 4 compatible, persistent (AKA immutable) VTree. Traverse with speed-optimized functions reminiscent of XPath.
+Parse XML into a DOM level 4 compatible, persistent (AKA immutable) VTree. 
+
+Traverse trees with speed-optimized functions reminiscent of XPath.
 
 Parse JSON into a similar, traversable trees or mix with XML.
 
