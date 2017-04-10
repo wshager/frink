@@ -1,4 +1,4 @@
-import { VNode, Value, emptyINode, emptyAttrMap } from './vnode';
+import { VNode, Value, emptyINode, emptyAttrMap, ensureRoot } from './vnode';
 import { array2str, str2array, convert } from "./l3";
 
 function process(entry, parent, depth, key) {
@@ -35,14 +35,27 @@ export function toJS(doc) {
 		let type = inode._type,
 		    name = inode._name;
 		if (type == 1) {
-			for (let attr of inode._attrs.entries()) {}
+			let attrs = {}, arr = [];
+			let i = 0;
+			for (let attr of inode._attrs) {
+				attrs[attr[0]] = attr[1];
+			}
+			for (let n of inode) {
+				process(n[1], arr, i);
+				i++;
+			}
+			if (out === undefined) {
+				out = arr;
+			} else {
+				out[key] = { $name: inode._name, $attrs: attrs, $children: arr };
+			}
 		} else if (type == 3) {
 			out[key] = inode._value;
 		} else if (type == 12) {
 			out[key] = inode._value;
 		} else if (type == 5) {
-			var arr = [];
-			for (var i = 0; i < inode.size; i++) {
+			let arr = [];
+			for (let i = 0; i < inode.size; i++) {
 				process(inode.get(i), arr, i);
 			}
 			if (out === undefined) {
@@ -64,7 +77,7 @@ export function toJS(doc) {
 		return out;
 	}
 	// discard DOC for now
-	return process(doc.first());
+	return process(ensureRoot(doc).inode);
 }
 
 function step(node,depth){
