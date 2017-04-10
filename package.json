@@ -34,7 +34,8 @@
     "fastintcompression": "0.0.1",
     "ohamt": "*",
     "rrb-vector": "*",
-    "sax": "*"
+    "sax": "*",
+    "xregexp": "^3.1.1"
   },
   "license": "BSD-3-Clause",
   "bugs": {
