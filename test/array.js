@@ -12,8 +12,13 @@ assertEq(array.get(x,1),"a");
 assertEq(array.append(x,"d").toJS(),["a","b","c","d"]);
 assertEq(array.insertBefore(x,2,"d").toJS(),["a","d","b","c"]);
 assertEq(array.remove(x,2).toJS(),["a","c"]);
+assertEq(array.size(x),3);
 assertEq(array.tail(x).toJS(),["b","c"]);
 assertEq(array.head(x).toJS(),["a"]);
+assertEq(array.subarray(x,2).toJS(),["b","c"]);
+assertEq(array.subarray(x,2,array.size(x) + 2 - 1).toJS(),["b","c"]);
+assertEq(array.subarray(x,2,1).toJS(),["b"]);
+
 
 console.log("all tests passed");
 
