@@ -24,7 +24,7 @@ function _getIter(iterable) {
 
 export function compose(...funcs) {
     const l = funcs.length;
-    var f = (v, i, iterable, z) => {
+    return (v, i, iterable, z) => {
         let reset = false, c = _append;
         for (var j = 0; j < l; j++) {
             let ret = funcs[j].call(null, v, i, iterable, z);
@@ -49,7 +49,6 @@ export function compose(...funcs) {
         //return !reset ? step(z, v, c) : z;
         return !reset ? step(z, v, c) : z;
     };
-    return f;
 }
 
 // TODO pass control function to the point where a value would be yielded
