@@ -77,50 +77,31 @@ function _iterate(iterable, f, z) {
 }
 
 function _new(iterable) {
-    return typeof iterable["@@empty"] == "function" ? iterable["@@empty"]() : new iterable.constructor();
+    return iterable["@@empty"] ? iterable["@@empty"]() : new iterable.constructor();
 }
 
-// memoized
+// checkiecheckie
 function _append(iterable, appendee) {
-    try {
+    if(iterable["@@append"]) {
         return iterable["@@append"](appendee);
-    } catch (e) {
-        try {
-            let appended = iterable.push(appendee);
-            // stateful stuff
-            if (appended !== iterable) {
-                iterable["@@append"] = appendee => {
-                    this.push(appendee);
-                    return this;
-                };
-                return iterable;
-            }
-            iterable["@@append"] = appendee => {
-                return this.push(appendee);
-            };
-            return appended;
-        } catch (e) {
-            try {
-                let appended = iterable.set(appendee[0], appendee[1]);
-                // stateful stuff
-                if (appended === iterable) {
-                    iterable["@@append"] = appendee => {
-                        this.set(appendee[0], appendee[1]);
-                        return this;
-                    };
-                    return iterable;
-                }
-                iterable["@@append"] = appendee => {
-                    return this.set(appendee[0], appendee[1]);
-                };
-                return appended;
-            } catch(e) {
-                return new iterable.constructor(appendee);
-            }
-            // badeet badeet bathatsallfolks!
-            // if you want more generics, use a library
+    } else if(iterable.push){
+        let appended = iterable.push(appendee);
+        // stateful stuff
+        if (appended !== iterable) {
+            return iterable;
         }
+        return appended;
+    } else if(iterable.set) {
+        let appended = iterable.set(appendee[0], appendee[1]);
+        // stateful stuff
+        if (appended !== iterable) {
+            return iterable;
+        }
+        return appended;
+    } else {
+        return new iterable.constructor(appendee);
     }
+    // badeet badeet bathatsallfolks!
 }
 
 // introduce a step so we can reuse _iterate for foldLeft
@@ -150,17 +131,17 @@ export function distinctCat$1(f) {
     // FIXME how to optimize?
     return function transDistinctCat(v, i, iterable, z) {
         return step(z, v, function (z, v) {
-            return foldLeft(v, function(z,v){
+            return foldLeft(v, z, function(z,v){
                 if (f(z, v)) return _append(z,v);
                 return z;
-            }, z);
+            });
         });
     };
 }
 
 export function cat(v, i, iterable, z) {
     return step(z, v, function(z,v){
-        return foldLeft(v,_append,z);
+        return foldLeft(v,z,_append);
     });
 }
 
