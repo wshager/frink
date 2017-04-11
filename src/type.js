@@ -321,19 +321,19 @@ function _promote(a, b) {
 function _opReducer(iterable, opfn, other, general) {
     var otherIsSeq = isSeq(other);
     if (general) {
-        return foldLeft(iterable,function(acc, v) {
-            return acc || (otherIsSeq ? foldLeft(other,function(pre, cur) {
+        return foldLeft(iterable,false,function(acc, v) {
+            return acc || (otherIsSeq ? foldLeft(other,false,function(pre, cur) {
                 return pre || opfn(v, cur);
-            }, false) : opfn(v, other));
-        }, false);
+            }) : opfn(v, other));
+        });
     } else if (!isSeq(iterable) || iterable.size == 1) {
         let b = otherIsSeq ? first(other) : other;
         return opfn(first(iterable), b);
     } else {
         return forEach(iterable,function(v) {
-            return otherIsSeq ? foldLeft(other,function(pre, cur) {
+            return otherIsSeq ? foldLeft(other,false,function(pre, cur) {
                 return pre || opfn(v, cur);
-            }, false) : opfn(v, other);
+            }) : opfn(v, other);
         });
     }
 }

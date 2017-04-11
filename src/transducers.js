@@ -77,7 +77,7 @@ function _iterate(iterable, f, z) {
 }
 
 function _new(iterable) {
-    return iterable.hasOwnProperty("@@empty") ? iterable["@@empty"]() : new iterable.constructor();
+    return typeof iterable["@@empty"] == "function" ? iterable["@@empty"]() : new iterable.constructor();
 }
 
 // memoized
@@ -229,7 +229,7 @@ export function distinctCat(iterable, f) {
 }
 
 // non-composables!
-export function foldLeft(iterable, f, z) {
+export function foldLeft(iterable, z, f) {
     return _iterate(iterable, foldLeft$1(f), z);
 }
 

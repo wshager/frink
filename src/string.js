@@ -100,7 +100,7 @@ export function stringToCodepoints($str){
 }
 
 export function codepointsToString($seq){
-	return string(foldLeft($seq,(acc,_) => acc + String.fromCodePoint(_),""));
+	return string(foldLeft($seq,"",(acc,_) => acc + String.fromCodePoint(_)));
 	//return seq($seq.map(_ => String.fromCodePoint(_)).join(""));
 }
 
