@@ -75,9 +75,10 @@ export function size($a) {
 	return _checked($a, List.prototype.count);
 }
 
-export function subarray($a,$s,$e) {
-	var s =  first($s) || 1, e = first($e);
-	return _checked($a, rrb.slice, s - 1,  e);
+export function subarray($a,$s,$l) {
+	var s =  first($s) || 1, l = first($l);
+	var sx = s - 1;
+	return _checked($a, rrb.slice, sx,  l ? sx + l : undefined);
 }
 
 export function insertBefore($a, $i, $v) {
