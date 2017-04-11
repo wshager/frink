@@ -1205,8 +1205,20 @@ LazySeq.prototype["@@append"] = LazySeq.prototype.push;
 
 LazySeq.prototype.__is_Seq = true;
 
-LazySeq.prototype.concat = function (...v) {
-	return new LazySeq(this.iterable.concat(v));
+LazySeq.prototype.concat = function (...a) {
+	var ret = _isArray(this.iterable) ? this.iterable : Array.from(this.iterable);
+	for (var i = 0, l = a.length; i < l; i++) {
+		var x = a[i];
+		if (_isArray(x)) {
+			//  assume flat
+			ret = ret.concat(x);
+		} else if (isSeq(x)) {
+			ret = ret.concat(x.toArray());
+		} else {
+			ret.push(x);
+		}
+	}
+	return new LazySeq(ret);
 };
 
 LazySeq.prototype.toString = function () {
@@ -1260,19 +1272,8 @@ function _isArray(a) {
 }
 
 function seq(...a) {
-	var ret = [];
-	for (var i = 0, l = a.length; i < l; i++) {
-		var x = a[i];
-		if (_isArray(x)) {
-			//  assume flat
-			ret = ret.concat(x);
-		} else if (isSeq(x)) {
-			ret = ret.concat(x.toArray());
-		} else {
-			ret.push(x);
-		}
-	}
-	return new LazySeq(ret);
+	var s = new LazySeq();
+	return s.concat.apply(s, a);
 }
 
 function isSeq(a) {
@@ -1410,50 +1411,31 @@ function _iterate(iterable, f, z) {
 }
 
 function _new(iterable) {
-    return typeof iterable["@@empty"] == "function" ? iterable["@@empty"]() : new iterable.constructor();
+    return iterable["@@empty"] ? iterable["@@empty"]() : new iterable.constructor();
 }
 
-// memoized
+// checkiecheckie
 function _append(iterable, appendee) {
-    try {
+    if (iterable["@@append"]) {
         return iterable["@@append"](appendee);
-    } catch (e) {
-        try {
-            let appended = iterable.push(appendee);
-            // stateful stuff
-            if (appended !== iterable) {
-                iterable["@@append"] = appendee => {
-                    this.push(appendee);
-                    return this;
-                };
-                return iterable;
-            }
-            iterable["@@append"] = appendee => {
-                return this.push(appendee);
-            };
-            return appended;
-        } catch (e) {
-            try {
-                let appended = iterable.set(appendee[0], appendee[1]);
-                // stateful stuff
-                if (appended === iterable) {
-                    iterable["@@append"] = appendee => {
-                        this.set(appendee[0], appendee[1]);
-                        return this;
-                    };
-                    return iterable;
-                }
-                iterable["@@append"] = appendee => {
-                    return this.set(appendee[0], appendee[1]);
-                };
-                return appended;
-            } catch (e) {
-                return new iterable.constructor(appendee);
-            }
-            // badeet badeet bathatsallfolks!
-            // if you want more generics, use a library
+    } else if (iterable.push) {
+        let appended = iterable.push(appendee);
+        // stateful stuff
+        if (appended !== iterable) {
+            return iterable;
         }
+        return appended;
+    } else if (iterable.set) {
+        let appended = iterable.set(appendee[0], appendee[1]);
+        // stateful stuff
+        if (appended !== iterable) {
+            return iterable;
+        }
+        return appended;
+    } else {
+        return new iterable.constructor(appendee);
     }
+    // badeet badeet bathatsallfolks!
 }
 
 // introduce a step so we can reuse _iterate for foldLeft
@@ -1483,17 +1465,17 @@ function distinctCat$1(f) {
     // FIXME how to optimize?
     return function transDistinctCat(v, i, iterable, z) {
         return step(z, v, function (z, v) {
-            return foldLeft(v, function (z, v) {
+            return foldLeft(v, z, function (z, v) {
                 if (f(z, v)) return _append(z, v);
                 return z;
-            }, z);
+            });
         });
     };
 }
 
 function cat(v, i, iterable, z) {
     return step(z, v, function (z, v) {
-        return foldLeft(v, _append, z);
+        return foldLeft(v, z, _append);
     });
 }
 
@@ -3710,8 +3692,8 @@ function push(tree, val) {
 		// push to tail
 		let newTail = (0, _util.createLeafFrom)(tree.tail, tree.editable);
 		newTail.push(val);
+		if (!tree.editable) return new Tree(tree.size + 1, tree.root, newTail);
 		tree.size++;
-		if (!tree.editable) return new Tree(tree.size, tree.root, newTail);
 		tree.tail = newTail;
 		return tree;
 	}
@@ -3720,8 +3702,8 @@ function push(tree, val) {
 	let newTail = [val];
 	newTail.height = 0;
 	let newRoot = tree.root ? (0, _util.sinkTailIfSpace)(tree.tail, tree.root, tree.editable) || (0, _util.siblise)(tree.root, (0, _util.parentise)(tree.tail, tree.root.height)) : (0, _util.parentise)(tree.tail, 1);
+	if (!tree.editable) return new Tree(tree.size + 1, newRoot, newTail);
 	tree.size++;
-	if (!tree.editable) return new Tree(tree.size, newRoot, newTail);
 	tree.root = newRoot;
 	tree.tail = newTail;
 	return tree;
@@ -3995,9 +3977,9 @@ const DONE = {
 };
 
 TreeIterator.prototype.next = function () {
+	if (this.i == this.tree.size) return DONE;
 	var v = this.tree.get(this.i);
 	this.i++;
-	if (this.i == this.tree.size) return DONE;
 	return { value: v };
 };
 
@@ -4008,7 +3990,6 @@ TreeIterator.prototype[Symbol.iterator] = function () {
 Tree.prototype[Symbol.iterator] = function () {
 	return new TreeIterator(this);
 };
-
 },{"./concat":13,"./const":14,"./slice":15,"./util":17}],17:[function(require,module,exports){
 "use strict";
 
