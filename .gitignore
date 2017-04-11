@@ -1,5 +1,2 @@
 .jshintrc
 node_modules
-
-test/*
-!test/index.js
