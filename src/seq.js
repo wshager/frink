@@ -119,3 +119,37 @@ export function insertBefore(s,pos,ins) {
 	}
     return seq(n.concat(a.slice(pos)));
 }
+
+/**
+ * [zeroOrOne returns arg OR error if arg not zero or one]
+ * @param  {Seq} $arg [Sequence to test]
+ * @return {Seq|Error}     [Process Error in implementation]
+ */
+export function zeroOrOne($arg) {
+    if($arg === undefined) return seq();
+    if(!isSeq($arg)) return $arg;
+    if($arg.size > 1) return error("FORG0003");
+    return $arg;
+}
+/**
+ * [oneOrMore returns arg OR error if arg not one or more]
+ * @param  {Seq} $arg [Sequence to test]
+ * @return {Seq|Error}      [Process Error in implementation]
+ */
+export function oneOrMore($arg) {
+    if($arg === undefined) return error("FORG0004");
+	if(!isSeq($arg)) return $arg;
+	if($arg.size === 0) return error("FORG0004");
+    return $arg;
+}
+/**
+ * [exactlyOne returns arg OR error if arg not exactly one]
+ * @param  {Seq} $arg [Sequence to test]
+ * @return {Seq|Error}      [Process Error in implementation]
+ */
+export function exactlyOne($arg) {
+    if($arg === undefined) return error("FORG0005");
+    if(!isSeq($arg)) return $arg;
+    if($arg.size != 1) return error("FORG0005");
+    return $arg;
+}
