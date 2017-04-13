@@ -191,7 +191,7 @@ List.prototype.toString = function(root = true, json = false){
 
 function _modify(pinode,node,ref) {
 	var type = pinode._type;
-	if(type == 1){
+	if(type == 1 || type == 9){
 		if (ref !== undefined) {
 			return restoreNode(pinode.insertBefore([ref.name,ref.inode],[node.name,node.inode]), pinode);
 		} else {
@@ -209,7 +209,7 @@ function _modify(pinode,node,ref) {
 	}
 }
 
-function _n(type, name, children){
+function _n(type, name, children = []){
 	if(isSeq(children)) children = children.toArray();
 	if(children.constructor != Array) {
 		if(children === undefined) {
@@ -267,7 +267,6 @@ function _v(type,value,name) {
 		// reuse insertIndex here to create a named map entry
 		if(node.name === undefined) node.name = pinode.count() + 1;
 		node.inode = new Value(node.type, node.name, value, pinode._depth + 1);
-		node.name = name;
 		// we don't want to do checks here
 		// we just need to call a function that will insert the node into the parent
 		parent.inode = _modify(pinode,node,ref);
@@ -313,7 +312,10 @@ export function p(name,value){
 }
 
 export function x(name, value) {
-	if(arguments.length == 1) value = name;
+	if(arguments.length == 1) {
+		value = name;
+		return _v(typeof value == "string" ? 3 : 12, value);
+	}
 	return _v(typeof value == "string" ? 3 : 12, value, name);
 }
 
