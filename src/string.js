@@ -6,6 +6,8 @@ import { string } from "./type";
 
 import { e, a, x, q } from "./vnode";
 
+import { appendChild } from "./modify";
+
 import { isNode } from "./access";
 
 import { into, transform, compose, forEach, filter, foldLeft, cat } from "./transducers";
@@ -34,7 +36,7 @@ function _repcached(rep){
 
 export function analyzeString($str,$pat) {
 	var str = first(string($str));
-    var ret = [];
+    var ret = e("fn:analyze-string-result");
 	var index = 0;
 	if(str){
 		let pat = first($pat);
@@ -43,11 +45,10 @@ export function analyzeString($str,$pat) {
 			var str = args.pop();
 			var idx = args.pop();
 			// the rest is groups
-			if(idx > index) ret.push(
-				e("fn:non-match",x(str.substring(index,idx)))
-			);
+			if(idx > index) ret = appendChild(ret,e("fn:non-match",x(str.substring(index,idx))));
 			index = idx + match.length;
 			var len = args.length;
+			var me = e("fn:match");
 			if(len > 0) {
 				var children = [];
 				for(let i = 0;i<len;i++){
@@ -56,23 +57,25 @@ export function analyzeString($str,$pat) {
 						// nest optional groups that are empty
 						// TODO nested groups
 						if(_ !== "") {
-							children.push(element("fn:group",seq(attribute("nr",Number(i+1)),text(_))));
+							let ge = e("fn:group",seq(a("nr",Number(i+1)),x(_)));
+							children.push(ge);
+							me = appendChild(me,ge);
 						} else {
 							var clen = children.length;
 							var last = clen ? children[clen-1] : children;
-							last.push(element("fn:group",seq(attribute("nr",Number(i+1)))));
+							last = appendChild(last,e("fn:group",seq(a("nr",Number(i+1)))));
 						}
 					}
 				}
-				var elm = e("fn:match",children);
-				ret.push(elm);
+				ret = appendChild(ret,me);
 			} else if(match) {
-				ret.push(e(seq("fn:match"),x(match)));
+				me = appendChild(me,x(match));
+				ret = appendChild(ret,me);
 			}
 		});
-		if(index < str.length) ret.push(e("fn:non-match",x(str.substr(index))));
+		if(index < str.length) ret = appendChild(ret,e("fn:non-match",x(str.substr(index))));
 	}
-	return e("fn:analyze-string-result",ret);
+	return ret;
 }
 
 export function tokenize($str,$pat) {
@@ -120,7 +123,7 @@ export function matches($str,$pat) {
     var str = first(string($str));
 	var pat = first($pat);
 	if(pat === undefined) return error("xxx");
-    str = _isNode(str) ? str.data() : str;
+    str = isNode(str) ? str.data() : str;
 	if(str === undefined) return seq(false);
     return _cached(pat).test(str.toString());
 }
