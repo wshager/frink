@@ -10,17 +10,17 @@ handle(n.parse(`<persoon id="243">
 
 function handle(out){
     var e = microtime.now();
-    if(err) console.error(err);
     console.log(out+"");
-    console.log("parsed",(e - s)/1000);   
+    console.log("parsed",(e - s)/1000);
     var elem = n.e("hobbies",[n.x("muziek")]);
-    
+
     s = microtime.now();
-    let next = n.insertBefore(out,elem);
+    var root = n.firstChild(out);
+    let next = n.insertChildBefore(n.lastChild(root),elem);
     e = microtime.now();
     console.log(next+"")
     console.log("appendChild",(e - s)/1000);
-    
+
     s = microtime.now();
     var l3 = n.toL3(out);
     e = microtime.now();
