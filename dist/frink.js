@@ -409,9 +409,7 @@ function _selectImpl(node, path) {
 	// if seq, apply axis to seq first
 	// FIXME to filter or not to filter?
 	var nodelist = (0, _seq.isSeq)(node) ? node = (0, _transducers.transform)(node, (0, _transducers.compose)((0, _transducers.forEach)(n => axis.f(n)), _transducers.cat)) : axis.f(node);
-	return (0, _transducers.transform)(nodelist, (0, _transducers.compose)( /*filter(nodeFilter),*/(0, _transducers.forEach)(process), function (v, i, iterable, z) {
-		return isNode(v) ? attr ? _transducers.cat : (0, _transducers.distinctCat)(_comparer()) : v;
-	}));
+	return (0, _transducers.transform)(nodelist, (0, _transducers.compose)( /*filter(nodeFilter),*/(0, _transducers.forEach)(process), n => isNode(n) ? attr ? (0, _transducers.cat)(n) : (0, _transducers.distinctCat)(_comparer())(n) : n));
 }
 
 function isEmptyNode(node) {
@@ -942,7 +940,7 @@ var _access = require('./access');
 function appendChild(node, child) {
 	node = (0, _vnode.ensureRoot)(node);
 	//if(!node || !node.size) return;
-	let last = (0, _access.lastChild)(node);
+	//let last = lastChild(node);
 	if (node.type == 9 && node.inode.size > 0) {
 		throw new Error("Document can only contain one child.");
 	}
@@ -952,6 +950,7 @@ function appendChild(node, child) {
 		child.inode(node);
 	} else {
 		// TODO make protective clone (of inode)
+		node.inode = (0, _vnode.restoreNode)(node.inode.push([child.name, child.inode]), node.inode);
 	}
 	while (node.parent) {
 		child = node;
@@ -1193,6 +1192,9 @@ exports.empty = empty;
 exports.exists = exists;
 exports.count = count;
 exports.insertBefore = insertBefore;
+exports.zeroOrOne = zeroOrOne;
+exports.oneOrMore = oneOrMore;
+exports.exactlyOne = exactlyOne;
 function LazySeq(iterable) {
 	this.iterable = isSeq(iterable) ? iterable.toArray() : iterable || [];
 }
@@ -1313,6 +1315,40 @@ function insertBefore(s, pos, ins) {
 		n.push(ins);
 	}
 	return seq(n.concat(a.slice(pos)));
+}
+
+/**
+ * [zeroOrOne returns arg OR error if arg not zero or one]
+ * @param  {Seq} $arg [Sequence to test]
+ * @return {Seq|Error}     [Process Error in implementation]
+ */
+function zeroOrOne($arg) {
+	if ($arg === undefined) return seq();
+	if (!isSeq($arg)) return $arg;
+	if ($arg.size > 1) return error("FORG0003");
+	return $arg;
+}
+/**
+ * [oneOrMore returns arg OR error if arg not one or more]
+ * @param  {Seq} $arg [Sequence to test]
+ * @return {Seq|Error}      [Process Error in implementation]
+ */
+function oneOrMore($arg) {
+	if ($arg === undefined) return error("FORG0004");
+	if (!isSeq($arg)) return $arg;
+	if ($arg.size === 0) return error("FORG0004");
+	return $arg;
+}
+/**
+ * [exactlyOne returns arg OR error if arg not exactly one]
+ * @param  {Seq} $arg [Sequence to test]
+ * @return {Seq|Error}      [Process Error in implementation]
+ */
+function exactlyOne($arg) {
+	if ($arg === undefined) return error("FORG0005");
+	if (!isSeq($arg)) return $arg;
+	if ($arg.size != 1) return error("FORG0005");
+	return $arg;
 }
 },{}],9:[function(require,module,exports){
 "use strict";
@@ -1794,7 +1830,7 @@ List.prototype.toString = function (root = true, json = false) {
 
 function _modify(pinode, node, ref) {
 	var type = pinode._type;
-	if (type == 1) {
+	if (type == 1 || type == 9) {
 		if (ref !== undefined) {
 			return restoreNode(pinode.insertBefore([ref.name, ref.inode], [node.name, node.inode]), pinode);
 		} else {
@@ -1812,7 +1848,7 @@ function _modify(pinode, node, ref) {
 	}
 }
 
-function _n(type, name, children) {
+function _n(type, name, children = []) {
 	if ((0, _seq.isSeq)(children)) children = children.toArray();
 	if (children.constructor != Array) {
 		if (children === undefined) {
@@ -1871,7 +1907,6 @@ function _v(type, value, name) {
 		// reuse insertIndex here to create a named map entry
 		if (node.name === undefined) node.name = pinode.count() + 1;
 		node.inode = new Value(node.type, node.name, value, pinode._depth + 1);
-		node.name = name;
 		// we don't want to do checks here
 		// we just need to call a function that will insert the node into the parent
 		parent.inode = _modify(pinode, node, ref);
@@ -1917,7 +1952,10 @@ function p(name, value) {
 }
 
 function x(name, value) {
-	if (arguments.length == 1) value = name;
+	if (arguments.length == 1) {
+		value = name;
+		return _v(typeof value == "string" ? 3 : 12, value);
+	}
 	return _v(typeof value == "string" ? 3 : 12, value, name);
 }
 
