@@ -8,7 +8,11 @@ import { seq, first, isSeq, isEmpty } from "./seq";
 
 import { isNode, isEmptyNode } from "./access";
 
-import { compose, forEach, filter, foldLeft, into } from "./transducers";
+import { isArray } from "./array";
+
+import { isMap } from "./map";
+
+import { transform, compose, forEach, filter, foldLeft, into } from "./transducers";
 
 // TODO complete math (e.g. type checks for idiv and friends)
 
@@ -206,26 +210,24 @@ export function to($a, $b) {
 }
 
 export function indexOf($a, $b) {
-    $a = item($a);
-    $b = item($b);
+    $a = first($a);
+    $b = first($b);
     return $a.findKeys(function(i) {
         return _boolean($b.op("equals", i));
     });
 }
 
 export function call(...a) {
-    let $f = item(a[0]);
+    let f = first(a[0]);
     let args = a.slice(1);
-    return $f.map(function(f) {
-        if (isList(f)) {
-            return f.get(first(a[1]) - 1);
-        } else if (isMap(f)) {
-            var key = first(a[1]);
-            return f.get(key);
-        } else {
-            return f.apply(this, args);
-        }
-    });
+    if (isArray(f)) {
+        return f.get(first(a[1]) - 1);
+    } else if (isMap(f)) {
+        var key = first(a[1]);
+        return f.get(key);
+    } else {
+        return f.apply(this, args);
+    }
 }
 
 function numbertest(a) {
@@ -421,7 +423,7 @@ function dataImpl(node, fltr = false) {
     if (isSeq(node)) {
         if (isEmpty(node)) return node;
         //ret = node.map(_ => dataImpl(_, fltr)).filter(_ => _ !== undefined);
-        var a = filter(node,_ => undefined !== dataImpl(_, fltr));
+        var a = transform(node,compose(forEach(_ => dataImpl(_, fltr)),filter(_ => undefined !== _)));
         if (!a.size) {
             ret = seq(new UntypedAtomic(""));
         } else {
