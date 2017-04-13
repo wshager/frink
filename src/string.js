@@ -62,8 +62,10 @@ export function analyzeString($str,$pat) {
 							me = appendChild(me,ge);
 						} else {
 							var clen = children.length;
-							var last = clen ? children[clen-1] : children;
-							last = appendChild(last,e("fn:group",seq(a("nr",Number(i+1)))));
+							if(clen) {
+								var last = children[clen - 1];
+								last = appendChild(last,e("fn:group",seq(a("nr",Number(i+1)))));
+							}
 						}
 					}
 				}
