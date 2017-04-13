@@ -5,7 +5,7 @@ import { firstChild, lastChild } from './access';
 export function appendChild(node, child) {
 	node = ensureRoot(node);
 	//if(!node || !node.size) return;
-	let last = lastChild(node);
+	//let last = lastChild(node);
 	if(node.type == 9 && node.inode.size > 0) {
 		throw new Error("Document can only contain one child.");
 	}
@@ -15,11 +15,12 @@ export function appendChild(node, child) {
 		child.inode(node);
 	} else {
 		// TODO make protective clone (of inode)
+		node.inode = restoreNode(node.inode.push([child.name,child.inode]), node.inode);
 	}
 	while (node.parent) {
 		child = node;
 		node = node.parent;
-		node.inode = restoreNode(node.inode.set(child.name,child.inode),node.inode);
+		node.inode = restoreNode(node.inode.set(child.name,child.inode), node.inode);
 	}
 	// this ensures immutability
 	return node.type == 9 ? firstChild(node) : node;
