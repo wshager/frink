@@ -229,7 +229,7 @@ export function range(n,s=0) {
     for(var i=s; i<n; i++) {
         arr[i] = i;
     }
-    return arr;
+    return seq(arr);
 }
 
 // TODO:
