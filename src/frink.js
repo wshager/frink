@@ -1,8 +1,3 @@
-import FastIntCompression from "fastintcompression";
-
-const compress = FastIntCompression.compress;
-const uncompress = FastIntCompression.uncompress;
-
 export { e, a, x, l, m, p, q } from "./vnode";
 
 export { appendChild, insertBefore, removeChild } from "./modify";
