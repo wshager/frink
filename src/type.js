@@ -425,7 +425,7 @@ function dataImpl(node, fltr = false) {
         //ret = node.map(_ => dataImpl(_, fltr)).filter(_ => _ !== undefined);
         var a = into(node,compose(forEach(_ => dataImpl(_, fltr)),filter(_ => undefined !== _)),seq());
         if (!a.size) {
-            ret = seq(new UntypedAtomic(""));
+            ret = new UntypedAtomic("");
         } else {
             ret = a;
         }
@@ -443,7 +443,7 @@ function dataImpl(node, fltr = false) {
             ret = !ret ? undefined : _cast(ret, UntypedAtomic);
         }
     }
-    return ret;
+    return isSeq(ret) && !ret.size ? new UntypedAtomic("") : ret;
 }
 
 export function instanceOf($a, $b) {
