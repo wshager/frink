@@ -154,6 +154,11 @@ export function parent(node) {
 	return node.parent ? seq(new VNodeIterator([node.parent.inode][Symbol.iterator](),node.parent.parent, vnode)) : seq();
 }
 
+export function self(node) {
+	if(!arguments.length) return Axis(self);
+	return node ? seq(new VNodeIterator([node.inode][Symbol.iterator](),node.parent, vnode)) : seq();
+}
+
 export function iter(node, f) {
 	// FIXME pass doc?
 	var i=0,prev;
@@ -339,39 +344,38 @@ function _comparer() {
 
 // TODO use direct functions as much as passible, e.g. _isNode instead of node
 function _selectImpl(node, path) {
-    if(typeof path == "string") {
-		var at = /^@/.test(path);
-		if(at) path = path.substring(1);
-		path = at ? attribute(path) : element(path);
-	}
-	var pathArr, len = 1;
-	if(isSeq(path)) {
-		pathArr = path.toArray();
-		len = pathArr.length;
-	} else {
-		pathArr = [path];
-	}
-	var filtered = [], axis = child(), directAccess;
-	for(var i = 0; i < len; i++){
-		let path = pathArr[i];
+	if(!isSeq(path)) path = seq(path);
+	var axis = self(), directAccess;
+	// process strings
+	path = transform(path,compose(forEach(function(path){
+		if(typeof path == "string") {
+			var at = /^@/.test(path);
+			if(at) path = path.substring(1);
+			return at ? attribute(path) : element(path);
+		}
+		return [path];
+	}),cat));
+	var filtered = transform(path,compose(forEach(function(path){
 		if(path.__is_Axis) {
 			axis = path;
 		} else if(path.__is_Accessor){
+			axis = child();
 			directAccess = path.__index;
-			filtered.push(path.f);
+			return path.f;
 		} else {
-			filtered.push(path);
+			return path;
 		}
-	}
+	}),filter(_ => !!_)));
+
 	var attr = axis.__type == 2;
-	var composed = compose.apply(null,filtered);
+	var composed = compose.apply(null,filtered.toArray());
 	const process = n => into(directAccess && !_isVNodeIterator(n) && !_isSiblingIterator(n) ? n.get(directAccess) : n, composed, seq());
 	//var nodeFilter = n => _isElement(n) || _isVNodeIterator(n) || _isSiblingIterator(n) || _isMap(n) || _isList(n);
 	// if seq, apply axis to seq first
-	// FIXME to filter or not to filter?
-	var nodelist = isSeq(node) ? node = transform(node, compose(forEach(n => axis.f(n)), cat)) : axis.f(node);
-	return transform(nodelist,compose(/*filter(nodeFilter),*/forEach(process), (n,k,i,z) =>
-		isSeq(n) ? cat(n,k,i,z) : isNode(n) ? attr ? cat(n,k,i,z) : distinctCat(_comparer())(n,k,i,z) : n));
+	// if no axis, expect context function call, so don't process + cat
+	var list = isSeq(node) ? node = transform(node, compose(forEach(n => axis.f(n)), cat)) : axis.f(node);
+	return transform(list,compose(forEach(process), (n,k,i,z) =>
+		!isNode(n) || attr ? cat(isSeq(n) ? n : [n],k,i,z) : distinctCat(_comparer())(n,k,i,z)));
 }
 
 
