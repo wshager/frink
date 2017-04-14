@@ -1,6 +1,8 @@
 const array = require("../lib/array");
 const assert = require("assert");
 const t = require("../lib/transducers");
+const s = require("../lib/seq");
+const n = require("../lib/type");
 
 function assertEq(a,b){
 	assert.equal(JSON.stringify(a),JSON.stringify(b));
@@ -24,3 +26,5 @@ console.log("all tests passed");
 
 console.log(t.foldLeft(x,"",(a,b) => a + b));
 console.log(t.transform(x,t.compose(t.filter(_ => _ != "a"),t.forEach(_ => _ + ".ok"))));
+
+console.log(array.default(n.string("a"),s.seq()));
