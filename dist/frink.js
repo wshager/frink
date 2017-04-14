@@ -424,10 +424,9 @@ function isEmptyNode(node) {
 const isNode = exports.isNode = _isVNode;
 
 function name($a) {
-	return _transducers.forEach($a, function (_) {
-		if (!_isVNode(_)) throw new Error("This is not a node");
-		return _.name;
-	});
+	if (_seq.isSeq($a)) return _transducers.forEach($a, name);
+	if (!_isVNode($a)) throw new Error("This is not a node");
+	return $a.name;
 }
 },{"./pretty":6,"./seq":8,"./transducers":9,"./vnode":10}],2:[function(require,module,exports){
 "use strict";
@@ -2934,11 +2933,10 @@ const constant = x => () => x;
     Based on:
     http://stackoverflow.com/questions/7616461/generate-a-hash-from-string-in-javascript-jquery
 */
-const hash = exports.hash = str => {
-    const type = typeof str;
-    if (type === 'number') return str;
-    if (type !== 'string') str += '';
-
+const hash = exports.hash = key => {
+    const type = typeof key;
+    if (type === 'number') return key;
+    var str = key+"";
     let hash = 0;
     for (let i = 0, len = str.length; i < len; ++i) {
         const c = str.charCodeAt(i);
@@ -4069,5 +4067,6 @@ Map.prototype.count = function () {
 Object.defineProperty(Map.prototype, 'size', {
     get: Map.prototype.count
 });
+
 },{}]},{},[3])(3)
 });
