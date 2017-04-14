@@ -139,6 +139,8 @@ Object.assign(Number.prototype, compProto, opProto);
 
 Object.assign(Boolean.prototype, compProto);
 
+Object.assign(Decimal, compProto);
+
 // TODO decimal opt-in/out
 const zeroInt = () => new Decimal(0);
 const zero = () => Number(0);
