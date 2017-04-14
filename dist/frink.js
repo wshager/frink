@@ -250,7 +250,7 @@ function _nodeTest(qname) {
 }
 
 function element(qname) {
-	return _nodeTest(qname);
+	return _seq.seq(child(), _nodeTest(qname));
 }
 
 function _attrGet(node, key) {
@@ -384,7 +384,7 @@ function _selectImpl(node, path) {
 	if (!_seq.isSeq(path)) path = _seq.seq(path);
 	var axis = self(),
 	    directAccess;
-	// process strings
+	// process strings (can this be combined?)
 	path = _transducers.transform(path, _transducers.compose(_transducers.forEach(function (path) {
 		if (typeof path == "string") {
 			var at = /^@/.test(path);
@@ -397,7 +397,6 @@ function _selectImpl(node, path) {
 		if (path.__is_Axis) {
 			axis = path;
 		} else if (path.__is_Accessor) {
-			axis = child();
 			directAccess = path.__index;
 			return path.f;
 		} else {
@@ -1592,7 +1591,7 @@ function range(n, s = 0) {
     for (var i = s; i < n; i++) {
         arr[i] = i;
     }
-    return arr;
+    return _seq.seq(arr);
 }
 
 // TODO:
