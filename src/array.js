@@ -120,7 +120,10 @@ export function flatten($a) {
 export function get($a,$i) {
 	var i = first($i) || 1;
 	var ix = i.valueOf() - 1;
-	return _checked($a,rrb.get,ix);
+	return _checked($a,function(a){
+		if(a.size) return a.get(ix);
+		return seq();
+	});
 }
 
 export function forEach($a,$f){
