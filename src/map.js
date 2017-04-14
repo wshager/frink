@@ -70,7 +70,7 @@ export function entry(...a){
 	var m  = ohamt.empty,
 		k = first(a[0]),
 		v = a[1];
-	return m.set(k.valueOf(),isSeq(v) && v.size>1 ? v : first(v));
+	return m.set(k,isSeq(v) && v.size>1 ? v : first(v));
 }
 
 export function get($map,$key) {
