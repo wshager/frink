@@ -57,9 +57,7 @@ export function analyzeString($str,$pat) {
 						// nest optional groups that are empty
 						// TODO nested groups
 						if(_ !== "") {
-							let ge = e("fn:group",seq(a("nr",Number(i+1)),x(_)));
-							children.push(ge);
-							me = appendChild(me,ge);
+							children[i] = e("fn:group",seq(a("nr",Number(i+1)),x(_)));
 						} else {
 							var clen = children.length;
 							if(clen) {
@@ -68,8 +66,9 @@ export function analyzeString($str,$pat) {
 							}
 						}
 					}
+					if(children[i]) me = appendChild(me,children[i]);
 				}
-				ret = appendChild(ret,me);
+				if(children.length) ret = appendChild(ret,me);
 			} else if(match) {
 				me = appendChild(me,x(match));
 				ret = appendChild(ret,me);
