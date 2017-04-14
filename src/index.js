@@ -15,7 +15,7 @@ export * from "./l3";
 
 export { fromJS, toJS, iter as iterJS, toL3 as jsToL3, fromL3 as jsFromL3 } from "./json";
 
-export { seq, isSeq, first, isEmpty as isEmptySeq, empty, exists, count, insertBefore } from "./seq";
+export { seq, isSeq, first, isEmpty as isEmptySeq, empty, exists, count, insertBefore, zeroOrOne, oneOrMore, exactlyOne } from "./seq";
 
 export * from "./subseq";
 
