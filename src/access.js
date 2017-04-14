@@ -215,7 +215,7 @@ function _nodeTest(qname){
 }
 
 export function element(qname){
-	return _nodeTest(qname);
+	return seq(child(),_nodeTest(qname));
 }
 
 function _attrGet(node,key){
@@ -346,7 +346,7 @@ function _comparer() {
 function _selectImpl(node, path) {
 	if(!isSeq(path)) path = seq(path);
 	var axis = self(), directAccess;
-	// process strings
+	// process strings (can this be combined?)
 	path = transform(path,compose(forEach(function(path){
 		if(typeof path == "string") {
 			var at = /^@/.test(path);
@@ -359,7 +359,6 @@ function _selectImpl(node, path) {
 		if(path.__is_Axis) {
 			axis = path;
 		} else if(path.__is_Accessor){
-			axis = child();
 			directAccess = path.__index;
 			return path.f;
 		} else {
