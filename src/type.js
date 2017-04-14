@@ -423,7 +423,7 @@ function dataImpl(node, fltr = false) {
     if (isSeq(node)) {
         if (isEmpty(node)) return node;
         //ret = node.map(_ => dataImpl(_, fltr)).filter(_ => _ !== undefined);
-        var a = transform(node,compose(forEach(_ => dataImpl(_, fltr)),filter(_ => undefined !== _)));
+        var a = into(node,compose(forEach(_ => dataImpl(_, fltr)),filter(_ => undefined !== _)),seq());
         if (!a.size) {
             ret = seq(new UntypedAtomic(""));
         } else {
@@ -436,7 +436,7 @@ function dataImpl(node, fltr = false) {
     var type = node.type;
     if (fltr && fltr === type) return undefined;
     if (type === 1) {
-        ret = node.map(_ => dataImpl(_, 2)).filter(_ => _ !== undefined);
+        ret = into(node,compose(forEach(_ => dataImpl(_, fltr)),filter(_ => undefined !== _)),seq());
     } else {
         ret = node.value;
         if (typeof ret == "string") {
