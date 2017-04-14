@@ -12,7 +12,7 @@ import { isArray } from "./array";
 
 import { isMap } from "./map";
 
-import { transform, compose, forEach, filter, foldLeft, into } from "./transducers";
+import { transform, compose, forEach, filter, foldLeft, into, range } from "./transducers";
 
 // TODO complete math (e.g. type checks for idiv and friends)
 
