@@ -4,7 +4,7 @@ import { error } from "./error";
 
 import { seq, first, isSeq, isEmpty } from "./seq";
 
-import { into, transform, compose, filter, forEach, foldLeft, cat } from "./transducers";
+import * as t from "./transducers";
 
 
 var List = rrb.empty.constructor;
@@ -37,13 +37,13 @@ export default function(...a) {
 	if(l==1 && isSeq(a[0])){
 		return rrb.fromArray(a[0].toArray());
 	}
-	return rrb.fromArray(a);//into(a,compose(filter(_ => !isEmpty(_)), forEach(_ => first(_))), rrb.empty);
+	return rrb.fromArray(a);//t.into(a,t.compose(t.filter(_ => !isEmpty(_)), t.forEach(_ => first(_))), rrb.empty);
 }
 
 export function join($a) {
 	if ($a === undefined) return error("XPTY0004");
 	// assume a sequence of vectors
-	return foldLeft(a,rrb.empty,function(pre,cur){
+	return t.foldLeft($a,rrb.empty,function(pre,cur){
 		var v = first(cur);
 		if(!isArray(v)) return error("XPTY0004","One of the items for array:join is not an array.");
 		return pre.concat(v);
@@ -114,11 +114,23 @@ export function reverse($a) {
 }
 
 export function flatten($a) {
-	return into($a,cat,seq());
+	return t.into($a,t.cat,seq());
 }
 
 export function get($a,$i) {
 	var i = first($i) || 1;
 	var ix = i.valueOf() - 1;
 	return _checked($a,rrb.get,ix);
+}
+
+export function forEach($a,$f){
+	return t.forEach(first($a),first($f));
+}
+
+export function filter($a,$f){
+	return t.filter(first($a),first($f));
+}
+
+export function foldLeft($a,$z,$f){
+	return t.foldLeft(first($a),$z,first($f));
 }
