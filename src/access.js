@@ -389,8 +389,7 @@ export const isNode = _isVNode;
 
 
 export function name($a) {
-	return forEach($a,function(_){
-        if(!_isVNode(_)) throw new Error("This is not a node");
-        return _.name;
-	});
+	if(isSeq($a)) return forEach($a,name);
+	if(!_isVNode($a)) throw new Error("This is not a node");
+	return $a.name;
 }
