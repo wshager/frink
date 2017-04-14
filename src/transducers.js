@@ -1,5 +1,5 @@
 // very basic stuff, not really transducers but less code
-
+import { seq } from "./seq";
 
 export function isIterable(obj) {
     return !!obj && typeof obj[Symbol.iterator] === 'function';
@@ -99,7 +99,7 @@ function _append(iterable, appendee) {
         }
         return appended;
     } else {
-        return new iterable.constructor(appendee);
+        return seq(appendee);
     }
     // badeet badeet bathatsallfolks!
 }
