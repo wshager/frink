@@ -370,15 +370,15 @@ function _selectImpl(node, path) {
 	// if seq, apply axis to seq first
 	// FIXME to filter or not to filter?
 	var nodelist = isSeq(node) ? node = transform(node, compose(forEach(n => axis.f(n)), cat)) : axis.f(node);
-	return transform(nodelist,compose(/*filter(nodeFilter),*/forEach(process), n =>
-		isNode(n) ? attr ? cat(n) : distinctCat(_comparer())(n) : n));
+	return transform(nodelist,compose(/*filter(nodeFilter),*/forEach(process), (n,k,i,z) =>
+		isSeq(n) ? cat(n,k,i,z) : isNode(n) ? attr ? cat(n,k,i,z) : distinctCat(_comparer())(n,k,i,z) : n));
 }
 
 
 export function isEmptyNode(node){
 	if(!_isVNode(node)) return false;
 	if(_isText(node) || _isLiteral(node) || _isAttribute(node)) return node.value === undefined;
-	return !node.count();
+	return !node.inode.count();
 }
 
 export const isNode = _isVNode;
