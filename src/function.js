@@ -38,8 +38,8 @@ function camelCase(str) {
 export function functionLookup($name,$arity){
     var qname = first($name);
     var arity = first($arity);
-    var uri = first(qname._uri).toString();
-    var name = camelCase(first(qname._name).toString().split(/:/).pop());
+    var uri = first(qname.uri).toString();
+    var name = camelCase(first(qname.name).toString().split(/:/).pop());
     var fn = modules[uri][name+"$"+arity];
     if(!fn) fn = modules[uri][name+"$"];
     return !!fn ? fn : seq();
@@ -68,9 +68,9 @@ export function parse($a){
 export function apply($fn,$a) {
 	var a = first($a);
 	if(!(a instanceof Array)){
-		if(typeof a.toArray != "function") return error("");
+		if(typeof a.toJS != "function") return error("");
 	}
-	return first($fn).apply(this,a.toArray());
+	return first($fn).apply(this,a.toJS());
 }
 
 // FIXME check if seq + apply data
