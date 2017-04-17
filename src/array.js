@@ -13,13 +13,13 @@ List.prototype.__is_List = true;
 
 List.prototype["@@empty"] = function(){
 	return rrb.empty;
-}
+};
 
 List.prototype["@@append"] = List.prototype.push;
 
 rrb.TreeIterator.prototype["@@empty"] = function(){
 	return rrb.empty;
-}
+};
 
 rrb.TreeIterator.prototype["@@append"] = List.prototype.push;
 
@@ -64,7 +64,7 @@ function _checked($a, fn, ...args) {
 }
 
 export function head($a) {
-	return _checked($a, rrb.slice,0,1);
+	return _checked($a, rrb.get,0);
 }
 
 export function tail($a) {
@@ -114,7 +114,7 @@ export function reverse($a) {
 }
 
 export function flatten($a) {
-	return t.into($a,t.cat,seq());
+	return t.into($a, t.compose(t.cat,t.filter(_ => _ !== undefined)), seq());
 }
 
 export function get($a,$i) {
