@@ -178,7 +178,8 @@ function take$1(idx){
 function drop$1(idx){
     return function transDrop(v, i, iterable, z) {
         if (i >= idx) {
-            return step(z, v, _append, 0, true);
+            // use -1 to prevent 'take' from stopping short `drop`
+            return step(z, v, _append, -1, true);
         }
         return z;
     };
