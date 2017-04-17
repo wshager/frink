@@ -154,7 +154,8 @@ export function decimal($a) {
 }
 
 export function integer($a) {
-    return cast(forEach($a,Math.floor), Integer, zeroInt);
+    if(isSeq($a)) return forEach($a, integer);
+    return cast(Math.floor($a), Integer, zeroInt);
 }
 
 export function string($a) {
@@ -179,11 +180,7 @@ export function double($a) {
 
 export function boolean($a) {
     // type test
-    try {
-        return _boolean($a);
-    } catch (e) {
-        return e;
-    }
+    return _boolean($a);
 }
 
 export function cast($a, $b) {
@@ -350,12 +347,17 @@ function isNodeSeq($a) {
 // FIXME the unmarshalling of seqs is probably more efficient than anything else...
 // EXCEPT a filter + a lazy foldRight maybe
 export function _boolean($a) {
-    var a = first($a);
-    if (isEmpty(a)) return false;
-    if ($a.size > 1 && !isNode(a)) {
-        throw error("err:FORG0006");
+    if(isSeq($a)){
+        var s = $a.size;
+        if(!s) return false;
+        var a = first($a);
+        var _isNode = isNode(a);
+        if (s > 1 && !_isNode) {
+            return error("err:FORG0006");
+        }
+        return _isNode ? true : !!a.valueOf();
     }
-    return a.valueOf();
+    return !!$a.valueOf();
 }
 
 export const logic = {
