@@ -1286,7 +1286,7 @@ function empty(s) {
 	return isSeq(s) ? !s.count() : undef(s);
 }
 
-function exists($i) {
+function exists(s) {
 	return isSeq(s) ? !!s.count() : !undef(s);
 }
 
@@ -1541,7 +1541,8 @@ function take$1(idx) {
 function drop$1(idx) {
     return function transDrop(v, i, iterable, z) {
         if (i >= idx) {
-            return step(z, v, _append, 0, true);
+            // use -1 to prevent 'take' from stopping short `drop`
+            return step(z, v, _append, -1, true);
         }
         return z;
     };
@@ -3670,7 +3671,7 @@ Map.prototype.has = function (key) {
     return has(key, this);
 };
 
-const defKeyCompare = (x, y) => x === y;
+const defKeyCompare = (x, y) => x.valueOf() === y.valueOf();
 
 /**
     Create an empty map.
