@@ -99,7 +99,7 @@ export function empty(s){
     return isSeq(s) ? !s.count() : undef(s);
 }
 
-export function exists($i){
+export function exists(s){
     return isSeq(s) ? !!s.count() : !undef(s);
 }
 
