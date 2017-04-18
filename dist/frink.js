@@ -1266,7 +1266,9 @@ function _isArray(a) {
 }
 
 function seq(...a) {
+	if (a.length == 1) return new LazySeq(a[0]);
 	var s = new LazySeq();
+	if (a.length === 0) return s;
 	return s.concat.apply(s, a);
 }
 
