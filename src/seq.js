@@ -37,7 +37,7 @@ LazySeq.prototype.count = function(){
 };
 
 LazySeq.prototype.toArray = function() {
-	return this.iterable;
+	return Array.from(this.iterable);
 };
 
 Object.defineProperty(LazySeq.prototype,"size",{
@@ -79,8 +79,10 @@ function _isArray(a){
 }
 
 export function seq(...a){
+	if(a.length == 1) return new LazySeq(a[0]);
 	var s = new LazySeq();
-	return s.concat.apply(s,a);
+	if(a.length === 0) return s;
+	return s.concat.apply(s, a);
 }
 
 export function isSeq(a){
