@@ -6,8 +6,8 @@ function assertEq(a,b){
 	assert.equal(JSON.stringify(a),JSON.stringify(b));
 }
 var x = n.analyzeString("1 + 1","(\\)[\\+\\*\\-\\?]?)|(=#\\p{N}+#?\\p{N}*=|,)?([\\+\\*\\-\\?\\p{L}\\p{N}\\-_\\.@\\$%/#@\\^:]*)(\\(?)");
-var ret = n.select(x,"*");
-console.log(ret.toString());
+var ret = n.select(x,"*",n.string);
+//console.log(ret.toString());
 //var h = n.head(ret);
-var t = n.tail(ret);
-console.log(t.toString())
+//var t = n.tail(ret);
+console.log(n.concat(ret))
