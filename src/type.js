@@ -360,16 +360,22 @@ export function _boolean($a) {
     return !!$a.valueOf();
 }
 
-export const logic = {
-    and: function and($a, $b) {
-        return _boolean($a) && _boolean($b);
-    },
-    or: function or($a, $b) {
-        return _boolean($a) || _boolean($b);
-    },
-    not: function not($a) {
-        return !first($a);
-    }
+export function and($a, $b) {
+    return _boolean($a) && _boolean($b);
+}
+
+export function or($a, $b) {
+    return _boolean($a) || _boolean($b);
+}
+
+export function not($a) {
+    return !first($a);
+}
+
+const logic = {
+    and: and,
+    or: or,
+    not: not
 };
 
 const opinv = {

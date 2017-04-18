@@ -1,4 +1,4 @@
-import { op, logic } from "./type";
+import { op } from "./type";
 
 export function eq($a,$b){
 	return op($a,"eq",$b);
@@ -67,9 +67,3 @@ export function div($a,$b){
 export function idiv($a,$b){
 	return op($a,"idiv",$b);
 }
-
-export const and = logic.and;
-
-export const or = logic.or;
-
-export const not = logic.not;
