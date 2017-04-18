@@ -6,6 +6,8 @@ import { error } from "./error";
 
 import { into, transform, compose, filter, forEach, foldLeft, cat } from "./transducers";
 
+import { eq } from "./op";
+
 const OrderedMap = ohamt.empty.constructor;
 
 OrderedMap.prototype.__is_Map = true;
@@ -26,7 +28,9 @@ export function isMap($maybe){
 
 export default function map(...a){
 	var l = a.length;
-	var m = ohamt.empty.beginMutation();
+	var m = ohamt.make({
+		keyEq: (x,y) => eq(x,y)
+	}).beginMutation();
 	if(l===0){
 		return m.endMutation();
 	}
@@ -47,7 +51,7 @@ export function put($map,$k,$v) {
 }
 
 export function keys($map) {
-	return seq(Array.from(first($map).keys()));
+	return seq(first($map).keys());
 }
 
 export function contains($map,$k){
@@ -75,7 +79,7 @@ export function entry(...a){
 
 export function get($map,$key) {
 	var map = first($map);
-	var k = first($key).valueOf();
+	var k = first($key);
 	var v = map.get(k);
 	return v !== undefined ? v : seq();
 }
