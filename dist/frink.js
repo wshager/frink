@@ -1224,7 +1224,7 @@ LazySeq.prototype.count = function () {
 };
 
 LazySeq.prototype.toArray = function () {
-	return this.iterable;
+	return Array.from(this.iterable);
 };
 
 Object.defineProperty(LazySeq.prototype, "size", {
@@ -2934,9 +2934,9 @@ const constant = x => () => x;
     http://stackoverflow.com/questions/7616461/generate-a-hash-from-string-in-javascript-jquery
 */
 const hash = exports.hash = key => {
-    const type = typeof key;
-    if (type === 'number') return key;
-    var str = key+"";
+    if (typeof key === 'number') return key;
+    var str = key + '';
+
     let hash = 0;
     for (let i = 0, len = str.length; i < len; ++i) {
         const c = str.charCodeAt(i);
@@ -3393,7 +3393,7 @@ emptyNode._modify = (edit, keyEq, shift, f, h, k, size, insert) => {
 /* Ordered / Multi helpers
  ******************************************************************************/
 
-function getLeafOrMulti(node, hash, key) {
+function getLeafOrMulti(node, keyEq, hash, key) {
     var s = 0,
         len = 0;
     while (node && node.type > 1) {
@@ -3401,7 +3401,7 @@ function getLeafOrMulti(node, hash, key) {
             len = node.children.length;
             for (var i = 0; i < len; i++) {
                 var c = node.children[i];
-                if (c.key === key) {
+                if (keyEq(c.key, key)) {
                     node = c;
                     break;
                 }
@@ -3420,14 +3420,14 @@ function getLeafOrMulti(node, hash, key) {
             s += SIZE;
         } else {
             // just return
-            if (node.key === key) {
+            if (keyEq(node.key, key)) {
                 return node;
             } else {
                 return;
             }
         }
     }
-    if (!!node && node.key === key) return node;
+    if (!!node && keyEq(node.key, key)) return node;
 }
 
 function getLeafFromMulti(node, id) {
@@ -3444,7 +3444,7 @@ function getLeafFromMultiV(node, val) {
     }
 }
 
-function updatePosition(parent, edit, entry, val, prev = false, s = 0) {
+function updatePosition(parent, keyEq, edit, entry, val, prev = false, s = 0) {
     var len = 0,
         type = parent.type,
         node = null,
@@ -3460,7 +3460,7 @@ function updatePosition(parent, edit, entry, val, prev = false, s = 0) {
         len = children.length;
         for (; idx < len; ++idx) {
             node = children[idx];
-            if (key === node.key) break;
+            if (keyEq(key, node.key)) break;
         }
     } else if (type == 3) {
         var frag = hashFragment(s, hash);
@@ -3484,7 +3484,7 @@ function updatePosition(parent, edit, entry, val, prev = false, s = 0) {
         }
     }
     if (node) {
-        children = arrayUpdate(canEditNode(edit, node), idx, updatePosition(node, edit, entry, val, prev, s), children);
+        children = arrayUpdate(canEditNode(edit, node), idx, updatePosition(node, keyEq, edit, entry, val, prev, s), children);
         if (type == 2) {
             return Collision(edit, parent.hash, children);
         } else if (type == 3) {
@@ -3627,7 +3627,7 @@ Map.prototype.get = function (key, alt) {
 Map.prototype.first = function () {
     var start = this._start;
     if (!start) return;
-    var node = getLeafOrMulti(this._root, start[0], start[1]);
+    var node = getLeafOrMulti(this._root, this._config.keyEq, start[0], start[1]);
     if (node.type == MULTI) node = getLeafFromMulti(node, start[2]);
     return node.value;
 };
@@ -3635,18 +3635,18 @@ Map.prototype.first = function () {
 Map.prototype.last = function () {
     var end = this._insert;
     if (!end) return;
-    var node = getLeafOrMulti(this._root, end[0], end[1]);
+    var node = getLeafOrMulti(this._root, this._config.keyEq, end[0], end[1]);
     if (node.type == MULTI) node = getLeafFromMulti(node, end[2]);
     return node.value;
 };
 
 Map.prototype.next = function (key, val) {
-    var node = getLeafOrMulti(this._root, hash(key), key);
+    var node = getLeafOrMulti(this._root, this._config.keyEq, hash(key), key);
     if (node.type == MULTI) {
         node = getLeafFromMultiV(node, val);
     }
     if (node.next === undefined) return;
-    var next = getLeafOrMulti(this._root, node.next[0], node.next[1]);
+    var next = getLeafOrMulti(this._root, this._config.keyEq, node.next[0], node.next[1]);
     if (next.type == MULTI) {
         next = getLeafFromMulti(next, node.next[2]);
     }
@@ -3671,7 +3671,10 @@ Map.prototype.has = function (key) {
     return has(key, this);
 };
 
-const defKeyCompare = (x, y) => x.valueOf() === y.valueOf();
+const defKeyCompare = (x, y) => {
+    console.log("comp",x.equals,y,x === y)
+    return x === y;
+};
 
 /**
     Create an empty map.
@@ -3746,13 +3749,14 @@ const appendHash = exports.appendHash = function (hash, key, value, exists, map)
     var insert = map._insert;
     map = modifyHash(constant(value), hash, key, exists ? null : insert, 0, map);
     if (insert && !exists) {
+        var keyEq = map._config.keyEq;
         const edit = map._editable ? map._edit : NaN;
-        map._root = updatePosition(map._root, edit, insert, [hash, key]);
+        map._root = updatePosition(map._root, keyEq, edit, insert, [hash, key]);
         if (map._start[1] === key) {
-            var node = getLeafOrMulti(map._root, hash, key);
+            var node = getLeafOrMulti(map._root, keyEq, hash, key);
             var next = node.next;
-            map._root = updatePosition(map._root, edit, [hash, key], undefined);
-            map._root = updatePosition(map._root, edit, node.next, undefined, true);
+            map._root = updatePosition(map._root, keyEq, edit, [hash, key], undefined);
+            map._root = updatePosition(map._root, keyEq, edit, node.next, undefined, true);
             map._start = node.next;
         }
     }
@@ -3780,12 +3784,13 @@ Map.prototype.set = function (key, value) {
  */
 const addHash = exports.addHash = function (hash, key, value, map) {
     var insert = map._insert;
-    var node = getLeafOrMulti(map._root, hash, key);
+    const keyEq = map._config.keyEq;
+    var node = getLeafOrMulti(map._root, keyEq, hash, key);
     var multi = node ? node.id + 1 : 0;
     var newmap = modifyHash(constant(value), hash, key, insert, multi, map);
     if (insert) {
         const edit = map._editable ? map._edit : NaN;
-        newmap._root = updatePosition(newmap._root, edit, insert, [hash, key, multi]);
+        newmap._root = updatePosition(newmap._root, keyEq, edit, insert, [hash, key, multi]);
     }
     return newmap;
 };
@@ -3805,7 +3810,8 @@ Map.prototype.push = function (kv) {
 const del = constant(nothing);
 const removeHash = exports.removeHash = (hash, key, val, map) => {
     // in case of collision, we need a leaf
-    var node = getLeafOrMulti(map._root, hash, key);
+    const keyEq = map._config.keyEq;
+    var node = getLeafOrMulti(map._root, keyEq, hash, key);
     if (node === undefined) return map;
     var prev = node.prev,
         next = node.next;
@@ -3821,14 +3827,14 @@ const removeHash = exports.removeHash = (hash, key, val, map) => {
     const edit = map._editable ? map._edit : NaN;
     var id = leaf ? leaf.id : 0;
     if (prev !== undefined) {
-        map._root = updatePosition(map._root, edit, prev, next);
+        map._root = updatePosition(map._root, keyEq, edit, prev, next);
         if (insert && insert[1] === key && insert[2] === id) map._insert = prev;
     }
     if (next !== undefined) {
-        map._root = updatePosition(map._root, edit, next, prev, true);
+        map._root = updatePosition(map._root, keyEq, edit, next, prev, true);
         if (map._start[1] === key && map._start[2] === id) {
             //next = node.next;
-            map._root = updatePosition(map._root, edit, next, undefined, true);
+            map._root = updatePosition(map._root, keyEq, edit, next, undefined, true);
             map._start = next;
         }
     }
@@ -3864,12 +3870,13 @@ const insertBefore = exports.insertBefore = (ref, ins, map) => {
     var rkey = ref[0],
         rval = ref[1],
         rh = hash(rkey);
-    var refNode = getLeafOrMulti(map._root, rh, rkey);
+    const keyEq = map._config.keyEq;
+    var refNode = getLeafOrMulti(map._root, keyEq, rh, rkey);
     if (refNode === undefined) return map.push(insert);
     var key = ins[0],
         val = ins[1],
         h = hash(key);
-    var node = getLeafOrMulti(map._root, h, key);
+    var node = getLeafOrMulti(map._root, keyEq, h, key);
     var multi = node ? node.id + 1 : 0;
     if (refNode.type == MULTI) {
         refNode = getLeafFromMultiV(refNode, rval);
@@ -3879,15 +3886,15 @@ const insertBefore = exports.insertBefore = (ref, ins, map) => {
     map = modifyHash(constant(val), h, key, prev, multi, map);
     const edit = map._editable ? map._edit : NaN;
     // set the refNode's prev to ins' id
-    map._root = updatePosition(map._root, edit, [rh, rkey, refNode.id], [h, key, multi], true);
+    map._root = updatePosition(map._root, keyEq, edit, [rh, rkey, refNode.id], [h, key, multi], true);
     // set the refNode's prev's next to ins' id
     if (prev) {
-        map._root = updatePosition(map._root, edit, prev, [h, key, multi]);
+        map._root = updatePosition(map._root, keyEq, edit, prev, [h, key, multi]);
     } else {
         map._start = [h, key, multi];
     }
     // set the inserted's next to refNode
-    map._root = updatePosition(map._root, edit, [h, key, multi], [rh, rkey, refNode.id]);
+    map._root = updatePosition(map._root, keyEq, edit, [h, key, multi], [rh, rkey, refNode.id]);
     map._insert = insert;
     return map;
 };
@@ -3897,7 +3904,7 @@ Map.prototype.insertBefore = function (ref, ins) {
 };
 
 Map.prototype.propsByValue = function (key, val) {
-    var node = getLeafOrMulti(this._root, hash(key), key);
+    var node = getLeafOrMulti(this._root, this._config.keyEq, hash(key), key);
     if (node.type == MULTI) {
         node = getLeafFromMultiV(val);
     }
@@ -3948,8 +3955,9 @@ const DONE = {
     done: true
 };
 
-function MapIterator(root, v, f) {
+function MapIterator(root, config, v, f) {
     this.root = root;
+    this.config = config;
     this.f = f;
     this.v = v;
 }
@@ -3957,7 +3965,7 @@ function MapIterator(root, v, f) {
 MapIterator.prototype.next = function () {
     var v = this.v;
     if (!v) return DONE;
-    var node = getLeafOrMulti(this.root, v[0], v[1]);
+    var node = getLeafOrMulti(this.root, this.config.keyEq, v[0], v[1]);
     if (node.type == MULTI) {
         node = getLeafFromMulti(node, v[2]);
         if (!node) return DONE;
@@ -3973,7 +3981,7 @@ MapIterator.prototype[Symbol.iterator] = function () {
 /**
     Lazily visit each value in map with function `f`.
 */
-const visit = (map, f) => new MapIterator(map._root, map._start, f);
+const visit = (map, f) => new MapIterator(map._root, map._config, map._start, f);
 
 /**
     Get a Javascsript iterator of `map`.
@@ -4026,9 +4034,10 @@ const fold = exports.fold = (f, z, m) => {
     var root = m._root;
     if (isEmptyNode(root)) return z;
     var v = m._start;
+    var keyEq = m._config.keyEq;
     var node;
     do {
-        node = getLeafOrMulti(root, v[0], v[1]);
+        node = getLeafOrMulti(root, keyEq, v[0], v[1]);
         v = node.next;
         z = f(z, node.value, node.key);
     } while (node && node.next);
