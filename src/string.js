@@ -121,21 +121,19 @@ export function normalizeSpace($str) {
 }
 
 export function matches($str,$pat) {
-    var str = first(string($str));
+    var str = first(string($str)).valueOf();
 	var pat = first($pat);
 	if(pat === undefined) return error("xxx");
-    str = isNode(str) ? str.data() : str;
-	if(str === undefined) return seq(false);
-    return _cached(pat).test(str.toString());
+	//if(!str === undefined) return seq(false);
+    return !!str.match(_cached(pat));
 }
 
 export function replace($str,$pat,$rep) {
-	var str = first(string($str)),
+	var str = first(string($str)).valueOf(),
     	pat = first($pat),
     	rep = first($rep);
 	if(pat === undefined || rep === undefined) return error("xxx");
-	if(str === undefined) return seq();
-    return string(XRegExp.replace(str.toString(),_cached(pat),_repcached(rep),"all"));
+    return string(XRegExp.replace(str,_cached(pat),_repcached(rep),"all"));
 }
 
 
