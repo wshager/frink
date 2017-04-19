@@ -1,6 +1,6 @@
 import * as ohamt from "ohamt";
 
-import { seq, first, isSeq, isEmpty } from "./seq";
+import { seq, first, isSeq } from "./seq";
 
 import { error } from "./error";
 
@@ -37,7 +37,7 @@ export default function map(...a){
 	// expect a sequence of maps or each argument to be a map
 	if(l==1 && isSeq(a[0])){
 		a = a[0];
-		if(isEmpty(a)) return m.endMutation();
+		if(!a.size) return m.endMutation();
 	}
 	return into(a,cat,m).endMutation();
 }
