@@ -2314,9 +2314,9 @@ function cxFilter(iterable, f) {
 	});
 }
 
-const position = exports.position = n.__cx ? n.__cx[0] : n.indexInParent;
+const position = exports.position = n => n.__cx ? n.__cx[0] : n.indexInParent;
 
-const last = exports.last = n.__cx ? n.__cx[1].size - 1 : n.parent ? n.parent.size : 0;
+const last = exports.last = n => n.__cx ? n.__cx[1].size - 1 : n.parent ? n.parent.size : 0;
 
 // TODO convert qname to integer when parent is array
 function _nodeTest(qname) {

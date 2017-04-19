@@ -205,9 +205,9 @@ export function cxFilter(iterable,f){
 	});
 }
 
-export const position = n.__cx ? n.__cx[0] : n.indexInParent;
+export const position = n => n.__cx ? n.__cx[0] : n.indexInParent;
 
-export const last = n.__cx ? n.__cx[1].size - 1 : n.parent ? n.parent.size : 0;
+export const last = n => n.__cx ? n.__cx[1].size - 1 : n.parent ? n.parent.size : 0;
 
 // TODO convert qname to integer when parent is array
 function _nodeTest(qname){
