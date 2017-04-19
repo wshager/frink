@@ -197,7 +197,17 @@ function _get(idx, type){
 	};
 }
 
-export const position = n => n.indexInParent;
+export function cxFilter(iterable,f){
+    return filter(iterable,function(v,k,i){
+        if(!isSeq(v) && !isNode(v)) v = seq(v);
+        v.__cx = [k,i];
+        return f(v,k,i);
+	});
+}
+
+export const position = n.__cx ? n.__cx[0] : n.indexInParent;
+
+export const last = n.__cx ? n.__cx[1].size - 1 : n.parent ? n.parent.size : 0;
 
 // TODO convert qname to integer when parent is array
 function _nodeTest(qname){
@@ -273,7 +283,7 @@ function Axis(f,type){
 	};
 }
 export function child(){
-	return Axis(x => seq(x));
+	return Axis(x => seq(ensureRoot(x)));
 }
 
 const _isSiblingIterator = n => !!n && n.__is_SiblingIterator;
