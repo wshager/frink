@@ -47,7 +47,7 @@ Object.defineProperty(LazySeq.prototype,"size",{
 });
 
 function SeqIterator(iterable) {
-    this.iter = iterable[Symbol.iterator]();
+    this.iter = _isIter(iterable) ? iterable : iterable[Symbol.iterator]();
 }
 
 SeqIterator.prototype["@@append"] = LazySeq.prototype.push;
@@ -75,23 +75,31 @@ LazySeq.prototype[Symbol.iterator] = function () {
 };
 
 function _isArray(a){
-	return !!a && a.constructor == Array;
+	return !!(a && a.constructor == Array);
+}
+
+function _isIter(a) {
+	return !!(a && typeof a.next == "function");
 }
 
 export function seq(...a){
-	if(a.length == 1) return new LazySeq(a);
+	if (a.length == 1){
+		var x = a[0];
+		if(isSeq(x)) return x;
+		if(_isArray(x) || _isIter(x)) return new LazySeq(x);
+	}
 	var s = new LazySeq();
 	if(a.length === 0) return s;
 	return s.concat.apply(s, a);
 }
 
 export function isSeq(a){
-	return !!a && a.__is_Seq;
+	return !!(a && a.__is_Seq);
 }
 
 export const Seq = LazySeq;
 
-export const isEmpty = s => isSeq(s) && !s.count();
+export const isEmptySeq = s => isSeq(s) && !s.count();
 
 export const first = s => isSeq(s) ? _isArray(s.iterable) ? s.iterable[0] : _first(s.iterable) : s;
 
