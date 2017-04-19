@@ -2,7 +2,8 @@
 import { seq } from "./seq";
 
 export function isIterable(obj) {
-    return !!obj && typeof obj[Symbol.iterator] === 'function';
+    // FIXME is this acceptable?
+    return !!obj && typeof obj != "string" && typeof obj[Symbol.iterator] === 'function';
 }
 
 function Singleton(val) {
@@ -19,7 +20,7 @@ Singleton.prototype.next = function(){
 };
 
 function _getIter(iterable) {
-    return isIterable(iterable) ? iterable[Symbol.iterator]() : typeof iterable.next === "function" ? iterable : new Singleton(iterable);
+    return iterable === undefined ? new Singleton() : isIterable(iterable) ? iterable[Symbol.iterator]() : typeof iterable.next === "function" ? iterable : new Singleton(iterable);
 }
 
 export function compose(...funcs) {
@@ -226,9 +227,9 @@ export function into(iterable, f, z) {
 }
 
 export function range(n,s=0) {
-    var arr = new Array(n - s);
+    var arr = [];
     for(var i=s; i<n; i++) {
-        arr[i] = i;
+        arr.push(i);
     }
     return seq(arr);
 }
