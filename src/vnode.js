@@ -209,15 +209,14 @@ function _modify(pinode,node,ref) {
 	}
 }
 
-function _n(type, name, children = []){
-	if(isSeq(children)) children = children.toArray();
-	if(children.constructor != Array) {
-		if(children === undefined) {
-			children = [];
-		} else {
-			if(!children.__is_VNode) children = x(children);
-			children = [children];
-		}
+function _n(type, name, children){
+	if(children === undefined) {
+		children = [];
+	} else if(isSeq(children)) {
+		children = children.toArray();
+	} else if(children.constructor != Array) {
+		if(!children.__is_VNode) children = x(children);
+		children = [children];
 	}
 	var node = new VNode(function (parent, ref) {
 		let pinode = parent.inode;
