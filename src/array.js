@@ -2,7 +2,7 @@ import * as rrb from "rrb-vector";
 
 import { error } from "./error";
 
-import { seq, first, isSeq, isEmpty } from "./seq";
+import { seq, first, isSeq } from "./seq";
 
 import * as t from "./transducers";
 
@@ -37,7 +37,7 @@ export default function(...a) {
 	if(l==1 && isSeq(a[0])){
 		return rrb.fromArray(a[0].toArray());
 	}
-	return rrb.fromArray(a);//t.into(a,t.compose(t.filter(_ => !isEmpty(_)), t.forEach(_ => first(_))), rrb.empty);
+	return rrb.fromArray(a);
 }
 
 export function join($a) {
@@ -77,8 +77,9 @@ export function size($a) {
 
 export function subarray($a,$s,$l) {
 	var s =  first($s) || 1, l = first($l);
-	var sx = s - 1;
-	return _checked($a, rrb.slice, sx,  l ? sx + l : undefined);
+	var sx = s.valueOf() - 1;
+	if(l) l = Math.max(sx + Number(l),0);
+	return _checked($a, rrb.slice, sx, l);
 }
 
 export function insertBefore($a, $i, $v) {
