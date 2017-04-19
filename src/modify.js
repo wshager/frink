@@ -26,7 +26,7 @@ export function appendChild(node, child) {
 	return node.type == 9 ? firstChild(node) : node;
 }
 
-export function insertBefore(node,ins){
+export function insertChildBefore(node,ins){
 	node = ensureRoot(node);
 	//if(!node || !node.size) return;
 	let parent = node.parent;
