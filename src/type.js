@@ -4,13 +4,13 @@ import {
     error
 } from "./error";
 
-import { seq, first, isSeq, isEmpty } from "./seq";
+import { seq, first, isSeq, empty } from "./seq";
 
 import { isNode, isEmptyNode } from "./access";
 
-import { isArray } from "./array";
+import { isArray, get as aGet } from "./array";
 
-import { isMap } from "./map";
+import { isMap, get as mGet } from "./map";
 
 import { transform, compose, forEach, filter, foldLeft, into, range } from "./transducers";
 
@@ -160,6 +160,7 @@ export function integer($a) {
 
 export function string($a) {
     // type test
+    if($a === undefined) return emptyString();
     return isSeq($a) || isNode($a) ? data($a) : cast($a, String, emptyString);
 }
 
@@ -203,9 +204,9 @@ function _cast(a, b) {
 export function to($a, $b) {
     let a = first($a);
     let b = first($b);
-    a = a !== undefined ? +a.valueOf() : 0;
+    a = a !== undefined ? +a.valueOf() : 1;
     b = b !== undefined ? +b.valueOf() : 0;
-    return range(a, b + 1);
+    return range(b + 1, a);
 }
 
 export function indexOf($a, $b) {
@@ -218,14 +219,12 @@ export function indexOf($a, $b) {
 
 export function call(...a) {
     let f = first(a[0]);
-    let args = a.slice(1);
     if (isArray(f)) {
-        return f.get(first(a[1]) - 1);
+        return aGet(f,first(a[1]));
     } else if (isMap(f)) {
-        var key = first(a[1]);
-        return f.get(key);
+        return mGet(f,first(a[1]));
     } else {
-        return f.apply(this, args);
+        return f.apply(this, a.slice(1));
     }
 }
 
@@ -322,11 +321,18 @@ function _promote(a, b) {
 function _opReducer(iterable, opfn, other, general) {
     var otherIsSeq = isSeq(other);
     if (general) {
-        return foldLeft(iterable,false,function(acc, v) {
-            return acc || (otherIsSeq ? foldLeft(other,false,function(pre, cur) {
+        /*if(!isSeq(iterable)) {
+            var v = iterable;
+            return (otherIsSeq ? foldLeft(other, false, function (pre, cur) {
                 return pre || opfn(v, cur);
             }) : opfn(v, other));
-        });
+        } else {*/
+            return foldLeft(iterable,false,function(acc, v) {
+                return acc || (otherIsSeq ? foldLeft(other,false,function(pre, cur) {
+                    return pre || opfn(v, cur);
+                }) : opfn(v, other));
+            });
+        //}
     } else if (!isSeq(iterable) || iterable.size == 1) {
         let b = otherIsSeq ? first(other) : other;
         return opfn(first(iterable), b);
@@ -410,8 +416,8 @@ export function op($a, operator, $b) {
             $b = data($b);
         }
         if (!general) {
-            if (isEmpty($a)) return $a;
-            if (isEmpty($b)) return $b;
+            if (empty($a)) return $a;
+            if (empty($b)) return $b;
             // FIXME NOT! allow arithmetic on sequences (why not?)...
             // FIXME reduce when comp result is seq of booleans
             if ($b.size > 1) return error("err:XPTY0004");
@@ -431,7 +437,7 @@ export function data($a) {
 function dataImpl(node, fltr = false) {
     var ret;
     if (isSeq(node)) {
-        if (isEmpty(node)) return node;
+        if (empty(node)) return node;
         //ret = node.map(_ => dataImpl(_, fltr)).filter(_ => _ !== undefined);
         var a = into(node,compose(forEach(_ => dataImpl(_, fltr)),filter(_ => undefined !== _)),seq());
         if (!a.size) {
