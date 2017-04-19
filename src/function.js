@@ -70,7 +70,7 @@ export function apply($fn,$a) {
 	if(!(a instanceof Array)){
 		if(typeof a.toJS != "function") return error("");
 	}
-	return first($fn).apply(this,a.toJS());
+	return first($fn).apply(this,a.toJS(true));
 }
 
 // FIXME check if seq + apply data
