@@ -99,8 +99,6 @@ export function isSeq(a){
 
 export const Seq = LazySeq;
 
-export const isEmptySeq = s => isSeq(s) && !s.count();
-
 export const first = s => isSeq(s) ? _isArray(s.iterable) ? s.iterable[0] : _first(s.iterable) : s;
 
 const undef = s => s === undefined || s === null;
