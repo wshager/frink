@@ -7,7 +7,7 @@ export function parseString(str, cb) {
 
 export * from "./vnode";
 
-export { appendChild, insertBefore as insertChildBefore, removeChild } from "./modify";
+export * from "./modify";
 
 export * from "./access";
 
@@ -15,7 +15,7 @@ export * from "./l3";
 
 export { fromJS, toJS, iter as iterJS, toL3 as jsToL3, fromL3 as jsFromL3 } from "./json";
 
-export { seq, isSeq, first, isEmpty as isEmptySeq, empty, exists, count, insertBefore, zeroOrOne, oneOrMore, exactlyOne } from "./seq";
+export * from "./seq";
 
 export * from "./subseq";
 
