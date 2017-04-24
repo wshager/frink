@@ -21,27 +21,27 @@ export const operatorMap = {
     "+": "plus",
     "-": "minus",
     "*": "times",
-    "div": "dividedBy",
-    "/": "dividedBy",
-    "idiv": "dividedBy",
-    "eq": "equals",
-    "ne": "equals",
-    "gt": "greaterThan",
-    "lt": "lessThan",
-    "ge": "greaterThanEquals",
-    "le": "lessThanEquals",
+    "div": "div",
+    "/": "div",
+    "idiv": "div",
+    "eq": "eq",
+    "ne": "eq",
+    "gt": "gt",
+    "lt": "lt",
+    "ge": "gte",
+    "le": "gte",
     "&&": "and",
     "||": "or",
     "!": "not"
 };
 
 export const generalOperatorMap = {
-    ">": "greaterThan",
-    "<": "lessThan",
-    ">=": "greaterThanEquals",
-    "<=": "lessThanEquals",
-    "=": "equals",
-    "!=": "equals"
+    ">": "gt",
+    "<": "lt",
+    ">=": "gte",
+    "<=": "lte",
+    "=": "eq",
+    "!=": "eq"
 };
 
 class UntypedAtomic extends String {
@@ -98,19 +98,19 @@ class Float extends Number {
 }
 
 const compProto = {
-    equals(other) {
+    eq(other) {
         return this.valueOf() === other.valueOf();
     },
-    greaterThan(other) {
+    gt(other) {
         return this.valueOf() > other.valueOf();
     },
-    lessThan(other) {
+    lt(other) {
         return this.valueOf() < other.valueOf();
     },
-    greaterThanEquals(other) {
+    gte(other) {
         return this.valueOf() >= other.valueOf();
     },
-    lessThanEquals(other) {
+    lte(other) {
         return this.valueOf() <= other.valueOf();
     }
 };
@@ -125,7 +125,7 @@ const opProto = {
     times(other) {
         return this * other;
     },
-    dividedBy(other) {
+    div(other) {
         return this / other;
     }
 };
@@ -138,8 +138,6 @@ Object.assign(Float.prototype, compProto, opProto);
 Object.assign(Number.prototype, compProto, opProto);
 
 Object.assign(Boolean.prototype, compProto);
-
-Object.assign(Decimal.prototype, compProto);
 
 // TODO decimal opt-in/out
 const zeroInt = () => new Decimal(0);
