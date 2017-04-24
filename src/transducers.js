@@ -38,7 +38,6 @@ export function compose(...funcs) {
                 v = ret.v;
                 z = ret.z;
                 c = ret.f;
-                if(ret.d) i = 0;
                 if(ret.t == i) return !reset ? step(z, v, c) : z;
             } else {
                 // stop processing current iteration
@@ -66,7 +65,6 @@ function _iterate(iterable, f, z) {
         if(ret !== undefined){
             if (ret["@@step"]) {
                 z = ret.f(ret.z, ret.v);
-                if(ret.d) i = 0;
                 if(ret.t == i) return z;
             } else {
                 z = ret;
@@ -113,7 +111,6 @@ function step(z, v, f, t, d) {
         v: v,
         f: f,
         t:t,
-        d:d,
         "@@step": true
     };
 }
@@ -179,8 +176,7 @@ function take$1(idx){
 function drop$1(idx){
     return function transDrop(v, i, iterable, z) {
         if (i >= idx) {
-            // use -1 to prevent 'take' from stopping short `drop`
-            return step(z, v, _append, -1, true);
+            return step(z, v, _append, -1);
         }
         return z;
     };
