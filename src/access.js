@@ -205,9 +205,9 @@ export function cxFilter(iterable,f){
 	});
 }
 
-export const position = n => n.__cx ? n.__cx[0] : n.indexInParent;
+export const position = n => n.__cx ? n.__cx[0] + 1 : n.indexInParent;
 
-export const last = n => n.__cx ? n.__cx[1].size - 1 : n.parent ? n.parent.size : 0;
+export const last = n => n.__cx ? n.__cx[1].size : n.parent ? n.parent.size : 1;
 
 // TODO convert qname to integer when parent is array
 function _nodeTest(qname){
@@ -389,6 +389,7 @@ function _selectImpl(node, path) {
 
 
 export function isEmptyNode(node){
+	node = ensureRoot(node);
 	if(!_isVNode(node)) return false;
 	if(_isText(node) || _isLiteral(node) || _isAttribute(node)) return node.value === undefined;
 	return !node.inode.count();
