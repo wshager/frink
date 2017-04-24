@@ -46,7 +46,7 @@ export function VNode(inode,type,name,value,parent,depth,indexInParent){
 	this.name = name;
 	this.value = value;
 	this.parent = parent;
-	this.depth = depth;
+	this.depth = depth | 0;
 	this.indexInParent = indexInParent;
 }
 
@@ -78,7 +78,8 @@ VNode.prototype.last = function(){
 };
 
 VNode.prototype.next = function(node){
-	return this.inode.next(node.name,node.inode);
+	var inode = node.inode;
+	return this.inode.next(inode._name,inode);
 };
 
 export function vnode(inode, parent, depth, indexInParent){
@@ -360,7 +361,7 @@ export function ensureRoot(node){
 	if(!node) return;
 	if(!node.inode) {
 		let root = node.first();
-		return vnode(root, vnode(node));
+		return vnode(root, vnode(node), 1);
 	}
 	if(typeof node.inode === "function") {
 		node.inode(d());

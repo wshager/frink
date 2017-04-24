@@ -46,7 +46,7 @@ export function VNode(inode,type,name,value,parent,depth,indexInParent){
 	this.name = name;
 	this.value = value;
 	this.parent = parent;
-	this.depth = depth;
+	this.depth = depth | 0;
 	this.indexInParent = indexInParent;
 }
 
@@ -361,7 +361,7 @@ export function ensureRoot(node){
 	if(!node) return;
 	if(!node.inode) {
 		let root = node.first();
-		return vnode(root, vnode(node, undefined, 0), 1);
+		return vnode(root, vnode(node), 1);
 	}
 	if(typeof node.inode === "function") {
 		node.inode(d());
