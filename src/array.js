@@ -11,6 +11,8 @@ var List = rrb.empty.constructor;
 
 List.prototype.__is_List = true;
 
+List.prototype._type = 5;
+
 List.prototype["@@empty"] = function(){
 	return rrb.empty;
 };
@@ -29,7 +31,7 @@ export function isArray($maybe) {
 	return !!(maybe && maybe.__is_List);
 }
 
-export default function(...a) {
+export default function array(...a) {
 	var l = a.length;
 	if(l===0){
 		return rrb.empty;
@@ -49,7 +51,6 @@ export function join($a) {
 		return pre.concat(v);
 	});
 }
-
 
 function _checked($a, fn, ...args) {
 	if ($a === undefined) return error("XPTY0004");
@@ -86,7 +87,7 @@ export function insertBefore($a, $i, $v) {
 	var i = first($i) || 1;
 	var ix = i.valueOf() - 1;
 	// unmarshal Singleton
-	var v = isSeq($v) && $v.size > 1 ? $v : first($v);
+	var v = isSeq($v) && $v.size != 1 ? $v : first($v);
 	return _checked($a, function(a){
 		// slice from 0 to i
 		// slice form i to end
@@ -104,13 +105,13 @@ export function remove($a,$i) {
 }
 
 export function append($a,$v) {
-	var v = isSeq($v) && $v.size > 1 ? $v : first($v);
+	var v = isSeq($v) && $v.size != 1 ? $v : first($v);
 	return _checked($a,rrb.push,v);
 }
 
 export function reverse($a) {
 	return _checked($a,function(a){
-		return rrb.fromArray(rrb.toArray(a).reverse());
+		return rrb.fromArray(a.toJS(true).reverse());
 	});
 }
 
