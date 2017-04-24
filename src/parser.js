@@ -20,7 +20,7 @@ export class Parser extends EventEmitter {
 		this.reset();
 	}
 	reset() {
-		var doc = emptyINode(9,"#document",0,emptyAttrMap()), depth = 0;
+		var doc = emptyINode(9,"#document",emptyAttrMap()), depth = 0;
 		var last = doc, parents = [];
 		this.removeAllListeners();
 		saxParser.errThrown = false;
@@ -35,7 +35,7 @@ export class Parser extends EventEmitter {
 		saxParser.onopentag = (function(node) {
 			var nodeName = node.name,
 				nodeType = 1;
-			depth++;
+			//depth++;
 			var key, ref = node.attributes;
 			// FIXME xmlns attributes are stored!
 			if (node.uri) {
@@ -68,7 +68,7 @@ export class Parser extends EventEmitter {
 				//ret = ret.concat(attribute(attr.uri ? qname(attr.uri, attr.name) : attr.name, attr.value));
 				attrMap = attrMap.set(attr.name,attr.value);
 			}
-			let n = emptyINode(nodeType,nodeName,depth,attrMap.endMutation(true));
+			let n = emptyINode(nodeType,nodeName,attrMap.endMutation(true));
 			if(last) {
 				last = last.push([nodeName,n]);
 				parents.push(last);
@@ -76,7 +76,7 @@ export class Parser extends EventEmitter {
 			last = n;
 		}).bind(this);
 		saxParser.onclosetag = function() {
-			depth--;
+			//depth--;
 			// here we can be sure that mutation has stopped
 			// BUT the problem is now that last children's parents are still mutable
 			// that's why we retain properties, because we won't be mutating until parsing is done
@@ -92,7 +92,7 @@ export class Parser extends EventEmitter {
 		var ontext = function(value, type=3) {
 			if (/\S/.test(value)) {
 				let name = last.count() + 1;
-				let n = new Value(type,name,value,depth+1);
+				let n = new Value(type,name,value);
 				last = last.push([name,n]);
 			}
 		};

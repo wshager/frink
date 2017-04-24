@@ -14,12 +14,12 @@ function ValidationIterator(node,f, cf){
 ValidationIterator.prototype.next = function () {
 	var node = nextNode(this.node);
 	if (!node) return DONE;
-	var depth = node.inode._depth;
-	if(next.inode._depth === depth + 1){
+	var depth = node.depth;
+	if(next.depth === depth + 1){
 		this.f = this.cf;
 		var entry = this.f.call(null, next);
 		entry[0].call(null, next);
-	} else if(next.inode.depth === depth){
+	} else if(next.depth === depth){
 		this.f.call(null, node);
 
 	}
@@ -38,7 +38,7 @@ ValidationIterator.prototype[Symbol.iterator] = function () {
  */
 export function validate(node, schema, params = {}) {
 	node = node.inode ? node : firstChild(node);
-	var depth = node.inode._depth;
+	var depth = node.depth;
 	var entries = [];
 	var err = [];
 	var entry = _validate(schema, params, "#", "", err);
@@ -51,7 +51,7 @@ export function validate(node, schema, params = {}) {
 			depth--;
 			//errCount[depth] = 0;
 			entry = entries[depth];
-		} else if (node.inode._depth == depth + 1) {
+		} else if (node.depth == depth + 1) {
 			entries[depth] = entry;
 			depth++;
 			if(!entry[1]) {
@@ -62,7 +62,7 @@ export function validate(node, schema, params = {}) {
 			if(entry) entry[0].call(null, node);
 			//let errLen = err.length;
 			//errCount[depth] = errLen - (errCount[depth] | 0);
-		} else if (node.inode._depth == depth) {
+		} else if (node.depth == depth) {
 			entry = entries[depth - 1];
 			if(!entry[1]) {
 				//console.log("skipping",node.name);
@@ -239,9 +239,8 @@ const validator = {
 				return false;
 			};
 			let newpath = path + "/" + index;
-			var inode = node.inode;
-			let keys = inode.keys();
-			var len = inode.count();
+			let keys = node.keys();
+			var len = node.count();
 			for (let k of keys) {
 				if (props[k] || patternMatcher(k)) len--;
 			}
@@ -257,7 +256,7 @@ const validator = {
 	additionalItems:function(schema, key, params, index, path, err, node){
 		var additionalItems = schema[key];
 		var items = schema.items;
-		if(items.length !== node.inode.count()) err.push(x(schema,key,path + "/" + index));
+		if(items.length !== node.count()) err.push(x(schema,key,path + "/" + index));
 	},
 	minimum:function(schema, key, params, index, path, err, node){
 		var test = schema[key];
