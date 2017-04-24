@@ -12,13 +12,15 @@ const OrderedMap = ohamt.empty.constructor;
 
 OrderedMap.prototype.__is_Map = true;
 
+OrderedMap.prototype._type = 6;
+
 OrderedMap.prototype["@@empty"] = function(){
 	return ohamt.empty;
-}
+};
 
 OrderedMap.prototype["@@append"] = function(kv) {
 	return this.append(kv[0],kv[1]);
-}
+};
 
 
 export function isMap($maybe){
@@ -47,7 +49,7 @@ export const merge = map;
 export function put($map,$k,$v) {
 	var k = first($k);
 	var map = first($map);
-	return map.set(k,isSeq($v) && $v.size>1 ? $v : first($v));
+	return map.set(k,isSeq($v) && $v.size != 1 ? $v : first($v));
 }
 
 export function keys($map) {
@@ -74,7 +76,7 @@ export function entry(...a){
 	var m  = ohamt.empty,
 		k = first(a[0]),
 		v = a[1];
-	return m.set(k,isSeq(v) && v.size>1 ? v : first(v));
+	return m.set(k,isSeq(v) && v.size != 1 ? v : first(v));
 }
 
 export function get($map,$key) {
