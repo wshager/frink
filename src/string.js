@@ -89,7 +89,7 @@ export function tokenize($str,$pat) {
 export function substring($str,$s,$l) {
 	var str = first(string($str)),
 		s = Math.round(first($s)) - 1;
-	if(!$l) return _.substring(s);
+	if (!$l) return str.substring(s);
 	var l = first($l);
 	return string(str.substring(s,s + Math.round(l)));
 }
@@ -121,19 +121,20 @@ export function normalizeSpace($str) {
 }
 
 export function matches($str,$pat) {
-    var str = first(string($str)).valueOf();
+    var str = first(string($str));
 	var pat = first($pat);
 	if(pat === undefined) return error("xxx");
-	//if(!str === undefined) return seq(false);
-    return !!str.match(_cached(pat));
+	if(str === undefined) return seq(false);
+    return !!str.valueOf().match(_cached(pat));
 }
 
 export function replace($str,$pat,$rep) {
-	var str = first(string($str)).valueOf(),
+	var str = first(string($str)),
     	pat = first($pat),
     	rep = first($rep);
 	if(pat === undefined || rep === undefined) return error("xxx");
-    return string(XRegExp.replace(str,_cached(pat),_repcached(rep),"all"));
+	if(str === undefined) return seq();
+    return string(XRegExp.replace(str.valueOf(),_cached(pat),_repcached(rep),"all"));
 }
 
 
