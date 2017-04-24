@@ -2,7 +2,7 @@ import * as sax from 'sax';
 
 import { EventEmitter } from 'events';
 
-import { Value, emptyINode, emptyAttrMap } from './vnode';
+import { Value, emptyINode, emptyAttrMap } from './pvnode';
 
 import { stripBOM } from "./bom";
 

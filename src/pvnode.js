@@ -2,6 +2,8 @@ import * as ohamt from "ohamt";
 
 import * as rrb from "rrb-vector";
 
+import { ensureRoot } from './construct';
+
 import { prettyXML } from "./pretty";
 
 import { forEach, into } from "./transducers";
@@ -40,6 +42,10 @@ Value.prototype.toString = function(root = true, json = false) {
 	return str;
 };
 
+export function value(type, name, value){
+	return new Value(type, name, value);
+}
+
 export function VNode(inode,type,name,value,parent,depth,indexInParent){
 	this.inode = inode;
 	this.type = type;
@@ -55,6 +61,10 @@ VNode.prototype.__is_VNode = true;
 VNode.prototype.toString = function(){
 	var root = ensureRoot(this);
 	return root.inode.toString();
+};
+
+VNode.prototype._get = function(idx){
+	return this.inode.get(idx);
 };
 
 VNode.prototype.count = function(){
@@ -85,38 +95,6 @@ VNode.prototype.next = function(node){
 export function vnode(inode, parent, depth, indexInParent){
 	return new VNode(inode, inode._type, inode._ns ? q(inode._ns.uri, inode._name) : inode._name, inode._value, parent, depth, indexInParent);
 }
-
-export function VNodeIterator(iter, parent, f){
-	this.iter = iter;
-	this.parent = parent;
-	this.f = f;
-	this.index = -1;
-	this.__is_VNodeIterator = true;
-}
-
-const DONE = {
-    done: true
-};
-
-VNodeIterator.prototype.next = function () {
-    var v = this.iter.next();
-	this.index++;
-    if (v.done) return DONE;
-    return { value: this.f(v.value,this.parent,this.index) };
-};
-
-// TODO create iterator that yields a node seq
-// position() should overwrite get(), but the check should be name or indexInParent
-VNode.prototype[Symbol.iterator] = function(){
-	return new VNodeIterator(this.inode.values(),this, vnode);
-};
-
-VNode.prototype.get = function(idx){
-	var val = this.inode.get(idx);
-	if(!val) return [];
-	val = val.constructor == Array ? val : [val];
-	return new VNodeIterator(val[Symbol.iterator](), this, vnode);
-};
 
 export function Step(inode,parent,depth,indexInParent){
 	this.inode = inode;
@@ -151,6 +129,39 @@ export function restoreNode(next,node){
 export function emptyAttrMap(){
 	return ohamt.empty.beginMutation();
 }
+
+VNode.prototype.modify = function(node,ref) {
+	var pinode = this.inode;
+	var type = this.type;
+	if(type == 1 || type == 9){
+		if (ref !== undefined) {
+			this.inode = restoreNode(pinode.insertBefore([ref.name,ref.inode],[node.name,node.inode]), pinode);
+		} else {
+			// FIXME check the parent type
+			this.inode = restoreNode(pinode.push([node.name,node.inode]), pinode);
+		}
+	} else if(type == 5){
+		if (ref !== undefined) {
+			this.inode = restoreNode(pinode.insertBefore(ref,node.inode), pinode);
+		} else {
+			this.inode = restoreNode(pinode.push(node.inode), pinode);
+		}
+	} else if(type == 6){
+		this.inode = restoreNode(pinode.set(node.name,node.inode), pinode);
+	}
+	return this;
+};
+
+VNode.prototype.finalize = function(){
+	this.inode = this.inode.endMutation();
+	return this;
+};
+
+VNode.prototype.setAttribute = function(key,value,ref){
+	// ignore ref for now
+	this.inode._attrs = this.inode._attrs.set(key,value);
+	return this;
+};
 
 function elemToString(e){
 	const attrFunc = (z,v,k) => {
@@ -212,176 +223,3 @@ List.prototype.toString = function(root = true, json = false){
 	}
 	return str + "]";
 };
-
-function _modify(pinode,node,ref) {
-	var type = pinode._type;
-	if(type == 1 || type == 9){
-		if (ref !== undefined) {
-			return restoreNode(pinode.insertBefore([ref.name,ref.inode],[node.name,node.inode]), pinode);
-		} else {
-			// FIXME check the parent type
-			return restoreNode(pinode.push([node.name,node.inode]), pinode);
-		}
-	} else if(type == 5){
-		if (ref !== undefined) {
-			return restoreNode(pinode.insertBefore(ref,node.inode), pinode);
-		} else {
-			return restoreNode(pinode.push(node.inode), pinode);
-		}
-	} else if(type == 6){
-		return restoreNode(pinode.set(node.name,node.inode), pinode);
-	}
-}
-
-function _n(type, name, children){
-	if(children === undefined) {
-		children = [];
-	} else if(isSeq(children)) {
-		children = children.toArray();
-	} else if(children.constructor != Array) {
-		if(!children.__is_VNode) children = x(children);
-		children = [children];
-	}
-	var node = new VNode(function (parent, ref) {
-		let pinode = parent.inode;
-		let name = node.name, ns;
-		if(type == 1) {
-			if(_isQName(name)) {
-				ns = name;
-				name = name.name;
-			} else if(/:/.test(name)){
-				// TODO where are the namespaces?
-			}
-		}
-		let inode = emptyINode(type, name, type == 1 ? ohamt.empty.beginMutation() : undefined, ns);
-		node.inode = inode;
-		for (let i = 0; i < children.length; i++) {
-			let child = children[i];
-			child = child.inode(node);
-		}
-		node.inode = node.inode.endMutation();
-		// insert into the parent means: update all parents until we come to the root
-		// but the parents of my parent will be updated elsewhere
-		// we just mutate the parent, because it was either cloned or newly created
-		parent.inode = _modify(pinode, node, ref);
-		node.parent = parent;
-		return node;
-	}, type, name);
-	return node;
-}
-
-function _a(type, name, value) {
-	var node = new VNode(function (parent, ref) {
-		let attrMap = parent.inode._attrs;
-		if (ref !== undefined) {
-			parent.inode._attrs = attrMap.insertBefore([ref.name,ref.value],[name,value]);
-		} else {
-			parent.inode._attrs = attrMap.push([name,value]);
-		}
-		node.parent = parent;
-		return node;
-	}, type, name, value);
-	return node;
-}
-
-function _v(type,value,name) {
-	var node = new VNode(function (parent, ref) {
-		let pinode = parent.inode;
-		// reuse insertIndex here to create a named map entry
-		if(node.name === undefined) node.name = pinode.count() + 1;
-		node.inode = new Value(node.type, node.name, value);
-		// we don't want to do checks here
-		// we just need to call a function that will insert the node into the parent
-		parent.inode = _modify(pinode,node,ref);
-		node.parent = parent;
-		return node;
-	}, type, name, value);
-	return node;
-}
-
-/**
- * Create a provisional element VNode.
- * Once the VNode's inode function is called, the node is inserted into the parent at the specified index
- * @param  {[type]} name     [description]
- * @param  {[type]} children [description]
- * @return {[type]}          [description]
- */
-export function e(qname, children) {
-	return _n(1,qname,children);
-}
-
-export function l(name, children) {
-	if(arguments.length == 1) {
-		children = name;
-		name = "#";
-	}
-	return _n(5,name,children);
-}
-
-export function m(name,children){
-	if(arguments.length == 1) {
-		children = name;
-		name = "#";
-	}
-	return _n(6,name,children);
-}
-
-export function a(name,value){
-	return _a(2,name,value);
-}
-
-export function p(name,value){
-	return _a(7,name,value);
-}
-
-export function x(name, value) {
-	if(arguments.length == 1) {
-		value = name;
-		return _v(typeof value == "string" ? 3 : 12, value);
-	}
-	return _v(typeof value == "string" ? 3 : 12, value, name);
-}
-
-export function c(value, name){
-	return _v(8, value, name);
-}
-
-export function d(uri = null,prefix = null,doctype = null) {
-	var attrs = ohamt.empty;
-	if(uri) {
-		attrs = attrs.set("xmlns" + (prefix ? ":" + prefix : ""), uri);
-	}
-	if(doctype) {
-		attrs = attrs.set("DOCTYPE", doctype);
-	}
-	return new VNode(emptyINode(9,"#document",0, attrs), 9, "#document");
-}
-
-export function ensureRoot(node){
-	if(!node) return;
-	if(!node.inode) {
-		let root = node.first();
-		return vnode(root, vnode(node), 1);
-	}
-	if(typeof node.inode === "function") {
-		node.inode(d());
-		return node;
-	}
-	return node;
-}
-
-export function _isQName(maybe){
-	return !!(maybe && maybe.__is_QName);
-}
-
-export function QName(uri, name) {
-	var prefix = /:/.test(name) ? name.replace(/:.+$/,"") : null;
-    return {
-        __is_QName: true,
-		name: name,
-		prefix,
-        uri: uri
-    };
-}
-
-export const q = QName;

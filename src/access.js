@@ -1,10 +1,58 @@
-import { Value, VNode, Step, ensureRoot, vnode, VNodeIterator } from './vnode';
+import { Value, VNode, vnode } from './pvnode';
+
+import { ensureRoot } from './construct';
 
 import { compose, into, transform, forEach, filter, cat, distinctCat } from "./transducers";
 
 import { seq, isSeq } from "./seq";
 
 import { prettyXML } from "./pretty";
+
+
+export function VNodeIterator(iter, parent, f){
+	this.iter = iter;
+	this.parent = parent;
+	this.f = f;
+	this.indexInParent = -1;
+	this.__is_VNodeIterator = true;
+}
+
+const DONE = {
+    done: true
+};
+
+VNodeIterator.prototype.next = function () {
+    var v = this.iter.next();
+	this.indexInParent++;
+    if (v.done) return DONE;
+    return { value: this.f(v.value,this.parent,this.indexInParent) };
+};
+
+// TODO create iterator that yields a node seq
+// position() should overwrite get(), but the check should be name or indexInParent
+VNode.prototype[Symbol.iterator] = function(){
+	return new VNodeIterator(this.values(),this, vnode);
+};
+
+VNode.prototype.get = function(idx){
+	var val = this._get(idx);
+	if(!val) return [];
+	val = val.constructor == Array ? val : [val];
+	return new VNodeIterator(val[Symbol.iterator](), this, vnode);
+};
+
+export function Step(inode,parent,depth,indexInParent){
+	this.inode = inode;
+	this.parent = parent;
+	this.depth = depth;
+	this.indexInParent = indexInParent;
+}
+
+Step.prototype.type = 17;
+
+Step.prototype.toString = function(){
+	return "Step {depth:"+this.depth+", closes:"+this.parent.name+"}";
+};
 
 export function* docIter(node, reverse = false) {
 	node = ensureRoot(node);
@@ -292,10 +340,6 @@ function SiblingIterator(inode, parent, depth, indexInParent, dir){
 	this.dir = dir;
 	this.__is_SiblingIterator = true;
 }
-
-const DONE = {
-    done: true
-};
 
 SiblingIterator.prototype.next = function(){
 	var v = this.dir.call(this.parent.inode,this.name,this.inode);

@@ -1,4 +1,4 @@
-export { e, a, x, l, m, p, q } from "./vnode";
+export { e, a, x, l, m, p, q } from "./construct";
 
 export { appendChild, insertBefore, removeChild } from "./modify";
 

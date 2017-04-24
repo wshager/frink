@@ -4,7 +4,7 @@ import { seq, isSeq, first } from "./seq";
 
 import { string } from "./type";
 
-import { e, a, x, q } from "./vnode";
+import { e, a, x, q } from "./construct";
 
 import { appendChild } from "./modify";
 
