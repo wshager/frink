@@ -1,7 +1,7 @@
 // optional:
 //import FastIntCompression from "fastintcompression";
 
-import { emptyINode, emptyAttrMap, value, count, push, finalize } from './vnode';
+import { emptyINode, emptyAttrMap, attrEntries, setAttribute, value, count, push, finalize } from './vnode';
 
 import { iter } from "./access";
 
@@ -83,7 +83,7 @@ export function toL3(doc){
 	iter(doc, function (node) {
 		let type = node.type,
 		    inode = node.inode,
-		    depth = inode._depth,
+		    depth = node.depth,
 		    name = node.name;
         var nameIndex = 0;
         if (typeof name === "string") {
