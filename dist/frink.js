@@ -550,7 +550,7 @@ function _v(type, val, name) {
 	var node = new _vnode.VNode(function (parent, ref) {
 		let pinode = parent.inode;
 		// reuse insertIndex here to create a named map entry
-		if (node.name === undefined) node.name = pinode.count() + 1;
+		if (node.name === undefined) node.name = node.count() + 1;
 		node.inode = _vnode.value(node.type, node.name, val);
 		// we don't want to do checks here
 		// we just need to call a function that will insert the node into the parent
@@ -943,7 +943,7 @@ function toL3(doc) {
         names = {},
         i = 0,
         j = 0;
-    for (let attr of doc._attrs.entries()) {
+    for (let attr of attrEntries(doc)) {
         let name = attr[0],
             attrname = "@" + name;
         if (!names[attrname]) {
@@ -976,7 +976,7 @@ function toL3(doc) {
         out[i++] = depth;
         if (nameIndex) out[i++] = nameIndex;
         if (type == 1) {
-            for (let attr of inode._attrs.entries()) {
+            for (let attr of attrEntries(inode)) {
                 let name = attr[0],
                     attrname = "@" + name;
                 if (!names[attrname]) {
@@ -1071,7 +1071,7 @@ function fromL3(l3) {
         n = 0,
         parents = [],
         depth = 0;
-    var doc = _vnode.emptyINode(9, "#document", 0, _vnode.emptyAttrMap());
+    var doc = _vnode.emptyINode(9, "#document", _vnode.emptyAttrMap());
     parents[0] = doc;
     const process = function (entry) {
         let type = entry[0];
@@ -1079,9 +1079,9 @@ function fromL3(l3) {
         if (type == 2) {
             let parent = parents[depth];
             let name = names[entry[1]];
-            parent._attrs = parent._attrs.push([name, array2str(entry, 2)]);
+            parent = setAttribute(parent, name, array2str(entry, 2));
         } else if (type == 7 || type == 10) {
-            doc._attrs = doc._attrs.push([entry[1], array2str(entry, 2)]);
+            doc = setAttribute(doc, entry[1], array2str(entry, 2));
         } else if (type == 15) {
             n++;
             names[n] = array2str(entry, 1);
@@ -1093,31 +1093,30 @@ function fromL3(l3) {
             if (type == 1 || type == 5 || type == 6) {
                 name = names[entry[2]];
                 if (parents[depth]) {
-                    if (parents[depth]._attrs) parents[depth]._attrs.endMutation();
-                    parents[depth] = parents[depth].endMutation();
+                    parents[depth] = _vnode.finalize(parents[depth]);
                 }
-                node = _vnode.emptyINode(type, name, depth, _vnode.emptyAttrMap());
+                node = _vnode.emptyINode(type, name, _vnode.emptyAttrMap());
                 parents[depth] = node;
             } else if (type == 3) {
                 if (parentType == 1 || parentType == 9) {
-                    name = parent.count();
+                    name = _vnode.count(parent);
                     valIndex = 2;
                 } else {
                     name = names[entry[2]];
                     valIndex = 3;
                 }
-                node = new _vnode.Value(type, name, array2str(entry, valIndex), depth);
+                node = _vnode.value(type, name, array2str(entry, valIndex));
             } else if (type == 12) {
                 if (parentType == 1 || parentType == 9) {
-                    name = parent.count();
+                    name = _vnode.count(parent);
                     valIndex = 2;
                 } else {
                     name = names[entry[2]];
                     valIndex = 3;
                 }
-                node = new _vnode.Value(type, name, convert(array2str(entry, valIndex)), depth);
+                node = _vnode.value(type, name, convert(array2str(entry, valIndex)), depth);
             }
-            if (parent) parent = parentType == 5 ? parent.push(node) : parentType == 6 ? parent.set(name, node) : parent.push([name, node]);
+            if (parent) parent = _vnode.push(parent, [name, node]);
         }
     };
     var entry = [];
@@ -1130,7 +1129,7 @@ function fromL3(l3) {
         }
     }
     process(entry);
-    return parents[0].endMutation();
+    return _vnode.finalize(parents[0]);
 }
 },{"./access":1,"./vnode":12}],6:[function(require,module,exports){
 'use strict';
@@ -1886,8 +1885,9 @@ exports.finalize = finalize;
 exports.setAttribute = setAttribute;
 exports.count = count;
 exports.first = first;
+exports.attrEntries = attrEntries;
 
-var _construct = require("./construct");
+var _construct2 = require("./construct");
 
 var _pretty = require("./pretty");
 
@@ -1896,6 +1896,10 @@ var _transducers = require("./transducers");
 var _multimap = require("./multimap");
 
 var multimap = _interopRequireWildcard(_multimap);
+
+var _entries = require("entries");
+
+var entries = _interopRequireWildcard(_entries);
 
 function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
 
@@ -1917,8 +1921,8 @@ function VNode(inode, type, name, value, parent, depth, indexInParent, cache) {
 VNode.prototype.__is_VNode = true;
 
 VNode.prototype.toString = function () {
-	var root = _construct.ensureRoot(this);
-	return root.inode.toString();
+	var root = _construct2.ensureRoot(this);
+	return stringify(root.inode);
 };
 
 VNode.prototype._get = function (idx) {
@@ -2000,7 +2004,7 @@ VNode.prototype.next = function (node) {
 	    inode = this.inode,
 	    idx = node.name;
 	if (type == 1 || type == 9) {
-		if (node.indexInParent) return this.children[node.indexInParent + 1];
+		return inode.$children[node.indexInParent + 1];
 	}
 	if (type == 5) return inode[idx];
 	if (type == 6) {
@@ -2026,6 +2030,31 @@ VNode.prototype.set = function (key, val) {
 
 VNode.prototype.removeValue = function (key, val) {
 	this.inode.removeValue(key, val);
+	return this;
+};
+
+VNode.prototype.finalize = function () {
+	return this;
+};
+
+VNode.prototype.modify = function (node, ref) {
+	var pinode = this.inode;
+	var type = this.type;
+	if (type == 1 || type == 9) {
+		if (ref !== undefined) {
+			pinode.$children.splice(ref.indexInParent, 0, node.inode);
+		} else {
+			pinode.$children.push(node.inode);
+		}
+	} else if (type == 5) {
+		if (ref !== undefined) {
+			pinode.splice(ref.indexInParent, 0, node.inode);
+		} else {
+			pinode.push(node.inode);
+		}
+	} else if (type == 6) {
+		pinode[node.name] = node.inode;
+	}
 	return this;
 };
 
@@ -2116,6 +2145,10 @@ function first(inode) {
 	}
 }
 
+function attrEntries(inode) {
+	return entries.default(inode.$attrs);
+}
+
 function stringify(e, root = true, json = false) {
 	var str = "";
 	var cc = e.constructor;
@@ -2124,11 +2157,11 @@ function stringify(e, root = true, json = false) {
 		str += _transducers.forEach(e, c => stringify(c, false, json)).join(",");
 		str += "]";
 	} else if (cc == Object) {
-		if (c.$name) {
-			str += elemToString(c);
+		if (e.$name) {
+			str += elemToString(e);
 		} else {
 			str += "{";
-			str += _transducers.forEach(Object.entries(e), c => '"' + c[0] + '":' + stringify(c[1], false, json)).join(",");
+			str += _transducers.forEach(entries.default(e), c => '"' + c[0] + '":' + stringify(c[1], false, json)).join(",");
 			str += "}";
 		}
 	} else {
@@ -2144,7 +2177,7 @@ function elemToString(e) {
 	let str = "<" + e.$name;
 	let ns = e.$ns;
 	if (ns) str += " xmlns" + (ns.prefix ? ":" + ns.prefix : "") + "=\"" + ns.uri + "\"";
-	str = Object.entries(e.$attrs).reduce(attrFunc, str);
+	str = _transducers.foldLeft(entries.default(e.$attrs), str, attrFunc);
 	if (e.$children.length > 0) {
 		str += ">";
 		for (let c of e.$children) {
@@ -2156,47 +2189,21 @@ function elemToString(e) {
 	}
 	return str;
 }
-/*
-var OrderedMap = ohamt.empty.constructor;
+},{"./construct":2,"./multimap":7,"./pretty":8,"./transducers":11,"entries":13}],13:[function(require,module,exports){
+'use strict';
 
-OrderedMap.prototype.__is_Map = true;
+const entries = function *(obj) {
 
-OrderedMap.prototype.toString = function(root = true, json = false){
-	var str = "";
-	var type = this._type;
-	const docAttrFunc = (z,v,k) =>
-		z += k=="DOCTYPE" ? "<!"+k+" "+v+">" : "<?"+k+" "+v+"?>";
-	const objFunc = (kv) => "\""+kv[0]+"\":"+kv[1].toString(false,true);
-	if(type==1) {
-		str += elemToString(this);
-	} else if(type==3 || type == 12){
-		str += this.toString();
-	} else  if(type == 6){
-		str += "{";
-		str += into(this,forEach(objFunc),[]).join(",");
-		str += "}";
-	} else if(type==9){
-		str = this._attrs.reduce(docAttrFunc,str);
-		for(let c of this.values()){
-			str += c.toString(false);
-		}
-	}
-	return root ? prettyXML(str) : str;
+    const keys = Object.keys(obj);
+
+    for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
+
+        yield [key, obj[key]];
+    }
 };
 
-var List = rrb.empty.constructor;
+module.exports = entries;
 
-List.prototype.__is_List = true;
-
-List.prototype.toString = function(root = true, json = false){
-	var str = "[";
-	for(var i=0,l = this.size; i < l; ){
-		str += this.get(i).toString(false,true);
-		i++;
-		if(i<l) str += ",";
-	}
-	return str + "]";
-};
-*/
-},{"./construct":2,"./multimap":7,"./pretty":8,"./transducers":11}]},{},[4])(4)
+},{}]},{},[4])(4)
 });
