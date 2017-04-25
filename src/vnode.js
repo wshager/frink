@@ -1,10 +1,8 @@
-import { prettyXML } from "./pretty";
-
 import { ensureRoot } from './construct';
 
-import { forEach, into } from "./transducers";
+import { prettyXML } from "./pretty";
 
-import { seq, isSeq } from "./seq";
+import { forEach, into, range } from "./transducers";
 
 export function value(type, name, value){
 	return value;
@@ -27,6 +25,20 @@ VNode.prototype.toString = function(){
 	return root.inode.toString();
 };
 
+
+VNode.prototype._get = function(idx){
+	if(this.type == 1 || this.type == 9) {
+		var children = this.inode.$children;
+		if(typeof idx == "number") return children[idx-1];
+		var ret = [];
+		for(let i = 0, l = children.length; i<l; i++){
+			if(children[i].$name == idx) ret.push(children[i]);
+		}
+		return ret.length == 1 ? ret[0] : ret;
+	}
+	return this.inode[idx];
+};
+
 VNode.prototype.count = function(){
 	var type = this.type, inode = this.inode;
 	if(type == 1 || type == 9) return inode.$children.length;
@@ -37,40 +49,89 @@ VNode.prototype.count = function(){
 
 VNode.prototype.keys = function(){
 	var type = this.type, inode = this.inode;
-	if(type == 1 || type == 9) return inode.$children.length;
-	if(type == 5) return inode.length;
-	if(type == 6) return Object.keys(inode).length;
-	return 0;
+	if(type == 1 || type == 9) {
+		var children = inode.$children, len = children.length, keys = new Array(len);
+		for(let i = 0; i<len; i++){
+			keys[i] = children[i].$name || i + 1;
+		}
+	}
+	if(type == 5) return range(inode.length).toArray();
+	if(type == 6) return Object.keys(inode);
+	return [];
 };
 
 VNode.prototype.values = function(){
 	var type = this.type, inode = this.inode;
-	if(type == 1 || type == 9) return inode.$children.length;
-	if(type == 5) return inode.length;
-	if(type == 6) return Object.keys(inode).length;
-	return 0;
+	if(type == 1 || type == 9) return inode.$children;
+	if(type == 5) return inode;
+	if(type == 6) return Object.values(inode);
+	return inode;
 };
 
 VNode.prototype.first = function(){
 	var type = this.type, inode = this.inode;
-	if(type == 1 || type == 9) return inode.$children.length;
-	if(type == 5) return inode.length;
-	if(type == 6) return Object.keys(inode).length;
-	return 0;
+	if(type == 1 || type == 9) return inode.$children[0];
+	if(type == 5) return inode[0];
+	if(type == 6) {
+		// hmmm
+		var first = Object.keys(inode)[0];
+		return inode[first];//[first,inode[first]];
+	}
 };
+
+function _last(a){
+	return a[a.length-1];
+}
 
 VNode.prototype.last = function(){
 	var type = this.type, inode = this.inode;
-	if(type == 1 || type == 9) return inode.$children.length;
-	if(type == 5) return inode.length;
-	if(type == 6) return Object.keys(inode).length;
-	return 0;
+	if(type == 1 || type == 9) return _last(inode.$children);
+	if(type == 5) return _last(inode);
+	if(type == 6) {
+		var last = _last(Object.keys(inode));
+		return inode[last];//[last,inode[last]];
+	}
 };
 
 VNode.prototype.next = function(node){
-	var inode = node.inode;
-	return this.inode.next(inode._name,inode);
+	var type = this.type, inode = this.inode, idx = node.name;
+	if(type == 1 || type == 9) {
+		// hmm
+		var children = inode.$children;
+		if(typeof idx == "number") return children[idx-1];
+		var ret = [];
+		for(let i = 0, l = children.length; i<l; i++){
+			if(children[i].$name == idx && children[i]==node.inode) return children[i];
+		}
+	}
+	if(type == 5) return inode[idx];
+	if(type == 6) {
+		var entry = inode[idx];
+		return entry;//[entry,entry[last]];
+	}
 };
+
+
+VNode.prototype.push = function(val){
+	var type = this.type;
+	if(type == 5) {
+		this.inode.push(val[1]);
+	} else if(type == 6){
+		this.inode[val[0]] = val[1];
+	}
+	return this;
+};
+
+VNode.prototype.set = function(key,val){
+	this.inode.set(key,val);
+	return this;
+};
+
+VNode.prototype.removeValue = function(key,val){
+	node.inode = restoreNode(this.inode.removeValue(key,val),node.inode);
+	return this;
+};
+
 
 export function vnode(inode, parent, depth, indexInParent){
 	var type, cc = inode.constructor;
@@ -88,16 +149,6 @@ export function vnode(inode, parent, depth, indexInParent){
 	return new VNode(inode, type, inode.$ns ? q(inode.$ns.uri, inode.$name) : inode.$name, (type == 3 || type == 12) ? inode : null, parent, depth, indexInParent);
 }
 
-VNode.prototype._get = function(idx){
-	if(this.type == 1 || this.type == 9) {
-		var children = this.inode.$children;
-		for(let i = 0, l = children.length; i<l; i++){
-			if(children[i].$name == idx) return children[i];
-		}
-	}
-	return this.inode[idx];
-};
-
 export function emptyINode(type, name, attrs, ns) {
     var inode = type == 5 ? [] : {};
 	if(type == 1 || type == 9)
@@ -107,15 +158,6 @@ export function emptyINode(type, name, attrs, ns) {
 	inode.$children = [];
     return inode;
 }
-
-export function restoreNode(next,node){
-	next._type = node._type;
-	next._name = node._name;
-	next._attrs = node._attrs;
-	next._ns = node._ns;
-	return next;
-}
-
 
 export function emptyAttrMap(){
 	return Map();
@@ -140,7 +182,7 @@ function elemToString(e){
 	}
 	return str;
 }
-
+/*
 var OrderedMap = ohamt.empty.constructor;
 
 OrderedMap.prototype.__is_Map = true;
@@ -181,3 +223,4 @@ List.prototype.toString = function(root = true, json = false){
 	}
 	return str + "]";
 };
+*/
