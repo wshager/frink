@@ -1,4 +1,6 @@
-import { VNode, emptyINode, emptyAttrMap, value } from "./pvnode";
+import { VNode, emptyINode, emptyAttrMap, vnode, value } from "./pvnode";
+
+import { seq, isSeq } from "./seq";
 
 function _n(type, name, children){
 	if(children === undefined) {
@@ -25,37 +27,37 @@ function _n(type, name, children){
 			let child = children[i];
 			child = child.inode(node);
 		}
-		node.inode = node.finalize();
+		node = node.finalize();
 		// insert into the parent means: update all parents until we come to the root
 		// but the parents of my parent will be updated elsewhere
 		// we just mutate the parent, because it was either cloned or newly created
-		parent.inode = node.modify(node, ref);
+		parent = parent.modify(node, ref);
 		node.parent = parent;
 		return node;
 	}, type, name);
 	return node;
 }
 
-function _a(type, name, value) {
+function _a(type, name, val) {
 	var node = new VNode(function (parent, ref) {
-		node.parent = parent.setAttribute(name,value,ref);
+		node.parent = parent.setAttribute(name,val,ref);
 		return node;
-	}, type, name, value);
+	}, type, name, val);
 	return node;
 }
 
-function _v(type,value,name) {
+function _v(type,val,name) {
 	var node = new VNode(function (parent, ref) {
 		let pinode = parent.inode;
 		// reuse insertIndex here to create a named map entry
 		if(node.name === undefined) node.name = pinode.count() + 1;
-		node.inode = value(node.type, node.name, value);
+		node.inode = value(node.type, node.name, val);
 		// we don't want to do checks here
 		// we just need to call a function that will insert the node into the parent
 		parent.inode = parent.modify(node,ref);
 		node.parent = parent;
 		return node;
-	}, type, name, value);
+	}, type, name, val);
 	return node;
 }
 
