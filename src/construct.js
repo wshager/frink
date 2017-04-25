@@ -31,8 +31,7 @@ function _n(type, name, children){
 		// insert into the parent means: update all parents until we come to the root
 		// but the parents of my parent will be updated elsewhere
 		// we just mutate the parent, because it was either cloned or newly created
-		parent = parent.modify(node, ref);
-		node.parent = parent;
+		node.parent = parent.modify(node, ref);
 		return node;
 	}, type, name);
 	return node;
@@ -54,8 +53,7 @@ function _v(type,val,name) {
 		node.inode = value(node.type, node.name, val);
 		// we don't want to do checks here
 		// we just need to call a function that will insert the node into the parent
-		parent.inode = parent.modify(node,ref);
-		node.parent = parent;
+		node.parent = parent.modify(node,ref);
 		return node;
 	}, type, name, val);
 	return node;
