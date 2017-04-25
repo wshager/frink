@@ -114,7 +114,7 @@ export function emptyINode(type, name, attrs, ns) {
     var inode = type == 5 ? rrb.empty.beginMutation() : ohamt.make().beginMutation();
     inode._type = type;
     inode._name = name;
-    inode._attrs = attrs;
+    inode.$attrs = attrs;
 	inode._ns = ns;
     return inode;
 }
@@ -122,13 +122,37 @@ export function emptyINode(type, name, attrs, ns) {
 export function restoreNode(next,node){
 	next._type = node._type;
 	next._name = node._name;
-	next._attrs = node._attrs;
+	next.$attrs = node.$attrs;
 	next._ns = node._ns;
 	return next;
 }
 
-export function emptyAttrMap(){
-	return ohamt.empty.beginMutation();
+export function emptyAttrMap(init){
+	var attrs = ohamt.empty.beginMutation();
+	if(init) for(var k in init) attrs = attrs.set(k,init[k]);
+	return attrs;
+}
+
+export function push(inode,val){
+	return inode.push(val);
+}
+
+export function finalize(inode){
+	if(inode.$attrs) inode.$attrs = inode.$attrs.endMutation();
+	return inode.endMutation();
+}
+
+export function setAttribute(inode,key,val){
+	if(inode.$attrs) inode.$attrs = inode.$attrs.set(key,val);
+	return inode;
+}
+
+export function count(inode){
+	return inode.count();
+}
+
+export function first(inode){
+	return inode.first();
 }
 
 VNode.prototype.modify = function(node,ref) {
@@ -154,13 +178,14 @@ VNode.prototype.modify = function(node,ref) {
 };
 
 VNode.prototype.finalize = function(){
+	this.inode.$attrs = this.inode.$attrs.endMutation();
 	this.inode = this.inode.endMutation();
 	return this;
 };
 
 VNode.prototype.setAttribute = function(key,value,ref){
 	// ignore ref for now
-	this.inode._attrs = this.inode._attrs.set(key,value);
+	this.inode.$attrs = this.inode.$attrs.set(key,value);
 	return this;
 };
 
@@ -171,7 +196,7 @@ function elemToString(e){
 	let str = "<"+e._name;
 	let ns = e._ns;
 	if(ns) str += " xmlns" + (ns.prefix ? ":" + ns.prefix : "") + "=\"" + ns.uri + "\"";
-	str = e._attrs.reduce(attrFunc,str);
+	str = e.$attrs.reduce(attrFunc,str);
 	if(e.size > 0){
 		str += ">";
 		for(let c of e.values()){
@@ -203,7 +228,7 @@ OrderedMap.prototype.toString = function(root = true, json = false){
 		str += into(this,forEach(objFunc),[]).join(",");
 		str += "}";
 	} else if(type==9){
-		str = this._attrs.reduce(docAttrFunc,str);
+		str = this.$attrs.reduce(docAttrFunc,str);
 		for(let c of this.values()){
 			str += c.toString(false);
 		}
