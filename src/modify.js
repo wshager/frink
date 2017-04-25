@@ -25,7 +25,7 @@ export function appendChild(node, child) {
 		child.inode(node);
 	} else {
 		// TODO make protective clone (of inode)
-		node = node.push([child.name,child.inode]);
+		node = node.push(child);
 	}
 	return _ascend(node);
 }
@@ -36,6 +36,8 @@ export function insertChildBefore(node,ins){
 	let parent = node.parent;
 	if(typeof ins.inode == "function") {
 		ins.inode(parent,node);
+	} else {
+		// what?
 	}
 	node = parent;
 	return _ascend(node);
@@ -46,6 +48,6 @@ export function removeChild(node,child){
 	//if(!node || !node.size || !child) return;
 	// TODO error
 	if(child.parent.inode !== node.inode) return;
-	node = node.removeValue(child.name,child.inode);
+	node = node.removeChild(child);
 	return _ascend(node);
 }
