@@ -8,8 +8,6 @@ import { prettyXML } from "./pretty";
 
 import { forEach, into } from "./transducers";
 
-import { seq, isSeq } from "./seq";
-
 export function Value(type, name, value) {
 	this._type = type;
 	this._name = name;
@@ -92,22 +90,25 @@ VNode.prototype.next = function(node){
 	return this.inode.next(inode._name,inode);
 };
 
+VNode.prototype.push = function(val){
+	this.inode = restoreNode(this.inode.push(val), this.inode);
+	return this;
+};
+
+VNode.prototype.set = function(key,val){
+	this.inode = restoreNode(this.inode.set(key,val), this.inode);
+	return this;
+};
+
+VNode.prototype.removeValue = function(key,val){
+	node.inode = restoreNode(this.inode.removeValue(key,val),node.inode);
+	return this;
+};
+
+
 export function vnode(inode, parent, depth, indexInParent){
 	return new VNode(inode, inode._type, inode._ns ? q(inode._ns.uri, inode._name) : inode._name, inode._value, parent, depth, indexInParent);
 }
-
-export function Step(inode,parent,depth,indexInParent){
-	this.inode = inode;
-	this.parent = parent;
-	this.depth = depth;
-	this.indexInParent = indexInParent;
-}
-
-Step.prototype.type = 17;
-
-Step.prototype.toString = function(){
-	return "Step {depth:"+this.depth+", closes:"+this.parent.name+"}";
-};
 
 export function emptyINode(type, name, attrs, ns) {
     var inode = type == 5 ? rrb.empty.beginMutation() : ohamt.make().beginMutation();
