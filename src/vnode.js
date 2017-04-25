@@ -2,9 +2,11 @@ import { ensureRoot, q } from './construct';
 
 import { prettyXML } from "./pretty";
 
-import { forEach, into, range } from "./transducers";
+import { forEach, foldLeft, into, range } from "./transducers";
 
-import { multimap } from "./multimap";
+import * as multimap from "./multimap";
+
+import * as entries from "./entries";
 
 export function value(type, name, value){
 	return value;
@@ -25,7 +27,7 @@ VNode.prototype.__is_VNode = true;
 
 VNode.prototype.toString = function(){
 	var root = ensureRoot(this);
-	return root.inode.toString();
+	return stringify(root.inode);
 };
 
 
@@ -48,7 +50,7 @@ VNode.prototype.count = function(){
 VNode.prototype.keys = function(){
 	var type = this.type, inode = this.inode;
 	if(type == 1 || type == 9) {
-		let children = inode.$children, len = children.length, cache = multimap();
+		let children = inode.$children, len = children.length, cache = multimap.default();
 		for(let i = 0; i<len; i++){
 			cache.push([children[i].$name || i + 1,children[i]]);
 		}
@@ -130,25 +132,28 @@ VNode.prototype.removeValue = function(key,val){
 };
 
 
-export function vnode(inode, parent, depth, indexInParent){
-	var type, name, value, cc = inode.constructor;
-	if(cc == Array) {
+export function vnode(inode, parent, depth, indexInParent) {
+	var type,
+	    name,
+	    value,
+	    cc = inode.constructor;
+	if (cc == Array) {
 		type = 5;
 		name = parent.keys()[indexInParent];
-	} else if(cc == Object){
-		if(inode.$name) {
-			type = inode.$attrs.has("DOCTYPE") ? 9 : 1;
+	} else if (cc == Object) {
+		if (inode.$name) {
 			name = inode.$name;
+			type = name == "#document" ? 9 : 1;
 		} else {
 			type = 6;
 			name = parent.keys()[indexInParent];
 		}
 	} else {
-		type = (cc == Boolean || cc == Number) ? 12 : 3;
+		type = cc == Boolean || cc == Number ? 12 : 3;
 		value = inode;
 		name = parent.keys()[indexInParent];
 	}
-	return new VNode(inode, type, inode.$ns ? q(inode.$ns.uri, name) : name, value, parent, depth, indexInParent);
+	return new VNode(inode, type, inode.$ns ? _construct.q(inode.$ns.uri, name) : name, value, parent, depth, indexInParent);
 }
 
 export function emptyINode(type, name, attrs, ns) {
@@ -161,24 +166,95 @@ export function emptyINode(type, name, attrs, ns) {
     return inode;
 }
 
-export function emptyAttrMap(){
-	return Map();
+export function emptyAttrMap(init){
+	return init || {};
+}
+
+export function push(inode,val){
+	var cc = inode.constructor;
+	if(cc == Array) {
+		inode.push(val);
+	} else if(cc == Object){
+		if(inode.$name) {
+			inode.$children.push(val[1]);
+		} else {
+			inode[val[0]] = val[1];
+		}
+	}
+	return inode;
+}
+
+export function finalize(inode){
+	return inode;
+}
+
+export function setAttribute(inode,key,val){
+	if(inode.$attrs) inode.$attrs[key]  = val;
+	return inode;
+}
+
+export function count(inode){
+	var cc = inode.constructor;
+	if(cc == Array) {
+		return inode.length;
+	} else if(cc == Object){
+		if(inode.$name) {
+			return inode.$children.length;
+		} else {
+			return Object.keys(inode).length;
+		}
+	}
+	return 0;
+}
+
+export function first(inode){
+	var cc = inode.constructor;
+	if(cc == Array) {
+		return inode[0];
+	} else if(cc == Object){
+		if(inode.$name) {
+			return inode.$children[0];
+		} else {
+			return Object.values(inode)[0];
+		}
+	}
+}
+
+function stringify(e,root=true,json=false){
+	var str = "";
+	var cc = e.constructor;
+	if(cc == Array){
+		str += "[";
+		str += forEach(e,c => stringify(c,false,json)).join(",");
+		str += "]";
+	} else if(cc == Object){
+		if(e.$name) {
+			str += elemToString(e);
+		} else {
+			str += "{";
+			str += forEach(entries(e),c => '"'+c[0]+'":'+stringify(c[1],false,json)).join(",");
+			str += "}";
+		}
+	} else {
+		str = e.toString();
+	}
+	return root && !json ? prettyXML(str) : str;
 }
 
 function elemToString(e){
-	const attrFunc = (z,v,k) => {
-		return z += " "+k+"=\""+v+"\"";
+	const attrFunc = (z,kv) => {
+		return z += " "+kv[0]+"=\""+kv[1]+"\"";
 	};
-	let str = "<"+e._name;
-	let ns = e._ns;
+	let str = "<"+e.$name;
+	let ns = e.$ns;
 	if(ns) str += " xmlns" + (ns.prefix ? ":" + ns.prefix : "") + "=\"" + ns.uri + "\"";
-	str = e._attrs.reduce(attrFunc,str);
-	if(e.size > 0){
+	str = foldLeft(entries(e.$attrs),str,attrFunc);
+	if(e.$children.length > 0){
 		str += ">";
-		for(let c of e.values()){
-			str += c.toString(false);
+		for(let c of e.$children){
+			str += stringify(c,false);
 		}
-		str += "</"+e._name+">";
+		str += "</"+e.$name+">";
 	} else {
 		str += "/>";
 	}
