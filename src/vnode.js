@@ -6,7 +6,7 @@ import { forEach, foldLeft, into, range } from "./transducers";
 
 import * as multimap from "./multimap";
 
-import * as entries from "./entries";
+import * as entries from "entries";
 
 export function value(type, name, value){
 	return value;
@@ -101,7 +101,7 @@ VNode.prototype.last = function(){
 VNode.prototype.next = function(node){
 	var type = this.type, inode = this.inode, idx = node.name;
 	if(type == 1 || type == 9) {
-		if(node.indexInParent) return this.children[node.indexInParent+1];
+		return inode.$children[node.indexInParent+1];
 	}
 	if(type == 5) return inode[idx];
 	if(type == 6) {
@@ -128,6 +128,31 @@ VNode.prototype.set = function(key,val){
 
 VNode.prototype.removeValue = function(key,val){
 	this.inode.removeValue(key,val);
+	return this;
+};
+
+VNode.prototype.finalize = function(){
+	return this;
+};
+
+VNode.prototype.modify = function(node,ref) {
+	var pinode = this.inode;
+	var type = this.type;
+	if(type == 1 || type == 9){
+		if (ref !== undefined) {
+			pinode.$children.splice(ref.indexInParent,0,node.inode);
+		} else {
+			pinode.$children.push(node.inode);
+		}
+	} else if(type == 5){
+		if (ref !== undefined) {
+			pinode.splice(ref.indexInParent,0,node.inode);
+		} else {
+			pinode.push(node.inode);
+		}
+	} else if(type == 6){
+		pinode[node.name] = node.inode;
+	}
 	return this;
 };
 
@@ -220,6 +245,10 @@ export function first(inode){
 	}
 }
 
+export function attrEntries(inode){
+	return entries.default(inode.$attrs);
+}
+
 function stringify(e,root=true,json=false){
 	var str = "";
 	var cc = e.constructor;
@@ -232,7 +261,7 @@ function stringify(e,root=true,json=false){
 			str += elemToString(e);
 		} else {
 			str += "{";
-			str += forEach(entries(e),c => '"'+c[0]+'":'+stringify(c[1],false,json)).join(",");
+			str += forEach(entries.default(e),c => '"'+c[0]+'":'+stringify(c[1],false,json)).join(",");
 			str += "}";
 		}
 	} else {
@@ -248,7 +277,7 @@ function elemToString(e){
 	let str = "<"+e.$name;
 	let ns = e.$ns;
 	if(ns) str += " xmlns" + (ns.prefix ? ":" + ns.prefix : "") + "=\"" + ns.uri + "\"";
-	str = foldLeft(entries(e.$attrs),str,attrFunc);
+	str = foldLeft(entries.default(e.$attrs),str,attrFunc);
 	if(e.$children.length > 0){
 		str += ">";
 		for(let c of e.$children){
