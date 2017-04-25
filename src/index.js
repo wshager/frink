@@ -5,7 +5,9 @@ export function parseString(str, cb) {
     return parser.parseString(str, cb);
 }
 
-export * from "./vnode";
+export * from "./pvnode";
+
+export * from "./construct";
 
 export * from "./modify";
 
