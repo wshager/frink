@@ -1,10 +1,12 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.amd = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-"use strict";
+'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
 });
 exports.isNode = exports.last = exports.position = undefined;
+exports.VNodeIterator = VNodeIterator;
+exports.Step = Step;
 exports.docIter = docIter;
 exports.nextNode = nextNode;
 exports.prevNode = prevNode;
@@ -30,16 +32,63 @@ exports.selectAttribute = selectAttribute;
 exports.isEmptyNode = isEmptyNode;
 exports.name = name;
 
-var _vnode = require("./vnode");
+var _pvnode = require('./pvnode');
 
-var _transducers = require("./transducers");
+var _construct = require('./construct');
 
-var _seq = require("./seq");
+var _transducers = require('./transducers');
 
-var _pretty = require("./pretty");
+var _seq = require('./seq');
+
+var _pretty = require('./pretty');
+
+function VNodeIterator(iter, parent, f) {
+	this.iter = iter;
+	this.parent = parent;
+	this.f = f;
+	this.indexInParent = -1;
+	this.__is_VNodeIterator = true;
+}
+
+const DONE = {
+	done: true
+};
+
+VNodeIterator.prototype.next = function () {
+	var v = this.iter.next();
+	this.indexInParent++;
+	if (v.done) return DONE;
+	return { value: this.f(v.value, this.parent, this.indexInParent) };
+};
+
+// TODO create iterator that yields a node seq
+// position() should overwrite get(), but the check should be name or indexInParent
+_pvnode.VNode.prototype[Symbol.iterator] = function () {
+	return new VNodeIterator(this.values(), this, _pvnode.vnode);
+};
+
+_pvnode.VNode.prototype.get = function (idx) {
+	var val = this._get(idx);
+	if (!val) return [];
+	val = val.constructor == Array ? val : [val];
+	return new VNodeIterator(val[Symbol.iterator](), this, _pvnode.vnode);
+};
+
+function Step(inode, parent, depth, indexInParent) {
+	this.inode = inode;
+	this.parent = parent;
+	this.depth = depth;
+	this.indexInParent = indexInParent;
+}
+
+Step.prototype.type = 17;
+
+Step.prototype.toString = function () {
+	return "Step {depth:" + this.depth + ", closes:" + this.parent.name + "}";
+};
 
 function* docIter(node, reverse = false) {
-	node = _vnode.ensureRoot(node);
+	node = _construct.ensureRoot(node);
 	yield node;
 	while (node) {
 		node = nextNode(node);
@@ -60,7 +109,7 @@ function nextNode(node /* VNode */) {
 		parent = node;
 		inode = node.first();
 		// TODO handle arrays
-		node = _vnode.vnode(inode, parent, depth, indexInParent);
+		node = _pvnode.vnode(inode, parent, depth, indexInParent);
 		//console.log("found first", node.name, depth,indexInParent);
 		return node;
 	} else {
@@ -73,14 +122,14 @@ function nextNode(node /* VNode */) {
 			node = node.parent;
 			if (depth === 0 || !node) return;
 			inode = node.inode;
-			node = new _vnode.Step(inode, node.parent, depth, node.indexInParent);
+			node = new Step(inode, node.parent, depth, node.indexInParent);
 			//console.log("found step", node.name, depth, indexInParent);
 			return node;
 		} else {
 			// return the next child
 			inode = parent.next(node);
 			if (inode) {
-				node = _vnode.vnode(inode, parent, depth, indexInParent);
+				node = _pvnode.vnode(inode, parent, depth, indexInParent);
 				//console.log("found next", node.name, depth, indexInParent);
 				return node;
 			}
@@ -133,19 +182,19 @@ function stringify(input) {
 
 function firstChild(node, fltr = 0) {
 	// FIXME return root if doc (or something else?)
-	var next = _vnode.ensureRoot(node);
+	var next = _construct.ensureRoot(node);
 	if (!node.inode) return next;
 	next = nextNode(next);
 	if (node.depth == next.depth - 1) return next;
 }
 
 function nextSibling(node) {
-	node = _vnode.ensureRoot(node);
+	node = _construct.ensureRoot(node);
 	var parent = node.parent;
 	var next = parent.next(node);
 	// create a new node
 	// very fast, but now we haven't updated path, so we have no index!
-	if (next) return _vnode.vnode(next, parent, node.depth, node.indexInParent + 1);
+	if (next) return _pvnode.vnode(next, parent, node.depth, node.indexInParent + 1);
 }
 
 function* children(node) {
@@ -154,7 +203,7 @@ function* children(node) {
 	    iter = node.values();
 	while (!iter.done) {
 		let c = iter.next().value;
-		yield _vnode.vnode(c, node, node.depth + 1, i);
+		yield _pvnode.vnode(c, node, node.depth + 1, i);
 		i++;
 	}
 }
@@ -171,19 +220,19 @@ function getDoc(node) {
 }
 
 function lastChild(node) {
-	node = _vnode.ensureRoot(node);
+	node = _construct.ensureRoot(node);
 	var last = node.last();
-	return _vnode.vnode(last, node, node.depth + 1);
+	return _pvnode.vnode(last, node, node.depth + 1);
 }
 
 function parent(node) {
 	if (!arguments.length) return Axis(parent);
-	return node.parent ? _seq.seq(new _vnode.VNodeIterator([node.parent.inode][Symbol.iterator](), node.parent.parent, _vnode.vnode)) : _seq.seq();
+	return node.parent ? _seq.seq(new VNodeIterator([node.parent.inode][Symbol.iterator](), node.parent.parent, _pvnode.vnode)) : _seq.seq();
 }
 
 function self(node) {
 	if (!arguments.length) return Axis(self);
-	return node ? _seq.seq(new _vnode.VNodeIterator([node.inode][Symbol.iterator](), node.parent, _vnode.vnode)) : _seq.seq();
+	return node ? _seq.seq(new VNodeIterator([node.inode][Symbol.iterator](), node.parent, _pvnode.vnode)) : _seq.seq();
 }
 
 function iter(node, f) {
@@ -193,7 +242,7 @@ function iter(node, f) {
 	if (!f) f = node => {
 		prev = node;
 	};
-	node = _vnode.ensureRoot(node);
+	node = _construct.ensureRoot(node);
 	f(node, i++);
 	while (node) {
 		node = nextNode(node);
@@ -267,7 +316,7 @@ function _attrGet(node, key) {
 	} else {
 		iter = node.attrs;
 	}
-	return new _vnode.VNodeIterator(iter[Symbol.iterator](), node, (v, parent, index) => _vnode.vnode(new _vnode.Value(2, v[0], v[1], node.depth + 1), parent, index));
+	return new VNodeIterator(iter[Symbol.iterator](), node, (v, parent, index) => _pvnode.vnode(new _pvnode.Value(2, v[0], v[1], node.depth + 1), parent, index));
 }
 
 // TODO make axis default, process node here, return seq(VNodeIterator)
@@ -313,7 +362,7 @@ function Axis(f, type) {
 	};
 }
 function child() {
-	return Axis(x => _seq.seq(_vnode.ensureRoot(x)));
+	return Axis(x => _seq.seq(_construct.ensureRoot(x)));
 }
 
 const _isSiblingIterator = n => !!n && n.__is_SiblingIterator;
@@ -329,16 +378,12 @@ function SiblingIterator(inode, parent, depth, indexInParent, dir) {
 	this.__is_SiblingIterator = true;
 }
 
-const DONE = {
-	done: true
-};
-
 SiblingIterator.prototype.next = function () {
 	var v = this.dir.call(this.parent.inode, this.name, this.inode);
 	this.index++;
 	if (!v) return DONE;
 	this.inode = v;
-	return { value: _vnode.vnode(v, this.parent, this.depth, this.indexInParent) };
+	return { value: _pvnode.vnode(v, this.parent, this.depth, this.indexInParent) };
 };
 
 SiblingIterator.prototype[Symbol.iterator] = function () {
@@ -347,7 +392,7 @@ SiblingIterator.prototype[Symbol.iterator] = function () {
 
 function followingSibling(node) {
 	if (arguments.length === 0) return Axis(followingSibling);
-	node = _vnode.ensureRoot(node);
+	node = _construct.ensureRoot(node);
 	return _seq.seq(new SiblingIterator(node.inode, node.parent, node.depth, node.indexInParent, next));
 }
 
@@ -421,7 +466,7 @@ function _selectImpl(node, path) {
 }
 
 function isEmptyNode(node) {
-	node = _vnode.ensureRoot(node);
+	node = _construct.ensureRoot(node);
 	if (!_isVNode(node)) return false;
 	if (_isText(node) || _isLiteral(node) || _isAttribute(node)) return node.value === undefined;
 	return !node.count();
@@ -434,7 +479,176 @@ function name($a) {
 	if (!_isVNode($a)) throw new Error("This is not a node");
 	return $a.name;
 }
-},{"./pretty":6,"./seq":8,"./transducers":9,"./vnode":10}],2:[function(require,module,exports){
+},{"./construct":2,"./pretty":7,"./pvnode":8,"./seq":10,"./transducers":11}],2:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+exports.q = undefined;
+exports.e = e;
+exports.l = l;
+exports.m = m;
+exports.a = a;
+exports.p = p;
+exports.x = x;
+exports.c = c;
+exports.d = d;
+exports.ensureRoot = ensureRoot;
+exports._isQName = _isQName;
+exports.QName = QName;
+
+var _pvnode = require("./pvnode");
+
+var _seq = require("./seq");
+
+function _n(type, name, children) {
+	if (children === undefined) {
+		children = [];
+	} else if (_seq.isSeq(children)) {
+		children = children.toArray();
+	} else if (children.constructor != Array) {
+		if (!children.__is_VNode) children = x(children);
+		children = [children];
+	}
+	var node = new _pvnode.VNode(function (parent, ref) {
+		let pinode = parent.inode;
+		let name = node.name,
+		    ns;
+		if (type == 1) {
+			if (_isQName(name)) {
+				ns = name;
+				name = name.name;
+			} else if (/:/.test(name)) {
+				// TODO where are the namespaces?
+			}
+		}
+		node.inode = _pvnode.emptyINode(type, name, type == 1 ? _pvnode.emptyAttrMap() : undefined, ns);
+		for (let i = 0; i < children.length; i++) {
+			let child = children[i];
+			child = child.inode(node);
+		}
+		node = node.finalize();
+		// insert into the parent means: update all parents until we come to the root
+		// but the parents of my parent will be updated elsewhere
+		// we just mutate the parent, because it was either cloned or newly created
+		parent = parent.modify(node, ref);
+		node.parent = parent;
+		return node;
+	}, type, name);
+	return node;
+}
+
+function _a(type, name, val) {
+	var node = new _pvnode.VNode(function (parent, ref) {
+		node.parent = parent.setAttribute(name, val, ref);
+		return node;
+	}, type, name, val);
+	return node;
+}
+
+function _v(type, val, name) {
+	var node = new _pvnode.VNode(function (parent, ref) {
+		let pinode = parent.inode;
+		// reuse insertIndex here to create a named map entry
+		if (node.name === undefined) node.name = pinode.count() + 1;
+		node.inode = _pvnode.value(node.type, node.name, val);
+		// we don't want to do checks here
+		// we just need to call a function that will insert the node into the parent
+		parent.inode = parent.modify(node, ref);
+		node.parent = parent;
+		return node;
+	}, type, name, val);
+	return node;
+}
+
+/**
+ * Create a provisional element VNode.
+ * Once the VNode's inode function is called, the node is inserted into the parent at the specified index
+ * @param  {[type]} name     [description]
+ * @param  {[type]} children [description]
+ * @return {[type]}          [description]
+ */
+function e(qname, children) {
+	return _n(1, qname, children);
+}
+
+function l(name, children) {
+	if (arguments.length == 1) {
+		children = name;
+		name = "#";
+	}
+	return _n(5, name, children);
+}
+
+function m(name, children) {
+	if (arguments.length == 1) {
+		children = name;
+		name = "#";
+	}
+	return _n(6, name, children);
+}
+
+function a(name, value) {
+	return _a(2, name, value);
+}
+
+function p(name, value) {
+	return _a(7, name, value);
+}
+
+function x(name, value) {
+	if (arguments.length == 1) {
+		value = name;
+		return _v(typeof value == "string" ? 3 : 12, value);
+	}
+	return _v(typeof value == "string" ? 3 : 12, value, name);
+}
+
+function c(value, name) {
+	return _v(8, value, name);
+}
+
+function d(uri = null, prefix = null, doctype = null) {
+	var attrs = _pvnode.emptyAttrMap();
+	if (uri) {
+		attrs = attrs.set("xmlns" + (prefix ? ":" + prefix : ""), uri);
+	}
+	if (doctype) {
+		attrs = attrs.set("DOCTYPE", doctype);
+	}
+	return new _pvnode.VNode(_pvnode.emptyINode(9, "#document", 0, attrs), 9, "#document");
+}
+
+function ensureRoot(node) {
+	if (!node) return;
+	if (!node.inode) {
+		let root = node.first();
+		return _pvnode.vnode(root, _pvnode.vnode(node), 1);
+	}
+	if (typeof node.inode === "function") {
+		node.inode(d());
+		return node;
+	}
+	return node;
+}
+
+function _isQName(maybe) {
+	return !!(maybe && maybe.__is_QName);
+}
+
+function QName(uri, name) {
+	var prefix = /:/.test(name) ? name.replace(/:.+$/, "") : null;
+	return {
+		__is_QName: true,
+		name: name,
+		prefix,
+		uri: uri
+	};
+}
+
+const q = exports.q = QName;
+},{"./pvnode":8,"./seq":10}],3:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -502,55 +716,55 @@ function nextNode(node /* Node */) {
 		}
 	}
 }
-},{}],3:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
-var _vnode = require("./vnode");
+var _construct = require("./construct");
 
 Object.defineProperty(exports, "e", {
   enumerable: true,
   get: function () {
-    return _vnode.e;
+    return _construct.e;
   }
 });
 Object.defineProperty(exports, "a", {
   enumerable: true,
   get: function () {
-    return _vnode.a;
+    return _construct.a;
   }
 });
 Object.defineProperty(exports, "x", {
   enumerable: true,
   get: function () {
-    return _vnode.x;
+    return _construct.x;
   }
 });
 Object.defineProperty(exports, "l", {
   enumerable: true,
   get: function () {
-    return _vnode.l;
+    return _construct.l;
   }
 });
 Object.defineProperty(exports, "m", {
   enumerable: true,
   get: function () {
-    return _vnode.m;
+    return _construct.m;
   }
 });
 Object.defineProperty(exports, "p", {
   enumerable: true,
   get: function () {
-    return _vnode.p;
+    return _construct.p;
   }
 });
 Object.defineProperty(exports, "q", {
   enumerable: true,
   get: function () {
-    return _vnode.q;
+    return _construct.q;
   }
 });
 
@@ -645,7 +859,7 @@ Object.defineProperty(exports, "render", {
 });
 exports.compress = compress;
 exports.uncompress = uncompress;
-},{"./access":1,"./l3":4,"./modify":5,"./render":7,"./vnode":10}],4:[function(require,module,exports){
+},{"./access":1,"./construct":2,"./l3":5,"./modify":6,"./render":9}],5:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -920,7 +1134,7 @@ function fromL3(l3) {
     process(entry);
     return parents[0].endMutation();
 }
-},{"./access":1,"./vnode":10}],5:[function(require,module,exports){
+},{"./access":1,"./vnode":12}],6:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -930,12 +1144,12 @@ exports.appendChild = appendChild;
 exports.insertChildBefore = insertChildBefore;
 exports.removeChild = removeChild;
 
-var _vnode = require('./vnode');
+var _construct = require('./construct');
 
 var _access = require('./access');
 
 function appendChild(node, child) {
-	node = _vnode.ensureRoot(node);
+	node = _construct.ensureRoot(node);
 	//if(!node || !node.size) return;
 	//let last = lastChild(node);
 	if (node.type == 9 && node.inode.size > 0) {
@@ -947,19 +1161,19 @@ function appendChild(node, child) {
 		child.inode(node);
 	} else {
 		// TODO make protective clone (of inode)
-		node.inode = _vnode.restoreNode(node.inode.push([child.name, child.inode]), node.inode);
+		node = node.push([child.name, child.inode]);
 	}
 	while (node.parent) {
 		child = node;
 		node = node.parent;
-		node.inode = _vnode.restoreNode(node.inode.set(child.name, child.inode), node.inode);
+		node = node.set(child.name, child.inode);
 	}
 	// this ensures immutability
 	return node.type == 9 ? _access.firstChild(node) : node;
 }
 
 function insertChildBefore(node, ins) {
-	node = _vnode.ensureRoot(node);
+	node = _construct.ensureRoot(node);
 	//if(!node || !node.size) return;
 	let parent = node.parent;
 	if (typeof ins.inode == "function") {
@@ -969,27 +1183,26 @@ function insertChildBefore(node, ins) {
 	while (node.parent) {
 		ins = node;
 		node = node.parent;
-		node.inode = _vnode.restoreNode(node.inode.set(ins.name, ins.inode), node.inode);
+		node = node.set(ins.name, ins.inode);
 	}
 	// this ensures immutability
 	return node.type == 9 ? _access.firstChild(node) : node;
 }
 
 function removeChild(node, child) {
-	node = _vnode.ensureRoot(node);
+	node = _construct.ensureRoot(node);
 	//if(!node || !node.size || !child) return;
 	// TODO error
 	if (child.parent.inode !== node.inode) return;
-	let inode = node.inode.removeValue(child.name, child.inode);
-	node.inode = _vnode.restoreNode(inode, node.inode);
+	node = node.removeValue(child.name, child.inode);
 	while (node.parent) {
 		child = node;
 		node = node.parent;
-		node.inode = _vnode.restoreNode(node.inode.set(child.name, child.inode), node.inode);
+		node = node.set(ins.name, ins.inode);
 	}
 	return node.type == 9 ? _access.firstChild(node) : node;
 }
-},{"./access":1,"./vnode":10}],6:[function(require,module,exports){
+},{"./access":1,"./construct":2}],7:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -1062,7 +1275,250 @@ function prettyXML(text) {
 
 	return str[0] == '\n' ? str.slice(1) : str;
 }
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+exports.Value = Value;
+exports.value = value;
+exports.VNode = VNode;
+exports.vnode = vnode;
+exports.emptyINode = emptyINode;
+exports.restoreNode = restoreNode;
+exports.emptyAttrMap = emptyAttrMap;
+
+var _ohamt = require("ohamt");
+
+var ohamt = _interopRequireWildcard(_ohamt);
+
+var _rrbVector = require("rrb-vector");
+
+var rrb = _interopRequireWildcard(_rrbVector);
+
+var _construct = require("./construct");
+
+var _pretty = require("./pretty");
+
+var _transducers = require("./transducers");
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+
+function Value(type, name, value) {
+	this._type = type;
+	this._name = name;
+	this._value = value;
+}
+
+Value.prototype.__is_Value = true;
+
+Value.prototype.get = function () {
+	return this._value;
+};
+
+Value.prototype[Symbol.iterator] = function* () {
+	yield this;
+};
+
+Value.prototype.values = function () {
+	return this[Symbol.iterator]();
+};
+
+Value.prototype.count = function () {
+	return 0;
+};
+
+Value.prototype.size = 0;
+
+Value.prototype.toString = function (root = true, json = false) {
+	var str = this._value + "";
+	if (this._type == 3 && json) return '"' + str + '"';
+	return str;
+};
+
+function value(type, name, value) {
+	return new Value(type, name, value);
+}
+
+function VNode(inode, type, name, value, parent, depth, indexInParent) {
+	this.inode = inode;
+	this.type = type;
+	this.name = name;
+	this.value = value;
+	this.parent = parent;
+	this.depth = depth | 0;
+	this.indexInParent = indexInParent;
+}
+
+VNode.prototype.__is_VNode = true;
+
+VNode.prototype.toString = function () {
+	var root = _construct.ensureRoot(this);
+	return root.inode.toString();
+};
+
+VNode.prototype._get = function (idx) {
+	return this.inode.get(idx);
+};
+
+VNode.prototype.count = function () {
+	return this.inode.count();
+};
+
+VNode.prototype.keys = function () {
+	return this.inode.keys();
+};
+
+VNode.prototype.values = function () {
+	return this.inode.values();
+};
+
+VNode.prototype.first = function () {
+	return this.inode.first();
+};
+
+VNode.prototype.last = function () {
+	return this.inode.last();
+};
+
+VNode.prototype.push = function (val) {
+	this.inode = restoreNode(this.inode.push(val), this.inode);
+	return this;
+};
+
+VNode.prototype.next = function (node) {
+	var inode = node.inode;
+	return this.inode.next(inode._name, inode);
+};
+
+VNode.prototype.set = function (key, val) {
+	this.inode = restoreNode(this.inode.set(key, val), this.inode);
+	return this;
+};
+
+VNode.prototype.removeValue = function (key, val) {
+	node.inode = restoreNode(this.inode.removeValue(key, val), node.inode);
+};
+
+function vnode(inode, parent, depth, indexInParent) {
+	return new VNode(inode, inode._type, inode._ns ? q(inode._ns.uri, inode._name) : inode._name, inode._value, parent, depth, indexInParent);
+}
+
+function emptyINode(type, name, attrs, ns) {
+	var inode = type == 5 ? rrb.empty.beginMutation() : ohamt.make().beginMutation();
+	inode._type = type;
+	inode._name = name;
+	inode._attrs = attrs;
+	inode._ns = ns;
+	return inode;
+}
+
+function restoreNode(next, node) {
+	next._type = node._type;
+	next._name = node._name;
+	next._attrs = node._attrs;
+	next._ns = node._ns;
+	return next;
+}
+
+function emptyAttrMap() {
+	return ohamt.empty.beginMutation();
+}
+
+VNode.prototype.modify = function (node, ref) {
+	var pinode = this.inode;
+	var type = this.type;
+	if (type == 1 || type == 9) {
+		if (ref !== undefined) {
+			this.inode = restoreNode(pinode.insertBefore([ref.name, ref.inode], [node.name, node.inode]), pinode);
+		} else {
+			// FIXME check the parent type
+			this.inode = restoreNode(pinode.push([node.name, node.inode]), pinode);
+		}
+	} else if (type == 5) {
+		if (ref !== undefined) {
+			this.inode = restoreNode(pinode.insertBefore(ref, node.inode), pinode);
+		} else {
+			this.inode = restoreNode(pinode.push(node.inode), pinode);
+		}
+	} else if (type == 6) {
+		this.inode = restoreNode(pinode.set(node.name, node.inode), pinode);
+	}
+	return this;
+};
+
+VNode.prototype.finalize = function () {
+	this.inode = this.inode.endMutation();
+	return this;
+};
+
+VNode.prototype.setAttribute = function (key, value, ref) {
+	// ignore ref for now
+	this.inode._attrs = this.inode._attrs.set(key, value);
+	return this;
+};
+
+function elemToString(e) {
+	const attrFunc = (z, v, k) => {
+		return z += " " + k + "=\"" + v + "\"";
+	};
+	let str = "<" + e._name;
+	let ns = e._ns;
+	if (ns) str += " xmlns" + (ns.prefix ? ":" + ns.prefix : "") + "=\"" + ns.uri + "\"";
+	str = e._attrs.reduce(attrFunc, str);
+	if (e.size > 0) {
+		str += ">";
+		for (let c of e.values()) {
+			str += c.toString(false);
+		}
+		str += "</" + e._name + ">";
+	} else {
+		str += "/>";
+	}
+	return str;
+}
+
+var OrderedMap = ohamt.empty.constructor;
+
+OrderedMap.prototype.__is_Map = true;
+
+OrderedMap.prototype.toString = function (root = true, json = false) {
+	var str = "";
+	var type = this._type;
+	const docAttrFunc = (z, v, k) => z += k == "DOCTYPE" ? "<!" + k + " " + v + ">" : "<?" + k + " " + v + "?>";
+	const objFunc = kv => "\"" + kv[0] + "\":" + kv[1].toString(false, true);
+	if (type == 1) {
+		str += elemToString(this);
+	} else if (type == 3 || type == 12) {
+		str += this.toString();
+	} else if (type == 6) {
+		str += "{";
+		str += _transducers.into(this, _transducers.forEach(objFunc), []).join(",");
+		str += "}";
+	} else if (type == 9) {
+		str = this._attrs.reduce(docAttrFunc, str);
+		for (let c of this.values()) {
+			str += c.toString(false);
+		}
+	}
+	return root ? _pretty.prettyXML(str) : str;
+};
+
+var List = rrb.empty.constructor;
+
+List.prototype.__is_List = true;
+
+List.prototype.toString = function (root = true, json = false) {
+	var str = "[";
+	for (var i = 0, l = this.size; i < l;) {
+		str += this.get(i).toString(false, true);
+		i++;
+		if (i < l) str += ",";
+	}
+	return str + "]";
+};
+},{"./construct":2,"./pretty":7,"./transducers":11,"ohamt":18,"rrb-vector":16}],9:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1176,7 +1632,7 @@ function render(vnode, root) {
 		if (node.nodeType == 1) node.parentNode.removeChild(node);
 	}
 }
-},{"./access":1,"./dom":2}],8:[function(require,module,exports){
+},{"./access":1,"./dom":3}],10:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1355,7 +1811,7 @@ function exactlyOne($arg) {
 	if ($arg.size != 1) return error("FORG0005");
 	return $arg;
 }
-},{}],9:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1609,80 +2065,30 @@ function range(n, s = 0) {
 
 // TODO:
 // rewindable/fastforwardable iterators
-},{"./seq":8}],10:[function(require,module,exports){
+},{"./seq":10}],12:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
 });
-exports.q = undefined;
-exports.Value = Value;
+exports.value = value;
 exports.VNode = VNode;
 exports.vnode = vnode;
-exports.VNodeIterator = VNodeIterator;
-exports.Step = Step;
 exports.emptyINode = emptyINode;
 exports.restoreNode = restoreNode;
 exports.emptyAttrMap = emptyAttrMap;
-exports.e = e;
-exports.l = l;
-exports.m = m;
-exports.a = a;
-exports.p = p;
-exports.x = x;
-exports.c = c;
-exports.d = d;
-exports.ensureRoot = ensureRoot;
-exports._isQName = _isQName;
-exports.QName = QName;
-
-var _ohamt = require("ohamt");
-
-var ohamt = _interopRequireWildcard(_ohamt);
-
-var _rrbVector = require("rrb-vector");
-
-var rrb = _interopRequireWildcard(_rrbVector);
 
 var _pretty = require("./pretty");
+
+var _construct = require("./construct");
 
 var _transducers = require("./transducers");
 
 var _seq = require("./seq");
 
-function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
-
-function Value(type, name, value) {
-	this._type = type;
-	this._name = name;
-	this._value = value;
+function value(type, name, value) {
+	return value;
 }
-
-Value.prototype.__is_Value = true;
-
-Value.prototype.get = function () {
-	return this._value;
-};
-
-Value.prototype[Symbol.iterator] = function* () {
-	yield this;
-};
-
-Value.prototype.values = function () {
-	return this[Symbol.iterator]();
-};
-
-Value.prototype.count = function () {
-	return 0;
-};
-
-Value.prototype.size = 0;
-
-Value.prototype.toString = function (root = true, json = false) {
-	var str = this._value + "";
-	if (this._type == 3 && json) return '"' + str + '"';
-	return str;
-};
 
 function VNode(inode, type, name, value, parent, depth, indexInParent) {
 	this.inode = inode;
@@ -1690,96 +2096,100 @@ function VNode(inode, type, name, value, parent, depth, indexInParent) {
 	this.name = name;
 	this.value = value;
 	this.parent = parent;
-	this.depth = depth;
+	this.depth = depth | 0;
 	this.indexInParent = indexInParent;
 }
 
 VNode.prototype.__is_VNode = true;
 
 VNode.prototype.toString = function () {
-	var root = ensureRoot(this);
+	var root = _construct.ensureRoot(this);
 	return root.inode.toString();
 };
 
 VNode.prototype.count = function () {
-	return this.inode.count();
+	var type = this.type,
+	    inode = this.inode;
+	if (type == 1 || type == 9) return inode.$children.length;
+	if (type == 5) return inode.length;
+	if (type == 6) return Object.keys(inode).length;
+	return 0;
 };
 
 VNode.prototype.keys = function () {
-	return this.inode.keys();
+	var type = this.type,
+	    inode = this.inode;
+	if (type == 1 || type == 9) return inode.$children.length;
+	if (type == 5) return inode.length;
+	if (type == 6) return Object.keys(inode).length;
+	return 0;
 };
 
 VNode.prototype.values = function () {
-	return this.inode.values();
+	var type = this.type,
+	    inode = this.inode;
+	if (type == 1 || type == 9) return inode.$children.length;
+	if (type == 5) return inode.length;
+	if (type == 6) return Object.keys(inode).length;
+	return 0;
 };
 
 VNode.prototype.first = function () {
-	return this.inode.first();
+	var type = this.type,
+	    inode = this.inode;
+	if (type == 1 || type == 9) return inode.$children.length;
+	if (type == 5) return inode.length;
+	if (type == 6) return Object.keys(inode).length;
+	return 0;
 };
 
 VNode.prototype.last = function () {
-	return this.inode.last();
+	var type = this.type,
+	    inode = this.inode;
+	if (type == 1 || type == 9) return inode.$children.length;
+	if (type == 5) return inode.length;
+	if (type == 6) return Object.keys(inode).length;
+	return 0;
 };
 
 VNode.prototype.next = function (node) {
-	return this.inode.next(node.name, node.inode);
+	var inode = node.inode;
+	return this.inode.next(inode._name, inode);
 };
 
 function vnode(inode, parent, depth, indexInParent) {
-	return new VNode(inode, inode._type, inode._ns ? q(inode._ns.uri, inode._name) : inode._name, inode._value, parent, depth, indexInParent);
+	var type,
+	    cc = inode.constructor;
+	if (cc == Array) {
+		type = 5;
+	} else if (cc == Object) {
+		if (inode.$name) {
+			type = inode.$attrs.has("DOCTYPE") ? 9 : 1;
+		} else {
+			type = 6;
+		}
+	} else {
+		type = cc == Boolean || cc == Number ? 12 : 3;
+	}
+	return new VNode(inode, type, inode.$ns ? q(inode.$ns.uri, inode.$name) : inode.$name, type == 3 || type == 12 ? inode : null, parent, depth, indexInParent);
 }
 
-function VNodeIterator(iter, parent, f) {
-	this.iter = iter;
-	this.parent = parent;
-	this.f = f;
-	this.index = -1;
-	this.__is_VNodeIterator = true;
-}
-
-const DONE = {
-	done: true
-};
-
-VNodeIterator.prototype.next = function () {
-	var v = this.iter.next();
-	this.index++;
-	if (v.done) return DONE;
-	return { value: this.f(v.value, this.parent, this.index) };
-};
-
-// TODO create iterator that yields a node seq
-// position() should overwrite get(), but the check should be name or indexInParent
-VNode.prototype[Symbol.iterator] = function () {
-	return new VNodeIterator(this.inode.values(), this, vnode);
-};
-
-VNode.prototype.get = function (idx) {
-	var val = this.inode.get(idx);
-	if (!val) return [];
-	val = val.constructor == Array ? val : [val];
-	return new VNodeIterator(val[Symbol.iterator](), this, vnode);
-};
-
-function Step(inode, parent, depth, indexInParent) {
-	this.inode = inode;
-	this.parent = parent;
-	this.depth = depth;
-	this.indexInParent = indexInParent;
-}
-
-Step.prototype.type = 17;
-
-Step.prototype.toString = function () {
-	return "Step {depth:" + this.depth + ", closes:" + this.parent.name + "}";
+VNode.prototype._get = function (idx) {
+	if (this.type == 1 || this.type == 9) {
+		var children = this.inode.$children;
+		for (let i = 0, l = children.length; i < l; i++) {
+			if (children[i].$name == idx) return children[i];
+		}
+	}
+	return this.inode[idx];
 };
 
 function emptyINode(type, name, attrs, ns) {
-	var inode = type == 5 ? rrb.empty.beginMutation() : ohamt.make().beginMutation();
-	inode._type = type;
-	inode._name = name;
-	inode._attrs = attrs;
-	inode._ns = ns;
+	var inode = type == 5 ? [] : {};
+	if (type == 1 || type == 9) inode.$name = name;
+	inode.$attrs = attrs;
+	inode.$ns = ns;
+	inode.$children = [];
 	return inode;
 }
 
@@ -1792,7 +2202,7 @@ function restoreNode(next, node) {
 }
 
 function emptyAttrMap() {
-	return ohamt.empty.beginMutation();
+	return Map();
 }
 
 function elemToString(e) {
@@ -1814,221 +2224,49 @@ function elemToString(e) {
 	}
 	return str;
 }
-
+/*
 var OrderedMap = ohamt.empty.constructor;
 
 OrderedMap.prototype.__is_Map = true;
 
-OrderedMap.prototype.toString = function (root = true, json = false) {
+OrderedMap.prototype.toString = function(root = true, json = false){
 	var str = "";
 	var type = this._type;
-	const docAttrFunc = (z, v, k) => z += k == "DOCTYPE" ? "<!" + k + " " + v + ">" : "<?" + k + " " + v + "?>";
-	const objFunc = kv => "\"" + kv[0] + "\":" + kv[1].toString(false, true);
-	if (type == 1) {
+	const docAttrFunc = (z,v,k) =>
+		z += k=="DOCTYPE" ? "<!"+k+" "+v+">" : "<?"+k+" "+v+"?>";
+	const objFunc = (kv) => "\""+kv[0]+"\":"+kv[1].toString(false,true);
+	if(type==1) {
 		str += elemToString(this);
-	} else if (type == 3 || type == 12) {
+	} else if(type==3 || type == 12){
 		str += this.toString();
-	} else if (type == 6) {
+	} else  if(type == 6){
 		str += "{";
-		str += _transducers.into(this, _transducers.forEach(objFunc), []).join(",");
+		str += into(this,forEach(objFunc),[]).join(",");
 		str += "}";
-	} else if (type == 9) {
-		str = this._attrs.reduce(docAttrFunc, str);
-		for (let c of this.values()) {
+	} else if(type==9){
+		str = this._attrs.reduce(docAttrFunc,str);
+		for(let c of this.values()){
 			str += c.toString(false);
 		}
 	}
-	return root ? _pretty.prettyXML(str) : str;
+	return root ? prettyXML(str) : str;
 };
 
 var List = rrb.empty.constructor;
 
 List.prototype.__is_List = true;
 
-List.prototype.toString = function (root = true, json = false) {
+List.prototype.toString = function(root = true, json = false){
 	var str = "[";
-	for (var i = 0, l = this.size; i < l;) {
-		str += this.get(i).toString(false, true);
+	for(var i=0,l = this.size; i < l; ){
+		str += this.get(i).toString(false,true);
 		i++;
-		if (i < l) str += ",";
+		if(i<l) str += ",";
 	}
 	return str + "]";
 };
-
-function _modify(pinode, node, ref) {
-	var type = pinode._type;
-	if (type == 1 || type == 9) {
-		if (ref !== undefined) {
-			return restoreNode(pinode.insertBefore([ref.name, ref.inode], [node.name, node.inode]), pinode);
-		} else {
-			// FIXME check the parent type
-			return restoreNode(pinode.push([node.name, node.inode]), pinode);
-		}
-	} else if (type == 5) {
-		if (ref !== undefined) {
-			return restoreNode(pinode.insertBefore(ref, node.inode), pinode);
-		} else {
-			return restoreNode(pinode.push(node.inode), pinode);
-		}
-	} else if (type == 6) {
-		return restoreNode(pinode.set(node.name, node.inode), pinode);
-	}
-}
-
-function _n(type, name, children) {
-	if (children === undefined) {
-		children = [];
-	} else if (_seq.isSeq(children)) {
-		children = children.toArray();
-	} else if (children.constructor != Array) {
-		if (!children.__is_VNode) children = x(children);
-		children = [children];
-	}
-	var node = new VNode(function (parent, ref) {
-		let pinode = parent.inode;
-		let name = node.name,
-		    ns;
-		if (type == 1) {
-			if (_isQName(name)) {
-				ns = name;
-				name = name.name;
-			} else if (/:/.test(name)) {
-				// TODO where are the namespaces?
-			}
-		}
-		let inode = emptyINode(type, name, type == 1 ? ohamt.empty.beginMutation() : undefined, ns);
-		node.inode = inode;
-		for (let i = 0; i < children.length; i++) {
-			let child = children[i];
-			child = child.inode(node);
-		}
-		node.inode = node.inode.endMutation();
-		// insert into the parent means: update all parents until we come to the root
-		// but the parents of my parent will be updated elsewhere
-		// we just mutate the parent, because it was either cloned or newly created
-		parent.inode = _modify(pinode, node, ref);
-		node.parent = parent;
-		return node;
-	}, type, name);
-	return node;
-}
-
-function _a(type, name, value) {
-	var node = new VNode(function (parent, ref) {
-		let attrMap = parent.inode._attrs;
-		if (ref !== undefined) {
-			parent.inode._attrs = attrMap.insertBefore([ref.name, ref.value], [name, value]);
-		} else {
-			parent.inode._attrs = attrMap.push([name, value]);
-		}
-		node.parent = parent;
-		return node;
-	}, type, name, value);
-	return node;
-}
-
-function _v(type, value, name) {
-	var node = new VNode(function (parent, ref) {
-		let pinode = parent.inode;
-		// reuse insertIndex here to create a named map entry
-		if (node.name === undefined) node.name = pinode.count() + 1;
-		node.inode = new Value(node.type, node.name, value);
-		// we don't want to do checks here
-		// we just need to call a function that will insert the node into the parent
-		parent.inode = _modify(pinode, node, ref);
-		node.parent = parent;
-		return node;
-	}, type, name, value);
-	return node;
-}
-
-/**
- * Create a provisional element VNode.
- * Once the VNode's inode function is called, the node is inserted into the parent at the specified index
- * @param  {[type]} name     [description]
- * @param  {[type]} children [description]
- * @return {[type]}          [description]
- */
-function e(qname, children) {
-	return _n(1, qname, children);
-}
-
-function l(name, children) {
-	if (arguments.length == 1) {
-		children = name;
-		name = "#";
-	}
-	return _n(5, name, children);
-}
-
-function m(name, children) {
-	if (arguments.length == 1) {
-		children = name;
-		name = "#";
-	}
-	return _n(6, name, children);
-}
-
-function a(name, value) {
-	return _a(2, name, value);
-}
-
-function p(name, value) {
-	return _a(7, name, value);
-}
-
-function x(name, value) {
-	if (arguments.length == 1) {
-		value = name;
-		return _v(typeof value == "string" ? 3 : 12, value);
-	}
-	return _v(typeof value == "string" ? 3 : 12, value, name);
-}
-
-function c(value, name) {
-	return _v(8, value, name);
-}
-
-function d(uri = null, prefix = null, doctype = null) {
-	var attrs = ohamt.empty;
-	if (uri) {
-		attrs = attrs.set("xmlns" + (prefix ? ":" + prefix : ""), uri);
-	}
-	if (doctype) {
-		attrs = attrs.set("DOCTYPE", doctype);
-	}
-	return new VNode(emptyINode(9, "#document", 0, attrs), 9, "#document");
-}
-
-function ensureRoot(node) {
-	if (!node) return;
-	if (!node.inode) {
-		let root = node.first();
-		return vnode(root, vnode(node, undefined, 0), 1);
-	}
-	if (typeof node.inode === "function") {
-		node.inode(d());
-		return node;
-	}
-	return node;
-}
-
-function _isQName(maybe) {
-	return !!(maybe && maybe.__is_QName);
-}
-
-function QName(uri, name) {
-	var prefix = /:/.test(name) ? name.replace(/:.+$/, "") : null;
-	return {
-		__is_QName: true,
-		name: name,
-		prefix,
-		uri: uri
-	};
-}
-
-const q = exports.q = QName;
-},{"./pretty":6,"./seq":8,"./transducers":9,"ohamt":16,"rrb-vector":14}],11:[function(require,module,exports){
+*/
+},{"./construct":2,"./pretty":7,"./seq":10,"./transducers":11}],13:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2319,7 +2557,7 @@ function sumOfLengths(table) {
 	for (var i = 0; len > i; i++) sum += table[i].length;
 	return sum;
 }
-},{"./const":12,"./util":15}],12:[function(require,module,exports){
+},{"./const":14,"./util":17}],14:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2328,7 +2566,7 @@ Object.defineProperty(exports, "__esModule", {
 const B = exports.B = 5;
 const M = exports.M = 1 << B;
 const E = exports.E = 2;
-},{}],13:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2405,7 +2643,7 @@ function sliceRight(to, list) {
 	tbl.sizes = sizes;
 	return tbl;
 }
-},{"./util":15}],14:[function(require,module,exports){
+},{"./util":17}],16:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2755,7 +2993,7 @@ Tree.prototype[Symbol.iterator] = function () {
 	return new TreeIterator(this);
 };
 
-},{"./concat":11,"./const":12,"./slice":13,"./util":15}],15:[function(require,module,exports){
+},{"./concat":13,"./const":14,"./slice":15,"./util":17}],17:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2937,7 +3175,7 @@ function rootToArray(a, f, out = []) {
 	return out;
 }
 
-},{"./const":12}],16:[function(require,module,exports){
+},{"./const":14}],18:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -4137,5 +4375,5 @@ const toMap = exports.toMap = map => map.fold((acc, v, k) => (acc[k] = v && v.to
 Map.prototype.toJS = function () {
     return toMap(this);
 };
-},{}]},{},[3])(3)
+},{}]},{},[4])(4)
 });
