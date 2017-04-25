@@ -1,14 +1,16 @@
-import { ensureRoot } from './construct';
+import { ensureRoot, q } from './construct';
 
 import { prettyXML } from "./pretty";
 
 import { forEach, into, range } from "./transducers";
 
+import { multimap } from "./multimap";
+
 export function value(type, name, value){
 	return value;
 }
 
-export function VNode(inode,type,name,value,parent,depth,indexInParent){
+export function VNode(inode,type,name,value,parent,depth,indexInParent,cache){
 	this.inode = inode;
 	this.type = type;
 	this.name = name;
@@ -16,6 +18,7 @@ export function VNode(inode,type,name,value,parent,depth,indexInParent){
 	this.parent = parent;
 	this.depth = depth | 0;
 	this.indexInParent = indexInParent;
+	this.cache = cache;
 }
 
 VNode.prototype.__is_VNode = true;
@@ -28,13 +31,8 @@ VNode.prototype.toString = function(){
 
 VNode.prototype._get = function(idx){
 	if(this.type == 1 || this.type == 9) {
-		var children = this.inode.$children;
-		if(typeof idx == "number") return children[idx-1];
-		var ret = [];
-		for(let i = 0, l = children.length; i<l; i++){
-			if(children[i].$name == idx) ret.push(children[i]);
-		}
-		return ret.length == 1 ? ret[0] : ret;
+		let keys = this.cache || this.keys();
+		return keys[idx];
 	}
 	return this.inode[idx];
 };
@@ -50,13 +48,19 @@ VNode.prototype.count = function(){
 VNode.prototype.keys = function(){
 	var type = this.type, inode = this.inode;
 	if(type == 1 || type == 9) {
-		var children = inode.$children, len = children.length, keys = new Array(len);
+		let children = inode.$children, len = children.length, cache = multimap();
 		for(let i = 0; i<len; i++){
-			keys[i] = children[i].$name || i + 1;
+			cache.push([children[i].$name || i + 1,children[i]]);
 		}
+		this.cache = cache;
+		return cache.keys();
 	}
 	if(type == 5) return range(inode.length).toArray();
-	if(type == 6) return Object.keys(inode);
+	if(type == 6) {
+		let keys = Object.keys(inode);
+		this.cache = keys;
+		return keys;
+	}
 	return [];
 };
 
@@ -73,9 +77,8 @@ VNode.prototype.first = function(){
 	if(type == 1 || type == 9) return inode.$children[0];
 	if(type == 5) return inode[0];
 	if(type == 6) {
-		// hmmm
-		var first = Object.keys(inode)[0];
-		return inode[first];//[first,inode[first]];
+		var keys = this.cache || this.keys();
+		return inode[keys[0]];
 	}
 };
 
@@ -88,26 +91,20 @@ VNode.prototype.last = function(){
 	if(type == 1 || type == 9) return _last(inode.$children);
 	if(type == 5) return _last(inode);
 	if(type == 6) {
-		var last = _last(Object.keys(inode));
-		return inode[last];//[last,inode[last]];
+		var keys = this.cache || this.keys();
+		return inode[_last(keys)];
 	}
 };
 
 VNode.prototype.next = function(node){
 	var type = this.type, inode = this.inode, idx = node.name;
 	if(type == 1 || type == 9) {
-		// hmm
-		var children = inode.$children;
-		if(typeof idx == "number") return children[idx-1];
-		var ret = [];
-		for(let i = 0, l = children.length; i<l; i++){
-			if(children[i].$name == idx && children[i]==node.inode) return children[i];
-		}
+		if(node.indexInParent) return this.children[node.indexInParent+1];
 	}
 	if(type == 5) return inode[idx];
 	if(type == 6) {
 		var entry = inode[idx];
-		return entry;//[entry,entry[last]];
+		return entry;
 	}
 };
 
@@ -128,25 +125,30 @@ VNode.prototype.set = function(key,val){
 };
 
 VNode.prototype.removeValue = function(key,val){
-	node.inode = restoreNode(this.inode.removeValue(key,val),node.inode);
+	this.inode.removeValue(key,val);
 	return this;
 };
 
 
 export function vnode(inode, parent, depth, indexInParent){
-	var type, cc = inode.constructor;
+	var type, name, value, cc = inode.constructor;
 	if(cc == Array) {
 		type = 5;
+		name = parent.keys()[indexInParent];
 	} else if(cc == Object){
 		if(inode.$name) {
 			type = inode.$attrs.has("DOCTYPE") ? 9 : 1;
+			name = inode.$name;
 		} else {
 			type = 6;
+			name = parent.keys()[indexInParent];
 		}
 	} else {
 		type = (cc == Boolean || cc == Number) ? 12 : 3;
+		value = inode;
+		name = parent.keys()[indexInParent];
 	}
-	return new VNode(inode, type, inode.$ns ? q(inode.$ns.uri, inode.$name) : inode.$name, (type == 3 || type == 12) ? inode : null, parent, depth, indexInParent);
+	return new VNode(inode, type, inode.$ns ? q(inode.$ns.uri, name) : name, value, parent, depth, indexInParent);
 }
 
 export function emptyINode(type, name, attrs, ns) {
