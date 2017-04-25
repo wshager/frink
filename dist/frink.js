@@ -532,8 +532,7 @@ function _n(type, name, children) {
 		// insert into the parent means: update all parents until we come to the root
 		// but the parents of my parent will be updated elsewhere
 		// we just mutate the parent, because it was either cloned or newly created
-		parent = parent.modify(node, ref);
-		node.parent = parent;
+		node.parent = parent.modify(node, ref);
 		return node;
 	}, type, name);
 	return node;
@@ -555,8 +554,7 @@ function _v(type, val, name) {
 		node.inode = _pvnode.value(node.type, node.name, val);
 		// we don't want to do checks here
 		// we just need to call a function that will insert the node into the parent
-		parent.inode = parent.modify(node, ref);
-		node.parent = parent;
+		node.parent = parent.modify(node, ref);
 		return node;
 	}, type, name, val);
 	return node;
@@ -1148,6 +1146,17 @@ var _construct = require('./construct');
 
 var _access = require('./access');
 
+function _ascend(node) {
+	var child;
+	while (node.parent) {
+		child = node;
+		node = node.parent;
+		node = node.set(child.name, child.inode);
+	}
+	// this ensures immutability
+	return node.type == 9 ? _access.firstChild(node) : node;
+}
+
 function appendChild(node, child) {
 	node = _construct.ensureRoot(node);
 	//if(!node || !node.size) return;
@@ -1163,13 +1172,7 @@ function appendChild(node, child) {
 		// TODO make protective clone (of inode)
 		node = node.push([child.name, child.inode]);
 	}
-	while (node.parent) {
-		child = node;
-		node = node.parent;
-		node = node.set(child.name, child.inode);
-	}
-	// this ensures immutability
-	return node.type == 9 ? _access.firstChild(node) : node;
+	return _ascend(node);
 }
 
 function insertChildBefore(node, ins) {
@@ -1180,13 +1183,7 @@ function insertChildBefore(node, ins) {
 		ins.inode(parent, node);
 	}
 	node = parent;
-	while (node.parent) {
-		ins = node;
-		node = node.parent;
-		node = node.set(ins.name, ins.inode);
-	}
-	// this ensures immutability
-	return node.type == 9 ? _access.firstChild(node) : node;
+	return _ascend(node);
 }
 
 function removeChild(node, child) {
@@ -1195,12 +1192,7 @@ function removeChild(node, child) {
 	// TODO error
 	if (child.parent.inode !== node.inode) return;
 	node = node.removeValue(child.name, child.inode);
-	while (node.parent) {
-		child = node;
-		node = node.parent;
-		node = node.set(ins.name, ins.inode);
-	}
-	return node.type == 9 ? _access.firstChild(node) : node;
+	return _ascend(node);
 }
 },{"./access":1,"./construct":2}],7:[function(require,module,exports){
 'use strict';
@@ -1382,14 +1374,14 @@ VNode.prototype.last = function () {
 	return this.inode.last();
 };
 
-VNode.prototype.push = function (val) {
-	this.inode = restoreNode(this.inode.push(val), this.inode);
-	return this;
-};
-
 VNode.prototype.next = function (node) {
 	var inode = node.inode;
 	return this.inode.next(inode._name, inode);
+};
+
+VNode.prototype.push = function (val) {
+	this.inode = restoreNode(this.inode.push(val), this.inode);
+	return this;
 };
 
 VNode.prototype.set = function (key, val) {
@@ -1398,7 +1390,8 @@ VNode.prototype.set = function (key, val) {
 };
 
 VNode.prototype.removeValue = function (key, val) {
-	node.inode = restoreNode(this.inode.removeValue(key, val), node.inode);
+	this.inode = restoreNode(this.inode.removeValue(key, val), this.inode);
+	return this;
 };
 
 function vnode(inode, parent, depth, indexInParent) {
@@ -2075,16 +2068,13 @@ exports.value = value;
 exports.VNode = VNode;
 exports.vnode = vnode;
 exports.emptyINode = emptyINode;
-exports.restoreNode = restoreNode;
 exports.emptyAttrMap = emptyAttrMap;
-
-var _pretty = require("./pretty");
 
 var _construct = require("./construct");
 
-var _transducers = require("./transducers");
+var _pretty = require("./pretty");
 
-var _seq = require("./seq");
+var _transducers = require("./transducers");
 
 function value(type, name, value) {
 	return value;
@@ -2107,6 +2097,19 @@ VNode.prototype.toString = function () {
 	return root.inode.toString();
 };
 
+VNode.prototype._get = function (idx) {
+	if (this.type == 1 || this.type == 9) {
+		var children = this.inode.$children;
+		if (typeof idx == "number") return children[idx - 1];
+		var ret = [];
+		for (let i = 0, l = children.length; i < l; i++) {
+			if (children[i].$name == idx) ret.push(children[i]);
+		}
+		return ret.length == 1 ? ret[0] : ret;
+	}
+	return this.inode[idx];
+};
+
 VNode.prototype.count = function () {
 	var type = this.type,
 	    inode = this.inode;
@@ -2119,42 +2122,93 @@ VNode.prototype.count = function () {
 VNode.prototype.keys = function () {
 	var type = this.type,
 	    inode = this.inode;
-	if (type == 1 || type == 9) return inode.$children.length;
-	if (type == 5) return inode.length;
-	if (type == 6) return Object.keys(inode).length;
-	return 0;
+	if (type == 1 || type == 9) {
+		var children = inode.$children,
+		    len = children.length,
+		    keys = new Array(len);
+		for (let i = 0; i < len; i++) {
+			keys[i] = children[i].$name || i + 1;
+		}
+	}
+	if (type == 5) return _transducers.range(inode.length).toArray();
+	if (type == 6) return Object.keys(inode);
+	return [];
 };
 
 VNode.prototype.values = function () {
 	var type = this.type,
 	    inode = this.inode;
-	if (type == 1 || type == 9) return inode.$children.length;
-	if (type == 5) return inode.length;
-	if (type == 6) return Object.keys(inode).length;
-	return 0;
+	if (type == 1 || type == 9) return inode.$children;
+	if (type == 5) return inode;
+	if (type == 6) return Object.values(inode);
+	return inode;
 };
 
 VNode.prototype.first = function () {
 	var type = this.type,
 	    inode = this.inode;
-	if (type == 1 || type == 9) return inode.$children.length;
-	if (type == 5) return inode.length;
-	if (type == 6) return Object.keys(inode).length;
-	return 0;
+	if (type == 1 || type == 9) return inode.$children[0];
+	if (type == 5) return inode[0];
+	if (type == 6) {
+		// hmmm
+		var first = Object.keys(inode)[0];
+		return inode[first]; //[first,inode[first]];
+	}
 };
+
+function _last(a) {
+	return a[a.length - 1];
+}
 
 VNode.prototype.last = function () {
 	var type = this.type,
 	    inode = this.inode;
-	if (type == 1 || type == 9) return inode.$children.length;
-	if (type == 5) return inode.length;
-	if (type == 6) return Object.keys(inode).length;
-	return 0;
+	if (type == 1 || type == 9) return _last(inode.$children);
+	if (type == 5) return _last(inode);
+	if (type == 6) {
+		var last = _last(Object.keys(inode));
+		return inode[last]; //[last,inode[last]];
+	}
 };
 
 VNode.prototype.next = function (node) {
-	var inode = node.inode;
-	return this.inode.next(inode._name, inode);
+	var type = this.type,
+	    inode = this.inode,
+	    idx = node.name;
+	if (type == 1 || type == 9) {
+		// hmm
+		var children = inode.$children;
+		if (typeof idx == "number") return children[idx - 1];
+		var ret = [];
+		for (let i = 0, l = children.length; i < l; i++) {
+			if (children[i].$name == idx && children[i] == node.inode) return children[i];
+		}
+	}
+	if (type == 5) return inode[idx];
+	if (type == 6) {
+		var entry = inode[idx];
+		return entry; //[entry,entry[last]];
+	}
+};
+
+VNode.prototype.push = function (val) {
+	var type = this.type;
+	if (type == 5) {
+		this.inode.push(val[1]);
+	} else if (type == 6) {
+		this.inode[val[0]] = val[1];
+	}
+	return this;
+};
+
+VNode.prototype.set = function (key, val) {
+	this.inode.set(key, val);
+	return this;
+};
+
+VNode.prototype.removeValue = function (key, val) {
+	node.inode = restoreNode(this.inode.removeValue(key, val), node.inode);
+	return this;
 };
 
 function vnode(inode, parent, depth, indexInParent) {
@@ -2174,16 +2228,6 @@ function vnode(inode, parent, depth, indexInParent) {
 	return new VNode(inode, type, inode.$ns ? q(inode.$ns.uri, inode.$name) : inode.$name, type == 3 || type == 12 ? inode : null, parent, depth, indexInParent);
 }
 
-VNode.prototype._get = function (idx) {
-	if (this.type == 1 || this.type == 9) {
-		var children = this.inode.$children;
-		for (let i = 0, l = children.length; i < l; i++) {
-			if (children[i].$name == idx) return children[i];
-		}
-	}
-	return this.inode[idx];
-};
-
 function emptyINode(type, name, attrs, ns) {
 	var inode = type == 5 ? [] : {};
 	if (type == 1 || type == 9) inode.$name = name;
@@ -2191,14 +2235,6 @@ function emptyINode(type, name, attrs, ns) {
 	inode.$ns = ns;
 	inode.$children = [];
 	return inode;
-}
-
-function restoreNode(next, node) {
-	next._type = node._type;
-	next._name = node._name;
-	next._attrs = node._attrs;
-	next._ns = node._ns;
-	return next;
 }
 
 function emptyAttrMap() {
@@ -2266,7 +2302,7 @@ List.prototype.toString = function(root = true, json = false){
 	return str + "]";
 };
 */
-},{"./construct":2,"./pretty":7,"./seq":10,"./transducers":11}],13:[function(require,module,exports){
+},{"./construct":2,"./pretty":7,"./transducers":11}],13:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
