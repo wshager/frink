@@ -1,4 +1,4 @@
-import { Value, VNode, vnode } from './pvnode';
+import { Value, VNode, vnode } from './vnode';
 
 import { ensureRoot } from './construct';
 
@@ -188,7 +188,7 @@ export function getDoc(node) {
 export function lastChild(node){
 	node = ensureRoot(node);
 	var last = node.last();
-	return vnode(last,node,node.depth+1);
+	return vnode(last,node,node.depth+1, node.count() - 1);
 }
 
 export function parent(node) {
