@@ -101,7 +101,7 @@ VNode.prototype.set = function(key,val){
 };
 
 VNode.prototype.removeValue = function(key,val){
-	node.inode = restoreNode(this.inode.removeValue(key,val),node.inode);
+	this.inode = restoreNode(this.inode.removeValue(key, val), this.inode);
 	return this;
 };
 
