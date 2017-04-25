@@ -1,7 +1,7 @@
 // optional:
 //import FastIntCompression from "fastintcompression";
 
-import { VNode, Value, emptyINode, emptyAttrMap } from './vnode';
+import { emptyINode, emptyAttrMap, value, count, push, finalize } from './vnode';
 
 import { iter } from "./access";
 
@@ -68,7 +68,7 @@ export function toL3(doc){
 	    names = {},
 	    i = 0,
         j = 0;
-	for (let attr of doc._attrs.entries()) {
+	for (let attr of attrEntries(doc)) {
 		let name = attr[0], attrname = "@"+name;
 		if (!names[attrname]) {
 			names[attrname] = ++j;
@@ -100,7 +100,7 @@ export function toL3(doc){
         out[i++] = depth;
         if(nameIndex) out[i++] = nameIndex;
 		if (type == 1) {
-			for (let attr of inode._attrs.entries()) {
+			for (let attr of attrEntries(inode)) {
 				let name = attr[0], attrname = "@"+name;
 				if (!names[attrname]) {
 					names[attrname] = ++j;
@@ -194,7 +194,7 @@ export function fromL3(l3) {
 	    n = 0,
 	    parents = [],
 		depth = 0;
-	var doc = emptyINode(9, "#document", 0, emptyAttrMap());
+	var doc = emptyINode(9, "#document", emptyAttrMap());
 	parents[0] = doc;
 	const process = function(entry){
 		let type = entry[0];
@@ -202,9 +202,9 @@ export function fromL3(l3) {
         if(type == 2){
             let parent = parents[depth];
             let name = names[entry[1]];
-			parent._attrs = parent._attrs.push([name, array2str(entry,2)]);
+			parent = setAttribute(parent, name, array2str(entry,2));
         } else if(type == 7 || type == 10){
-            doc._attrs = doc._attrs.push([entry[1],array2str(entry,2)]);
+            doc = setAttribute(doc, entry[1], array2str(entry,2));
         } else if(type == 15){
             n++;
             names[n] = array2str(entry,1);
@@ -216,31 +216,30 @@ export function fromL3(l3) {
     		if(type == 1 || type == 5 || type == 6) {
                 name = names[entry[2]];
                 if(parents[depth]) {
-                    if(parents[depth]._attrs) parents[depth]._attrs.endMutation();
-                    parents[depth] = parents[depth].endMutation();
+                    parents[depth] = finalize(parents[depth]);
                 }
-    			node = emptyINode(type, name, depth, emptyAttrMap());
+    			node = emptyINode(type, name, emptyAttrMap());
     			parents[depth] = node;
     		} else if(type == 3){
                 if(parentType == 1 || parentType == 9){
-                    name = parent.count();
+                    name = count(parent);
                     valIndex = 2;
                 } else {
                     name = names[entry[2]];
                     valIndex = 3;
                 }
-    			node = new Value(type,name,array2str(entry,valIndex),depth);
+    			node = value(type,name,array2str(entry,valIndex));
             } else  if(type == 12){
                 if(parentType == 1 || parentType == 9){
-                    name = parent.count();
+                    name = count(parent);
                     valIndex = 2;
                 } else {
                     name = names[entry[2]];
                     valIndex = 3;
                 }
-                node = new Value(type,name,convert(array2str(entry,valIndex)),depth);
+                node = value(type,name,convert(array2str(entry,valIndex)),depth);
             }
-            if (parent) parent = parentType == 5 ? parent.push(node) : parentType == 6 ? parent.set(name, node) : parent.push([name, node]);
+            if (parent) parent = push(parent,[name, node]);
         }
 	};
 	var entry = [];
@@ -253,5 +252,5 @@ export function fromL3(l3) {
 		}
 	}
     process(entry);
-	return parents[0].endMutation();
+	return finalize(parents[0]);
 }
