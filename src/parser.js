@@ -2,7 +2,7 @@ import * as sax from 'sax';
 
 import { EventEmitter } from 'events';
 
-import { Value, emptyINode, emptyAttrMap } from './pvnode';
+import { emptyINode, emptyAttrMap, value, push, finalize, setAttribute, count } from './vnode';
 
 import { stripBOM } from "./bom";
 
@@ -20,8 +20,8 @@ export class Parser extends EventEmitter {
 		this.reset();
 	}
 	reset() {
-		var doc = emptyINode(9,"#document",emptyAttrMap()), depth = 0;
-		var last = doc, parents = [];
+		var last = emptyINode(9,"#document",emptyAttrMap());
+		var parents = [];
 		this.removeAllListeners();
 		saxParser.errThrown = false;
 		saxParser.onerror = (function(error) {
@@ -35,7 +35,6 @@ export class Parser extends EventEmitter {
 		saxParser.onopentag = (function(node) {
 			var nodeName = node.name,
 				nodeType = 1;
-			//depth++;
 			var key, ref = node.attributes;
 			// FIXME xmlns attributes are stored!
 			if (node.uri) {
@@ -51,7 +50,7 @@ export class Parser extends EventEmitter {
 				}
 				//nodeName = qname(node.uri, node.name);
 			}
-			let attrMap = emptyAttrMap();
+			var attrs = {};
 			for (key in ref) {
 				if (!hasProp.call(ref, key)) continue;
 				var attr = node.attributes[key];
@@ -66,34 +65,31 @@ export class Parser extends EventEmitter {
 					}
 				}
 				//ret = ret.concat(attribute(attr.uri ? qname(attr.uri, attr.name) : attr.name, attr.value));
-				attrMap = attrMap.set(attr.name,attr.value);
+				attrs[attr.name] = attr.value;
 			}
-			let n = emptyINode(nodeType,nodeName,attrMap.endMutation(true));
+			let n = emptyINode(nodeType,nodeName,emptyAttrMap(attrs));
 			if(last) {
-				last = last.push([nodeName,n]);
+				last = push(last,[nodeName,n]);
 				parents.push(last);
 			}
 			last = n;
 		}).bind(this);
 		saxParser.onclosetag = function() {
-			//depth--;
 			// here we can be sure that mutation has stopped
 			// BUT the problem is now that last children's parents are still mutable
 			// that's why we retain properties, because we won't be mutating until parsing is done
-			last = last.endMutation(true);
+			last = finalize(last);
 			last = parents.pop();
 		};
 		saxParser.onend = (function() {
 			saxParser.ended = true;
-			let doc = last.endMutation(true);
-			doc._attrs = last._attrs.endMutation(true);
-			return this.emit("end", doc);
+			return this.emit("end", finalize(last));
 		}).bind(this);
-		var ontext = function(value, type=3) {
-			if (/\S/.test(value)) {
-				let name = last.count() + 1;
-				let n = new Value(type,name,value);
-				last = last.push([name,n]);
+		var ontext = function(val, type=3) {
+			if (/\S/.test(val)) {
+				let name = count(last) + 1;
+				let n = value(type,name,val);
+				last = push(last,[name,n]);
 			}
 		};
 		saxParser.ontext = ontext;
@@ -101,10 +97,10 @@ export class Parser extends EventEmitter {
 			ontext(value, 4);
 		};
 		saxParser.ondoctype = function(value){
-			last._attrs = last._attrs.set("DOCTYPE",value);
+			last = setAttribute(last,"DOCTYPE",value);
 		};
 		saxParser.onprocessinginstruction = function(pi) {
-			last._attrs = last._attrs.set(pi.name,pi.body);
+			last = setAttribute(last,pi.name,pi.body);
 		};
 		saxParser.oncomment = function(value) {
 			ontext(value, 8);
