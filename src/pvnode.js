@@ -2,7 +2,7 @@ import * as ohamt from "ohamt";
 
 import * as rrb from "rrb-vector";
 
-import { ensureRoot } from './construct';
+import { ensureRoot, q } from './construct';
 
 import { prettyXML } from "./pretty";
 
