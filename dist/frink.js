@@ -222,7 +222,7 @@ function getDoc(node) {
 function lastChild(node) {
 	node = _construct.ensureRoot(node);
 	var last = node.last();
-	return _vnode.vnode(last, node, node.depth + 1);
+	return _vnode.vnode(last, node, node.depth + 1, node.count() - 1);
 }
 
 function parent(node) {
@@ -943,7 +943,7 @@ function toL3(doc) {
         names = {},
         i = 0,
         j = 0;
-    for (let attr of attrEntries(doc)) {
+    for (let attr of _vnode.attrEntries(doc)) {
         let name = attr[0],
             attrname = "@" + name;
         if (!names[attrname]) {
@@ -959,7 +959,7 @@ function toL3(doc) {
     _access.iter(doc, function (node) {
         let type = node.type,
             inode = node.inode,
-            depth = inode._depth,
+            depth = node.depth,
             name = node.name;
         var nameIndex = 0;
         if (typeof name === "string") {
@@ -976,7 +976,7 @@ function toL3(doc) {
         out[i++] = depth;
         if (nameIndex) out[i++] = nameIndex;
         if (type == 1) {
-            for (let attr of attrEntries(inode)) {
+            for (let attr of _vnode.attrEntries(inode)) {
                 let name = attr[0],
                     attrname = "@" + name;
                 if (!names[attrname]) {
@@ -1163,13 +1163,12 @@ function appendChild(node, child) {
 	if (node.type == 9 && node.inode.size > 0) {
 		throw new Error("Document can only contain one child.");
 	}
-	let index = node.index;
 	// create shallow copy of path down to lastchild of node
 	if (typeof child.inode === "function") {
 		child.inode(node);
 	} else {
 		// TODO make protective clone (of inode)
-		node = node.push([child.name, child.inode]);
+		node = node.push(child);
 	}
 	return _ascend(node);
 }
@@ -1180,6 +1179,8 @@ function insertChildBefore(node, ins) {
 	let parent = node.parent;
 	if (typeof ins.inode == "function") {
 		ins.inode(parent, node);
+	} else {
+		// what?
 	}
 	node = parent;
 	return _ascend(node);
@@ -1190,7 +1191,7 @@ function removeChild(node, child) {
 	//if(!node || !node.size || !child) return;
 	// TODO error
 	if (child.parent.inode !== node.inode) return;
-	node = node.removeValue(child.name, child.inode);
+	node = node.removeChild(child);
 	return _ascend(node);
 }
 },{"./access":1,"./construct":2}],7:[function(require,module,exports){
@@ -2013,23 +2014,30 @@ VNode.prototype.next = function (node) {
 	}
 };
 
-VNode.prototype.push = function (val) {
+VNode.prototype.push = function (child) {
+	var name = child.name,
+	    val = child.inode;
 	var type = this.type;
 	if (type == 5) {
-		this.inode.push(val[1]);
+		this.inode.push(val);
 	} else if (type == 6) {
-		this.inode[val[0]] = val[1];
+		this.inode[name] = val;
 	}
 	return this;
 };
 
 VNode.prototype.set = function (key, val) {
-	this.inode.set(key, val);
+	// used to restore immutable parents, never modifies mutable
 	return this;
 };
 
-VNode.prototype.removeValue = function (key, val) {
-	this.inode.removeValue(key, val);
+VNode.prototype.removeChild = function (child) {
+	var type = this.type;
+	if (type == 5) {
+		this.inode.splice(child.indexInParent, 1);
+	} else if (type == 6) {
+		delete this.inode[child.name];
+	}
 	return this;
 };
 
