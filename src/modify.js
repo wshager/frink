@@ -1,4 +1,4 @@
-import { Node, Value, Step, restoreNode, ensureRoot } from './vnode';
+import { ensureRoot } from './construct';
 
 import { firstChild, lastChild } from './access';
 
@@ -15,12 +15,12 @@ export function appendChild(node, child) {
 		child.inode(node);
 	} else {
 		// TODO make protective clone (of inode)
-		node.inode = restoreNode(node.inode.push([child.name,child.inode]), node.inode);
+		node = node.push([child.name,child.inode]);
 	}
 	while (node.parent) {
 		child = node;
 		node = node.parent;
-		node.inode = restoreNode(node.inode.set(child.name,child.inode), node.inode);
+		node = node.set(child.name,child.inode);
 	}
 	// this ensures immutability
 	return node.type == 9 ? firstChild(node) : node;
@@ -37,7 +37,7 @@ export function insertChildBefore(node,ins){
 	while (node.parent) {
 		ins = node;
 		node = node.parent;
-		node.inode = restoreNode(node.inode.set(ins.name,ins.inode),node.inode);
+		node = node.set(ins.name,ins.inode);
 	}
 	// this ensures immutability
 	return node.type == 9 ? firstChild(node) : node;
@@ -48,12 +48,11 @@ export function removeChild(node,child){
 	//if(!node || !node.size || !child) return;
 	// TODO error
 	if(child.parent.inode !== node.inode) return;
-	let inode = node.inode.removeValue(child.name,child.inode);
-	node.inode = restoreNode(inode,node.inode);
+	node = node.removeValue(child.name,child.inode);
 	while (node.parent) {
 		child = node;
 		node = node.parent;
-		node.inode = restoreNode(node.inode.set(child.name,child.inode),node.inode);
+		node = node.set(ins.name,ins.inode);
 	}
 	return node.type == 9 ? firstChild(node) : node;
 }
