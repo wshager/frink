@@ -1,7 +1,7 @@
 // optional:
 //import FastIntCompression from "fastintcompression";
 
-import { emptyINode, emptyAttrMap, attrEntries, setAttribute, value, count, push, finalize } from './vnode';
+import { emptyINode, emptyAttrMap, attrEntries, setAttribute, ivalue, count, push, finalize } from './pvnode';
 
 import { iter } from "./access";
 
@@ -228,7 +228,7 @@ export function fromL3(l3) {
                     name = names[entry[2]];
                     valIndex = 3;
                 }
-    			node = value(type,name,array2str(entry,valIndex));
+    			node = ivalue(type,name,array2str(entry,valIndex));
             } else  if(type == 12){
                 if(parentType == 1 || parentType == 9){
                     name = count(parent);
@@ -237,7 +237,7 @@ export function fromL3(l3) {
                     name = names[entry[2]];
                     valIndex = 3;
                 }
-                node = value(type,name,convert(array2str(entry,valIndex)),depth);
+                node = ivalue(type,name,convert(array2str(entry,valIndex)),depth);
             }
             if (parent) parent = push(parent,[name, node]);
         }

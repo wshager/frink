@@ -1,4 +1,4 @@
-import { VNode, emptyINode, emptyAttrMap, vnode, value, first } from "./vnode";
+import { VNode, emptyINode, emptyAttrMap, vnode, ivalue, first } from "./pvnode";
 
 import { seq, isSeq } from "./seq";
 
@@ -50,7 +50,7 @@ function _v(type,val,name) {
 		let pinode = parent.inode;
 		// reuse insertIndex here to create a named map entry
 		if(node.name === undefined) node.name = node.count() + 1;
-		node.inode = value(node.type, node.name, val);
+		node.inode = ivalue(node.type, node.name, val);
 		// we don't want to do checks here
 		// we just need to call a function that will insert the node into the parent
 		node.parent = parent.modify(node,ref);

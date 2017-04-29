@@ -2,7 +2,7 @@ import * as sax from 'sax';
 
 import { EventEmitter } from 'events';
 
-import { emptyINode, emptyAttrMap, value, push, finalize, setAttribute, count } from './vnode';
+import { emptyINode, emptyAttrMap, ivalue, push, finalize, setAttribute, count } from './pvnode';
 
 import { stripBOM } from "./bom";
 
@@ -88,7 +88,7 @@ export class Parser extends EventEmitter {
 		var ontext = function(val, type=3) {
 			if (/\S/.test(val)) {
 				let name = count(last) + 1;
-				let n = value(type,name,val);
+				let n = ivalue(type,name,val);
 				last = push(last,[name,n]);
 			}
 		};
