@@ -1387,13 +1387,7 @@ VNode.prototype.push = function (child) {
 	var type = this.type,
 	    name = child.name,
 	    val = child.inode;
-	if (type == 1 || type == 9) {
-		this.inode = restoreNode(this.inode.push([name, val]), this.inode);
-	} else if (type == 5) {
-		this.inode = restoreNode(this.inode.push(val), this.inode);
-	} else if (type == 6) {
-		this.inode = restoreNode(this.inode.set(name, val), this.inode);
-	}
+	this.inode = restoreNode(this.inode.push([name, val]), this.inode);
 	return this;
 };
 
@@ -1481,7 +1475,15 @@ function emptyAttrMap(init) {
 }
 
 function push(inode, val) {
-	return inode.push(val);
+	var type = inode._type;
+	if (type == 1 || type == 9) {
+		return inode.push(val);
+	} else if (type == 5) {
+		return inode.push(val[1]);
+	} else if (type == 6) {
+		return inode.set(val[0], val[1]);
+	}
+	return inode;
 }
 
 function finalize(inode) {
@@ -1564,6 +1566,10 @@ List.prototype.toString = function (root = true, json = false) {
 		if (i < l) str += ",";
 	}
 	return str + "]";
+};
+
+List.prototype.values = function () {
+	return this[Symbol.iterator]();
 };
 },{"./access":1,"./construct":2,"./pretty":7,"./transducers":11,"ohamt":17,"rrb-vector":15}],9:[function(require,module,exports){
 "use strict";
@@ -4221,6 +4227,5 @@ const toMap = exports.toMap = map => map.fold((acc, v, k) => (acc[k] = v && v.to
 Map.prototype.toJS = function () {
     return toMap(this);
 };
-
 },{}]},{},[4])(4)
 });
