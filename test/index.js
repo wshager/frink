@@ -10,20 +10,28 @@ handle(n.parse(`<persoon id="243">
 
 function handle(out){
     var e = microtime.now();
-    console.log(out+"");
+
     console.log("parsed",(e - s)/1000);
+    console.log(n.firstChild(out)+"");
+    for(var x of n.docIter(out)){
+        console.log(x.type,x.name,x.depth);
+    }
+
     var elem = n.e("hobbies",[n.x("muziek")]);
 
     s = microtime.now();
     var root = n.firstChild(out);
     let next = n.insertChildBefore(n.lastChild(root),elem);
     e = microtime.now();
-    console.log(next+"")
+    console.log(next+"");
     console.log("appendChild",(e - s)/1000);
 
     s = microtime.now();
     var l3 = n.toL3(out);
     e = microtime.now();
     console.log("toL3",(e - s)/1000);
-    console.log(l3.byteLength);
+    var test = n.fromL3(l3);
+    console.log(n.firstChild(test)+"");
+
+    console.log(n.toJS(out))
 }
