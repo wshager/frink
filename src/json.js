@@ -1,62 +1,76 @@
-import { VNode, Value, emptyINode, emptyAttrMap, ensureRoot } from './vnode';
+import { VNode, emptyINode, emptyAttrMap, attrEntries, ivalue, finalize, push } from './pvnode';
+import { children } from "./access";
+import { ensureRoot } from "./construct";
 import { array2str, str2array, convert } from "./l3";
 
-function process(entry, parent, depth, key) {
+function process(entry, parent, key) {
 	var cc = entry.constructor;
 	if (cc === Object) {
-		let name = key !== undefined ? key : "#object";
-		let node = emptyINode(6, name, depth);
-		parent = parent.set(name, node);
-		let keys = Object.keys(entry);
-		for (let k of keys) {
-			process(entry[k], node, depth+1, k);
+		if(entry.$children){
+			let name = entry.$name;
+			let node = emptyINode(1, name,emptyAttrMap(entry.$attrs));
+			parent = push(parent, [name, node]);
+			for (var i = 0, l = entry.$children.length; i<l; i++) {
+				process(entry.$children[i], node, i);
+			}
+			node = finalize(node);
+		} else {
+			let name = key !== undefined ? key : "#object";
+			let node = emptyINode(6, name);
+			parent = push(parent, [name, node]);
+			let keys = Object.keys(entry);
+			for (let k of keys) {
+				process(entry[k], node, k);
+			}
+			node = finalize(node);
 		}
 	} else if (cc === Array) {
 		let name = key !== undefined ? key : "#array";
-		let node = emptyINode(5, name, depth);
-		parent = parent.set(name, node);
+		let node = emptyINode(5, name);
+		parent = push(parent, [name, node]);
 		for (let i = 0, len = entry.length; i < len; i++) {
-			process(entry[i], node, depth+1, i);
+			process(entry[i], node, i);
 		}
+		node = finalize(node);
 	} else {
-		let node = new Value(entry.constructor === String ? 3 : 12, key, entry, depth);
-		parent = parent.set(key, node);
+		let node = ivalue(entry.constructor === String ? 3 : 12, key, entry);
+		parent = push(parent,[key, node]);
 	}
 }
 
 export function fromJS(json) {
-	var doc = emptyINode(9, "#document", 0, emptyAttrMap());
-	process(json, doc, 1);
-	return doc;
+	var doc = emptyINode(9, "#document", emptyAttrMap());
+	process(json, doc);
+	return finalize(doc);
 }
 
 export function toJS(doc) {
-	function process(inode, out, key) {
-		let type = inode._type,
-		    name = inode._name;
+	function process(node, out, key) {
+		let type = node.type,
+		    name = node.name,
+			inode = node.inode;
 		if (type == 1) {
 			let attrs = {}, arr = [];
-			let i = 0;
-			for (let attr of inode._attrs) {
+			for (let attr of attrEntries(inode)) {
 				attrs[attr[0]] = attr[1];
 			}
-			for (let n of inode) {
-				process(n[1], arr, i);
-				i++;
+			for (let n of children(node)) {
+				process(n, arr, n.name);
 			}
+			let e = { $name: name, $attrs: attrs, $children: arr };
 			if (out === undefined) {
-				out = arr;
+				out = e;
 			} else {
-				out[key] = { $name: inode._name, $attrs: attrs, $children: arr };
+				out[key] = e;
 			}
 		} else if (type == 3) {
-			out[key] = inode._value;
+			out[key] = node.value;
 		} else if (type == 12) {
-			out[key] = inode._value;
+			out[key] = node.value;
 		} else if (type == 5) {
 			let arr = [];
-			for (let i = 0; i < inode.size; i++) {
-				process(inode.get(i), arr, i);
+			for (let n of children(node)) {
+				process(n, arr, n.indexInParent);
 			}
 			if (out === undefined) {
 				out = arr;
@@ -65,9 +79,9 @@ export function toJS(doc) {
 			}
 		} else if (type == 6) {
 			var obj = {};
-			inode.forEach((v, k) => {
-				process(v, obj, k);
-			});
+			for (let n of children(node)) {
+				process(n, obj, n.name);
+			}
 			if (out === undefined) {
 				out = obj;
 			} else {
@@ -77,7 +91,7 @@ export function toJS(doc) {
 		return out;
 	}
 	// discard DOC for now
-	return process(ensureRoot(doc).inode);
+	return process(ensureRoot(doc));
 }
 
 function step(node,depth){
@@ -212,7 +226,7 @@ export function fromL3(l3) {
 				if(isObj){
 					parent[key] = val;
 				} else {
-					parent.push(val);
+					push(parent,val);
 				}
 			}
 		}
