@@ -1,5 +1,3 @@
-import { Value, VNode, vnode } from './vnode';
-
 import { ensureRoot } from './construct';
 
 import { compose, into, transform, forEach, filter, cat, distinctCat } from "./transducers";
@@ -26,19 +24,6 @@ VNodeIterator.prototype.next = function () {
 	this.indexInParent++;
     if (v.done) return DONE;
     return { value: this.f(v.value,this.parent,this.indexInParent) };
-};
-
-// TODO create iterator that yields a node seq
-// position() should overwrite get(), but the check should be name or indexInParent
-VNode.prototype[Symbol.iterator] = function(){
-	return new VNodeIterator(this.values(),this, vnode);
-};
-
-VNode.prototype.get = function(idx){
-	var val = this._get(idx);
-	if(!val) return [];
-	val = val.constructor == Array ? val : [val];
-	return new VNodeIterator(val[Symbol.iterator](), this, vnode);
 };
 
 export function Step(inode,parent,depth,indexInParent){
@@ -76,7 +61,7 @@ export function nextNode(node /* VNode */) {
 		parent = node;
 		inode = node.first();
 		// TODO handle arrays
-		node = vnode(inode, parent, depth, indexInParent);
+		node = parent.vnode(inode, parent, depth, indexInParent);
 		//console.log("found first", node.name, depth,indexInParent);
 		return node;
 	} else {
@@ -96,7 +81,7 @@ export function nextNode(node /* VNode */) {
 			// return the next child
 			inode = parent.next(node);
 			if (inode) {
-				node = vnode(inode, parent, depth, indexInParent);
+				node = parent.vnode(inode, parent, depth, indexInParent);
 				//console.log("found next", node.name, depth, indexInParent);
 				return node;
 			}
@@ -161,16 +146,14 @@ export function nextSibling(node){
 	var next = parent.next(node);
 	// create a new node
 	// very fast, but now we haven't updated path, so we have no index!
-	if(next) return vnode(next, parent, node.depth, node.indexInParent+1);
+	if(next) return parent.vnode(next, parent, node.depth, node.indexInParent+1);
 }
 
 export function* children(node){
 	var inode = node;
-	var i = 0, iter = node.values();
-	while(!iter.done){
-		let c = iter.next().value;
-		yield vnode(c,node,node.depth+1,i);
-		i++;
+	var i = 0;
+	for(var c of node.values()){
+		if(c) yield node.vnode(c, node, node.depth + 1, i);
 	}
 }
 
@@ -188,7 +171,7 @@ export function getDoc(node) {
 export function lastChild(node){
 	node = ensureRoot(node);
 	var last = node.last();
-	return vnode(last,node,node.depth+1, node.count() - 1);
+	return node.vnode(last,node,node.depth+1, node.count() - 1);
 }
 
 export function parent(node) {
@@ -279,7 +262,7 @@ function _attrGet(node,key){
 	} else {
 		iter = node.attrs;
 	}
-	return new VNodeIterator(iter[Symbol.iterator](), node, (v, parent, index) => vnode(new Value(2, v[0], v[1], node.depth + 1), parent, index));
+	return new VNodeIterator(iter[Symbol.iterator](), node, (v, parent, index) => node.vnode(node.ivalue(2, v[0], v[1], node.depth + 1), parent, index));
 }
 
 // TODO make axis default, process node here, return seq(VNodeIterator)
@@ -346,7 +329,7 @@ SiblingIterator.prototype.next = function(){
 	this.index++;
 	if (!v) return DONE;
 	this.inode = v;
-	return { value: vnode(v, this.parent, this.depth, this.indexInParent) };
+	return { value: this.parent.vnode(v, this.parent, this.depth, this.indexInParent) };
 };
 
 SiblingIterator.prototype[Symbol.iterator] = function () {

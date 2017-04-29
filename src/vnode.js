@@ -4,11 +4,13 @@ import { prettyXML } from "./pretty";
 
 import { forEach, foldLeft, into, range } from "./transducers";
 
+import { VNodeIterator } from './access';
+
 import * as multimap from "./multimap";
 
 import * as entries from "entries";
 
-export function value(type, name, value){
+export function ivalue(){
 	return value;
 }
 
@@ -162,17 +164,18 @@ VNode.prototype.modify = function(node,ref) {
 	return this;
 };
 
-
 export function vnode(inode, parent, depth, indexInParent) {
 	var type,
 	    name,
 	    value,
 	    cc = inode.constructor;
+	// redirect to constructor(inode,type,name,value);
+	//if(cc == Function) return new VNode(inode,parent,depth,indexInParent);
 	if (cc == Array) {
 		type = 5;
 		name = parent.keys()[indexInParent];
 	} else if (cc == Object) {
-		if (inode.$name) {
+		if (inode.$children) {
 			name = inode.$name;
 			type = name == "#document" ? 9 : 1;
 		} else {
@@ -184,8 +187,27 @@ export function vnode(inode, parent, depth, indexInParent) {
 		value = inode;
 		name = parent.keys()[indexInParent];
 	}
-	return new VNode(inode, type, inode.$ns ? _construct.q(inode.$ns.uri, name) : name, value, parent, depth, indexInParent);
+	return new VNode(inode, type, inode.$ns ? q(inode.$ns.uri, name) : name, value, parent, depth, indexInParent);
 }
+
+// hitch this on VNode for reuse
+VNode.prototype.vnode = vnode;
+
+VNode.prototype.ivalue = ivalue;
+
+
+// TODO create iterator that yields a node seq
+// position() should overwrite get(), but the check should be name or indexInParent
+VNode.prototype[Symbol.iterator] = function(){
+	return new VNodeIterator(this.values(),this, vnode);
+};
+
+VNode.prototype.get = function(idx){
+	var val = this._get(idx);
+	if(!val) return [];
+	val = val.constructor == Array ? val : [val];
+	return new VNodeIterator(val[Symbol.iterator](), this, vnode);
+};
 
 export function emptyINode(type, name, attrs, ns) {
     var inode = type == 5 ? [] : {};
@@ -206,7 +228,7 @@ export function push(inode,val){
 	if(cc == Array) {
 		inode.push(val);
 	} else if(cc == Object){
-		if(inode.$name) {
+		if(inode.$children) {
 			inode.$children.push(val[1]);
 		} else {
 			inode[val[0]] = val[1];
@@ -229,7 +251,7 @@ export function count(inode){
 	if(cc == Array) {
 		return inode.length;
 	} else if(cc == Object){
-		if(inode.$name) {
+		if (inode.$children) {
 			return inode.$children.length;
 		} else {
 			return Object.keys(inode).length;
@@ -243,7 +265,7 @@ export function first(inode){
 	if(cc == Array) {
 		return inode[0];
 	} else if(cc == Object){
-		if(inode.$name) {
+		if (inode.$children) {
 			return inode.$children[0];
 		} else {
 			return Object.values(inode)[0];
@@ -252,28 +274,29 @@ export function first(inode){
 }
 
 export function attrEntries(inode){
-	return entries.default(inode.$attrs);
+	if(inode.$attrs) return entries.default(inode.$attrs);
+	return [];
 }
 
-function stringify(e,root=true,json=false){
+function stringify(e,root=true){
 	var str = "";
 	var cc = e.constructor;
 	if(cc == Array){
-		str += "[";
-		str += forEach(e,c => stringify(c,false,json)).join(",");
-		str += "]";
+		str += "<json:array>";
+		str += forEach(e,c => stringify(c,false,json)).join("");
+		str += "</json:array>";
 	} else if(cc == Object){
 		if(e.$name) {
 			str += elemToString(e);
 		} else {
-			str += "{";
-			str += forEach(entries.default(e),c => '"'+c[0]+'":'+stringify(c[1],false,json)).join(",");
-			str += "}";
+			str += "<json:map>";
+			str += forEach(entries.default(e),c => '"'+c[0]+'":'+stringify(c[1],false,json)).join("");
+			str += "</json:map>";
 		}
 	} else {
 		str = e.toString();
 	}
-	return root && !json ? prettyXML(str) : str;
+	return root ? prettyXML(str) : str;
 }
 
 function elemToString(e){

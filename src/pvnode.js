@@ -4,6 +4,8 @@ import * as rrb from "rrb-vector";
 
 import { ensureRoot, q } from './construct';
 
+import { VNodeIterator } from './access';
+
 import { prettyXML } from "./pretty";
 
 import { forEach, into } from "./transducers";
@@ -40,9 +42,23 @@ Value.prototype.toString = function(root = true, json = false) {
 	return str;
 };
 
-export function value(type, name, value){
+export function ivalue(type, name, value){
 	return new Value(type, name, value);
 }
+
+
+// TODO create iterator that yields a node seq
+// position() should overwrite get(), but the check should be name or indexInParent
+VNode.prototype[Symbol.iterator] = function(){
+	return new VNodeIterator(this.values(),this, vnode);
+};
+
+VNode.prototype.get = function(idx){
+	var val = this._get(idx);
+	if(!val) return [];
+	val = val.constructor == Array ? val : [val];
+	return new VNodeIterator(val[Symbol.iterator](), this, vnode);
+};
 
 export function VNode(inode,type,name,value,parent,depth,indexInParent){
 	this.inode = inode;
@@ -66,6 +82,7 @@ VNode.prototype._get = function(idx){
 };
 
 VNode.prototype.count = function(){
+	if(typeof this.inode == "function") return 0;
 	return this.inode.count();
 };
 
@@ -117,10 +134,49 @@ VNode.prototype.removeChild = function(child){
 	return this;
 };
 
+VNode.prototype.modify = function(node,ref) {
+	var pinode = this.inode;
+	var type = this.type;
+	if(type == 1 || type == 9){
+		if (ref !== undefined) {
+			this.inode = restoreNode(pinode.insertBefore([ref.name,ref.inode],[node.name,node.inode]), pinode);
+		} else {
+			// FIXME check the parent type
+			this.inode = restoreNode(pinode.push([node.name,node.inode]), pinode);
+		}
+	} else if(type == 5){
+		if (ref !== undefined) {
+			this.inode = restoreNode(pinode.insertBefore(ref,node.inode), pinode);
+		} else {
+			this.inode = restoreNode(pinode.push(node.inode), pinode);
+		}
+	} else if(type == 6){
+		this.inode = restoreNode(pinode.set(node.name,node.inode), pinode);
+	}
+	return this;
+};
+
+VNode.prototype.finalize = function(){
+	this.inode.$attrs = this.inode.$attrs.endMutation();
+	this.inode = this.inode.endMutation();
+	return this;
+};
+
+VNode.prototype.setAttribute = function(key,value,ref){
+	// ignore ref for now
+	this.inode.$attrs = this.inode.$attrs.set(key,value);
+	return this;
+};
+
 
 export function vnode(inode, parent, depth, indexInParent){
 	return new VNode(inode, inode._type, inode._ns ? q(inode._ns.uri, inode._name) : inode._name, inode._value, parent, depth, indexInParent);
 }
+
+// hitch this on VNode for reuse
+VNode.prototype.vnode = vnode;
+
+VNode.prototype.ivalue = ivalue;
 
 export function emptyINode(type, name, attrs, ns) {
     var inode = type == 5 ? rrb.empty.beginMutation() : ohamt.make().beginMutation();
@@ -167,39 +223,9 @@ export function first(inode){
 	return inode.first();
 }
 
-VNode.prototype.modify = function(node,ref) {
-	var pinode = this.inode;
-	var type = this.type;
-	if(type == 1 || type == 9){
-		if (ref !== undefined) {
-			this.inode = restoreNode(pinode.insertBefore([ref.name,ref.inode],[node.name,node.inode]), pinode);
-		} else {
-			// FIXME check the parent type
-			this.inode = restoreNode(pinode.push([node.name,node.inode]), pinode);
-		}
-	} else if(type == 5){
-		if (ref !== undefined) {
-			this.inode = restoreNode(pinode.insertBefore(ref,node.inode), pinode);
-		} else {
-			this.inode = restoreNode(pinode.push(node.inode), pinode);
-		}
-	} else if(type == 6){
-		this.inode = restoreNode(pinode.set(node.name,node.inode), pinode);
-	}
-	return this;
-};
-
-VNode.prototype.finalize = function(){
-	this.inode.$attrs = this.inode.$attrs.endMutation();
-	this.inode = this.inode.endMutation();
-	return this;
-};
-
-VNode.prototype.setAttribute = function(key,value,ref){
-	// ignore ref for now
-	this.inode.$attrs = this.inode.$attrs.set(key,value);
-	return this;
-};
+export function attrEntries(inode){
+	return inode.$attrs.entries();
+}
 
 function elemToString(e){
 	const attrFunc = (z,v,k) => {
