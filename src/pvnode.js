@@ -109,13 +109,7 @@ VNode.prototype.next = function(node){
 
 VNode.prototype.push = function(child){
 	var type = this.type, name = child.name, val = child.inode;
-	if(type == 1 || type == 9){
-		this.inode = restoreNode(this.inode.push([name,val]), this.inode);
-	} else if(type == 5) {
-		this.inode = restoreNode(this.inode.push(val), this.inode);
-	} else if(type == 6){
-		this.inode = restoreNode(this.inode.set(name,val), this.inode);
-	}
+	this.inode = restoreNode(this.inode.push([name,val]), this.inode);
 	return this;
 };
 
@@ -202,7 +196,15 @@ export function emptyAttrMap(init){
 }
 
 export function push(inode,val){
-	return inode.push(val);
+	var type = inode._type;
+	if(type == 1 || type == 9) {
+		return inode.push(val);
+	} else if(type == 5) {
+		return inode.push(val[1]);
+	} else  if(type == 6) {
+		return inode.set(val[0],val[1]);
+	}
+	return inode;
 }
 
 export function finalize(inode){
@@ -286,4 +288,8 @@ List.prototype.toString = function(root = true, json = false){
 		if(i<l) str += ",";
 	}
 	return str + "]";
+};
+
+List.prototype.values = function(){
+	return this[Symbol.iterator]();
 };
