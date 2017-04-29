@@ -153,7 +153,7 @@ export function* children(node){
 	var inode = node;
 	var i = 0;
 	for(var c of node.values()){
-		if(c) yield node.vnode(c, node, node.depth + 1, i);
+		if(c) yield node.vnode(c, node, node.depth + 1, i++);
 	}
 }
 
