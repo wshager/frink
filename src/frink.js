@@ -11,3 +11,5 @@ export * from "./validate";
 export { render } from "./render";
 
 export * from "./dom-util";
+
+export * from "./form";
