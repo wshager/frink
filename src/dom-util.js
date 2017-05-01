@@ -5,9 +5,13 @@
 
 /// <reference path="./typings/lib.es6.d.ts"/>
 
-import { isVNode } from "./access";
+import { isNode } from "./access";
 import { isSeq } from "./seq";
 import { forEach, foldLeft } from "./transducers";
+
+function domify(n){
+	// render
+}
 
 export function ready() {
 	return new Promise(function(resolve,reject){
@@ -60,7 +64,7 @@ export function on(elm, type, fn, context = document) {
         if (typeof elm == "string") {
             return on(query(elm, context), type, fn);
         }
-        if (isVNode(elm)) elm = elm._domNode || domify(elm);
+        if (isNode(elm)) elm = elm._domNode || domify(elm);
         elm.addEventListener(type, fn);
         return function () {
             elm.removeEventListener(type, fn);
@@ -128,8 +132,8 @@ export function hide(elm) {
 }
 
 function place(node, target, position) {
-    if (isVNode(node)) node = node._domNode || domify(node);
-    if (isVNode(target)) target = target._domNode || domify(target);
+    if (isNode(node)) node = node._domNode || domify(node);
+    if (isNode(target)) target = target._domNode || domify(target);
     if (position == 1) {
         empty(target);
     }
@@ -172,7 +176,7 @@ export function text(value) {
 }
 
 export function empty(node) {
-    if (isVNode(node)) node = node._domNode;
+    if (isNode(node)) node = node._domNode;
     if (!node) return;
     while (node.firstChild) {
         node.removeChild(node.firstChild);
