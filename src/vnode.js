@@ -2,6 +2,7 @@ import { ensureRoot } from './construct';
 
 import { VNodeIterator } from './access';
 
+
 import {
 	ivalue,
 	vnode,
@@ -23,7 +24,7 @@ import {
 	attrEntries,
 	modify,
 	stringify
-} from "./pvnode";
+} from "./form";
 
 export function VNode(inode,type,name,value,parent,depth,indexInParent,cache){
 	this.inode = inode;
@@ -44,6 +45,7 @@ VNode.prototype.toString = function(){
 };
 
 VNode.prototype.count = function(){
+	if(typeof this.inode == "function") return 0;
 	return count(this.inode);
 };
 
@@ -57,6 +59,9 @@ VNode.prototype.values = function(){
 	return values(this.inode,this.type);
 };
 
+VNode.prototype.first = function(){
+	return first(this.inode,this.type);
+};
 
 VNode.prototype.last = function(){
 	return last(this.inode,this.type);
@@ -65,7 +70,6 @@ VNode.prototype.last = function(){
 VNode.prototype.next = function(node){
 	return next(this.inode,node,this.type);
 };
-
 
 VNode.prototype.push = function(child){
 	this.inode = push(this.inode,[child.name,child.inode],this.type);
