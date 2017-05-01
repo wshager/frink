@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<script src="/dist/frink.js"></script>
+		<script>
+			var n = amd;
+			n.ready().then(function(){
+				console.log(n.validate(document.forms.test,null,{form:true}));
+				n.on(document.forms.test,"submit", f => n.validate(f,null,{form:true}));
+			});
+
+		</script>
+	</head>
+	<body>
+		<form name="test">
+			<input name="a" type="number" data-type="number" required />
+			<input name="b" type="text" data-type="string" />
+			<input name="c" type="checkbox" data-type="boolean" />
+			<select name="d">
+				<option name="d1" value="1">A</option>
+				<option name="d2" value="2">B</option>
+				<option name="d3" value="3">C</option>
+				<option name="d4" value="4">D</option>
+			</select>
+			<input name="e" type="email" data-type="string"/>
+			<input type="submit"/>
+		</form>
+	</body>
+</html>
