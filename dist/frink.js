@@ -481,9 +481,7 @@ exports.ensureRoot = ensureRoot;
 exports._isQName = _isQName;
 exports.QName = QName;
 
-var _vnode = require("./vnode");
-
-var _form = require("./form");
+var _persist = require("./persist");
 
 var _seq = require("./seq");
 
@@ -496,7 +494,7 @@ function _n(type, name, children) {
 		if (!children.__is_VNode) children = x(children);
 		children = [children];
 	}
-	var node = new _vnode.VNode(function (parent, ref) {
+	var node = new _persist.VNode(function (parent, ref) {
 		let pinode = parent.inode;
 		let name = node.name,
 		    ns;
@@ -508,7 +506,7 @@ function _n(type, name, children) {
 				// TODO where are the namespaces?
 			}
 		}
-		node.inode = _form.emptyINode(type, name, type == 1 ? _form.emptyAttrMap() : undefined, ns);
+		node.inode = _persist.emptyINode(type, name, type == 1 ? _persist.emptyAttrMap() : undefined, ns);
 		for (let i = 0; i < children.length; i++) {
 			let child = children[i];
 			child = child.inode(node);
@@ -524,7 +522,7 @@ function _n(type, name, children) {
 }
 
 function _a(type, name, val) {
-	var node = new _vnode.VNode(function (parent, ref) {
+	var node = new _persist.VNode(function (parent, ref) {
 		node.parent = parent.setAttribute(name, val, ref);
 		return node;
 	}, type, name, val);
@@ -532,11 +530,11 @@ function _a(type, name, val) {
 }
 
 function _v(type, val, name) {
-	var node = new _vnode.VNode(function (parent, ref) {
+	var node = new _persist.VNode(function (parent, ref) {
 		let pinode = parent.inode;
 		// reuse insertIndex here to create a named map entry
 		if (node.name === undefined) node.name = node.count() + 1;
-		node.inode = _form.ivalue(node.type, node.name, val);
+		node.inode = _persist.ivalue(node.type, node.name, val);
 		// we don't want to do checks here
 		// we just need to call a function that will insert the node into the parent
 		node.parent = parent.modify(node, ref);
@@ -600,14 +598,14 @@ function d(uri = null, prefix = null, doctype = null) {
 	if (doctype) {
 		attrs.DOCTYPE = doctype;
 	}
-	return new _vnode.VNode(_form.emptyINode(9, "#document", 0, _form.emptyAttrMap(attrs)), 9, "#document");
+	return new _persist.VNode(_persist.emptyINode(9, "#document", 0, _persist.emptyAttrMap(attrs)), 9, "#document");
 }
 
 function ensureRoot(node) {
 	if (!node) return;
 	if (!node.inode) {
-		let root = _form.first(node);
-		return _form.vnode(root, _form.vnode(node), 1, 0);
+		let root = _persist.first(node);
+		return _persist.vnode(root, _persist.vnode(node), 1, 0);
 	}
 	if (typeof node.inode === "function") {
 		node.inode(d());
@@ -631,7 +629,7 @@ function QName(uri, name) {
 }
 
 const q = exports.q = QName;
-},{"./form":5,"./seq":12,"./vnode":15}],3:[function(require,module,exports){
+},{"./persist":9,"./seq":12}],3:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1542,6 +1540,7 @@ function removeChild(node, child) {
 Object.defineProperty(exports, "__esModule", {
 	value: true
 });
+exports.VNode = undefined;
 exports.ivalue = ivalue;
 exports.vnode = vnode;
 exports.emptyINode = emptyINode;
@@ -1804,6 +1803,8 @@ function modify(inode, node, ref, type) {
 function stringify(inode) {
 	return inode.toString();
 }
+
+exports.VNode = _vnode.VNode;
 },{"./construct":2,"./pretty":10,"./transducers":13,"./vnode":15,"ohamt":22,"rrb-vector":20}],10:[function(require,module,exports){
 'use strict';
 
@@ -2823,7 +2824,7 @@ var _construct = require('./construct');
 
 var _access = require('./access');
 
-var _form = require('./form');
+var _persist = require('./persist');
 
 function VNode(inode, type, name, value, parent, depth, indexInParent, cache) {
 	this.inode = inode;
@@ -2840,79 +2841,79 @@ VNode.prototype.__is_VNode = true;
 
 VNode.prototype.toString = function () {
 	var root = _construct.ensureRoot(this);
-	return _form.stringify(root.inode);
+	return _persist.stringify(root.inode);
 };
 
 VNode.prototype.count = function () {
 	if (typeof this.inode == "function") return 0;
-	return _form.count(this.inode);
+	return _persist.count(this.inode);
 };
 
 VNode.prototype.keys = function () {
-	var cache = this.cache || _form.cached(this.inode, this.type);
+	var cache = this.cache || _persist.cached(this.inode, this.type);
 	if (cache) return cache.keys();
-	return _form.keys(this.inode, this.type);
+	return _persist.keys(this.inode, this.type);
 };
 
 VNode.prototype.values = function () {
-	return _form.values(this.inode, this.type);
+	return _persist.values(this.inode, this.type);
 };
 
 VNode.prototype.first = function () {
-	return _form.first(this.inode, this.type);
+	return _persist.first(this.inode, this.type);
 };
 
 VNode.prototype.last = function () {
-	return _form.last(this.inode, this.type);
+	return _persist.last(this.inode, this.type);
 };
 
 VNode.prototype.next = function (node) {
-	return _form.next(this.inode, node, this.type);
+	return _persist.next(this.inode, node, this.type);
 };
 
 VNode.prototype.push = function (child) {
-	this.inode = _form.push(this.inode, [child.name, child.inode], this.type);
+	this.inode = _persist.push(this.inode, [child.name, child.inode], this.type);
 	return this;
 };
 
 VNode.prototype.set = function (key, val) {
-	this.inode = _form.set(this.inode, key, val, this.type);
+	this.inode = _persist.set(this.inode, key, val, this.type);
 	return this;
 };
 
 VNode.prototype.removeChild = function (child) {
-	this.inode = _form.removeChild(this.inode, child, this.type);
+	this.inode = _persist.removeChild(this.inode, child, this.type);
 	return this;
 };
 
 VNode.prototype.finalize = function () {
-	this.inode = _form.finalize(this.inode);
+	this.inode = _persist.finalize(this.inode);
 	return this;
 };
 
 VNode.prototype.modify = function (node, ref) {
-	this.inode = _form.modify(this.inode, node, ref, this.type);
+	this.inode = _persist.modify(this.inode, node, ref, this.type);
 	return this;
 };
 
 // hitch this on VNode for reuse
-VNode.prototype.vnode = _form.vnode;
+VNode.prototype.vnode = _persist.vnode;
 
-VNode.prototype.ivalue = _form.ivalue;
+VNode.prototype.ivalue = _persist.ivalue;
 
 // TODO create iterator that yields a node seq
 // position() should overwrite get(), but the check should be name or indexInParent
 VNode.prototype[Symbol.iterator] = function () {
-	return new _access.VNodeIterator(this.values(), this, _form.vnode);
+	return new _access.VNodeIterator(this.values(), this, _persist.vnode);
 };
 
 VNode.prototype.get = function (idx) {
-	var val = _form.get(this.inode, idx, this.type, this.cache);
+	var val = _persist.get(this.inode, idx, this.type, this.cache);
 	if (!val) return [];
 	val = val.constructor == Array ? val : [val];
-	return new _access.VNodeIterator(val[Symbol.iterator](), this, _form.vnode);
+	return new _access.VNodeIterator(val[Symbol.iterator](), this, _persist.vnode);
 };
-},{"./access":1,"./construct":2,"./form":5}],16:[function(require,module,exports){
+},{"./access":1,"./construct":2,"./persist":9}],16:[function(require,module,exports){
 /* big.js v3.1.3 https://github.com/MikeMcl/big.js/LICENCE */
 ;(function (global) {
     'use strict';
