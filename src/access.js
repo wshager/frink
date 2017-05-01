@@ -26,8 +26,9 @@ VNodeIterator.prototype.next = function () {
     return { value: this.f(v.value,this.parent,this.indexInParent) };
 };
 
-export function Step(inode,parent,depth,indexInParent){
+export function Step(inode,name,parent,depth,indexInParent){
 	this.inode = inode;
+	this.name = name;
 	this.parent = parent;
 	this.depth = depth;
 	this.indexInParent = indexInParent;
@@ -74,7 +75,7 @@ export function nextNode(node /* VNode */) {
 			node = node.parent;
 			if (depth === 0 || !node) return;
 			inode = node.inode;
-			node = new Step(inode, node.parent, depth, node.indexInParent);
+			node = new Step(inode, node.name, node.parent, depth, node.indexInParent);
 			//console.log("found step", node.name, depth, indexInParent);
 			return node;
 		} else {
