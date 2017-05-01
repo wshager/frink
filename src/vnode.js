@@ -24,7 +24,7 @@ import {
 	attrEntries,
 	modify,
 	stringify
-} from "./form";
+} from "./persist";
 
 export function VNode(inode,type,name,value,parent,depth,indexInParent,cache){
 	this.inode = inode;
