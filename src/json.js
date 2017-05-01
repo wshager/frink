@@ -1,4 +1,4 @@
-import { VNode, emptyINode, emptyAttrMap, attrEntries, ivalue, finalize, push } from './pvnode';
+import { VNode, emptyINode, emptyAttrMap, attrEntries, ivalue, finalize, push } from './persist';
 import { children } from "./access";
 import { ensureRoot } from "./construct";
 import { array2str, str2array, convert } from "./l3";
