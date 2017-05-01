@@ -1,4 +1,4 @@
-import { VNode, emptyINode, emptyAttrMap, vnode, ivalue, first } from "./pvnode";
+import { VNode, emptyINode, emptyAttrMap, vnode, ivalue, first } from "./form";
 
 import { seq, isSeq } from "./seq";
 
