@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<script src="frink.js"></script>
+		<script>
+			var n = amd;
+			n.ready().then(function(){
+				console.log("ready");
+			});
+		</script>
+	</head>
+	<body>
+		<form name="test">
+			<input name="a" type="number" data-type="number" />
+			<input name="b" type="text" data-type="string" />
+			<input name="c" type="checkbox" data-type="boolean" />
+		</form>
+	</body>
+</html>
