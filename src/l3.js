@@ -1,7 +1,7 @@
 // optional:
 //import FastIntCompression from "fastintcompression";
 
-import { emptyINode, emptyAttrMap, attrEntries, setAttribute, ivalue, count, push, finalize } from './pvnode';
+import { emptyINode, emptyAttrMap, attrEntries, setAttribute, ivalue, count, push, finalize } from './persist';
 
 import { iter } from "./access";
 
