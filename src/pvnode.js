@@ -2,15 +2,17 @@ import * as ohamt from "ohamt";
 
 import * as rrb from "rrb-vector";
 
-import { ensureRoot, q } from './construct';
+import { VNode } from './vnode';
 
-import { VNodeIterator } from './access';
+import { q } from './construct';
 
 import { prettyXML } from "./pretty";
 
 import { forEach, into } from "./transducers";
 
-export function Value(type, name, value) {
+// helpers ---------------
+
+function Value(type, name, value) {
 	this._type = type;
 	this._name = name;
 	this._value = value;
@@ -42,152 +44,7 @@ Value.prototype.toString = function(root = true, json = false) {
 	return str;
 };
 
-export function ivalue(type, name, value){
-	return new Value(type, name, value);
-}
-
-
-// TODO create iterator that yields a node seq
-// position() should overwrite get(), but the check should be name or indexInParent
-VNode.prototype[Symbol.iterator] = function(){
-	return new VNodeIterator(this.values(),this, vnode);
-};
-
-VNode.prototype.get = function(idx){
-	var val = this._get(idx);
-	if(!val) return [];
-	val = val.constructor == Array ? val : [val];
-	return new VNodeIterator(val[Symbol.iterator](), this, vnode);
-};
-
-export function VNode(inode,type,name,value,parent,depth,indexInParent){
-	this.inode = inode;
-	this.type = type;
-	this.name = name;
-	this.value = value;
-	this.parent = parent;
-	this.depth = depth | 0;
-	this.indexInParent = indexInParent;
-}
-
-VNode.prototype.__is_VNode = true;
-
-VNode.prototype.toString = function(){
-	var root = ensureRoot(this);
-	return root.inode.toString();
-};
-
-VNode.prototype._get = function(idx){
-	return this.inode.get(idx);
-};
-
-VNode.prototype.count = function(){
-	if(typeof this.inode == "function") return 0;
-	return this.inode.count();
-};
-
-VNode.prototype.keys = function(){
-	return this.inode.keys();
-};
-
-VNode.prototype.values = function(){
-	return this.inode.values();
-};
-
-VNode.prototype.first = function(){
-	return this.inode.first();
-};
-
-VNode.prototype.last = function(){
-	return this.inode.last();
-};
-
-VNode.prototype.next = function(node){
-	var inode = node.inode;
-	return this.inode.next(inode._name,inode);
-};
-
-VNode.prototype.push = function(child){
-	var type = this.type, name = child.name, val = child.inode;
-	if(type == 1 || type == 9){
-		this.inode = restoreNode(this.inode.push([name,val]), this.inode);
-	} else if(type == 5) {
-		this.inode = restoreNode(this.inode.push(val), this.inode);
-	} else if(type == 6){
-		this.inode = restoreNode(this.inode.set(name,val), this.inode);
-	}
-	return this;
-};
-
-VNode.prototype.set = function(key,val){
-	this.inode = restoreNode(this.inode.set(key,val), this.inode);
-	return this;
-};
-
-VNode.prototype.removeChild = function(child){
-	var type = this.type, key = child.name, val = child.inode;
-	if(type == 1 || type == 9){
-		this.inode = restoreNode(this.inode.removeValue(key, val), this.inode);
-	} else if(type == 5 || type == 6){
-		this.inode = restoreNode(this.inode.remove(key), this.inode);
-	}
-	return this;
-};
-
-VNode.prototype.modify = function(node,ref) {
-	var pinode = this.inode;
-	var type = this.type;
-	if(type == 1 || type == 9){
-		if (ref !== undefined) {
-			this.inode = restoreNode(pinode.insertBefore([ref.name,ref.inode],[node.name,node.inode]), pinode);
-		} else {
-			// FIXME check the parent type
-			this.inode = restoreNode(pinode.push([node.name,node.inode]), pinode);
-		}
-	} else if(type == 5){
-		if (ref !== undefined) {
-			this.inode = restoreNode(pinode.insertBefore(ref,node.inode), pinode);
-		} else {
-			this.inode = restoreNode(pinode.push(node.inode), pinode);
-		}
-	} else if(type == 6){
-		this.inode = restoreNode(pinode.set(node.name,node.inode), pinode);
-	}
-	return this;
-};
-
-VNode.prototype.finalize = function(){
-	this.inode.$attrs = this.inode.$attrs.endMutation();
-	this.inode = this.inode.endMutation();
-	return this;
-};
-
-VNode.prototype.setAttribute = function(key,value,ref){
-	// ignore ref for now
-	this.inode.$attrs = this.inode.$attrs.set(key,value);
-	return this;
-};
-
-
-export function vnode(inode, parent, depth, indexInParent){
-	return new VNode(inode, inode._type, inode._ns ? q(inode._ns.uri, inode._name) : inode._name, inode._value, parent, depth, indexInParent);
-}
-
-// hitch this on VNode for reuse
-VNode.prototype.vnode = vnode;
-
-VNode.prototype.ivalue = ivalue;
-
-export function emptyINode(type, name, attrs, ns) {
-    var inode = type == 5 ? rrb.empty.beginMutation() : ohamt.make().beginMutation();
-    inode._type = type;
-    inode._name = name;
-    inode.$attrs = attrs;
-	inode._ns = ns;
-    return inode;
-}
-
-export function restoreNode(next,node){
+function _restore(next,node){
 	next._type = node._type;
 	next._name = node._name;
 	next.$attrs = node.$attrs;
@@ -195,39 +52,7 @@ export function restoreNode(next,node){
 	return next;
 }
 
-export function emptyAttrMap(init){
-	var attrs = ohamt.empty.beginMutation();
-	if(init) for(var k in init) attrs = attrs.set(k,init[k]);
-	return attrs;
-}
-
-export function push(inode,val){
-	return inode.push(val);
-}
-
-export function finalize(inode){
-	if(inode.$attrs) inode.$attrs = inode.$attrs.endMutation();
-	return inode.endMutation();
-}
-
-export function setAttribute(inode,key,val){
-	if(inode.$attrs) inode.$attrs = inode.$attrs.set(key,val);
-	return inode;
-}
-
-export function count(inode){
-	return inode.count();
-}
-
-export function first(inode){
-	return inode.first();
-}
-
-export function attrEntries(inode){
-	return inode.$attrs.entries();
-}
-
-function elemToString(e){
+function _elemToString(e){
 	const attrFunc = (z,v,k) => {
 		return z += " "+k+"=\""+v+"\"";
 	};
@@ -258,7 +83,7 @@ OrderedMap.prototype.toString = function(root = true, json = false){
 		z += k=="DOCTYPE" ? "<!"+k+" "+v+">" : "<?"+k+" "+v+"?>";
 	const objFunc = (kv) => "\""+kv[0]+"\":"+kv[1].toString(false,true);
 	if(type==1) {
-		str += elemToString(this);
+		str += _elemToString(this);
 	} else if(type==3 || type == 12){
 		str += this.toString();
 	} else  if(type == 6){
@@ -287,3 +112,125 @@ List.prototype.toString = function(root = true, json = false){
 	}
 	return str + "]";
 };
+
+// -----------------------
+
+export function ivalue(type, name, value){
+	return new Value(type, name, value);
+}
+
+export function vnode(inode, parent, depth, indexInParent){
+	return new VNode(inode, inode._type, inode._ns ? q(inode._ns.uri, inode._name) : inode._name, inode._value, parent, depth, indexInParent);
+}
+
+export function emptyINode(type, name, attrs, ns) {
+    var inode = type == 5 ? rrb.empty.beginMutation() : ohamt.make().beginMutation();
+    inode._type = type;
+    inode._name = name;
+    inode.$attrs = attrs;
+	inode._ns = ns;
+    return inode;
+}
+
+export function emptyAttrMap(init){
+	var attrs = ohamt.empty.beginMutation();
+	if(init) for(var k in init) attrs = attrs.set(k,init[k]);
+	return attrs;
+}
+
+export function get(inode, idx){
+	return inode.get(idx);
+}
+
+export function next(inode,node){
+	return inode.next(node.name,node.inode);
+}
+
+export function push(inode, val, type){
+	type = type || inode._type;
+	if(type == 1 || type == 9){
+		return _restore(inode.push(val), inode);
+	} else if(type == 5) {
+		return _restore(inode.push(val[1]), inode);
+	} else if(type == 6){
+		return _restore(inode.set(val[0],val[1]), inode);
+	}
+	return inode;
+}
+
+export function set(inode,key,val){
+	return _restore(inode.set(key,val), inode);
+}
+
+export function removeChild(inode,child,type){
+	type = type || inode._type;
+	var key = child.name, val = child.inode;
+	if(type == 1 || type == 9){
+		return _restore(inode.removeValue(key, val), inode);
+	} else if(type == 5 || type == 6){
+		return _restore(inode.remove(key), inode);
+	}
+	return inode;
+}
+
+export function cached(inode,type){
+}
+
+export function keys(inode,type){
+	return inode.keys();
+}
+
+export function values(inode){
+	return inode.values();
+}
+
+export function finalize(inode){
+	if(inode.$attrs) inode.$attrs = inode.$attrs.endMutation();
+	return inode.endMutation();
+}
+
+export function setAttribute(inode,key,val){
+	if(inode.$attrs) inode.$attrs = inode.$attrs.set(key,val);
+	return inode;
+}
+
+export function count(inode){
+	return inode.count();
+}
+
+export function first(inode){
+	return inode.first();
+}
+
+export function last(inode){
+	return inode.last();
+}
+
+export function attrEntries(inode){
+	return inode.$attrs.entries();
+}
+
+export function modify(inode,node,ref,type) {
+	type = type || inode._type;
+	if(type == 1 || type == 9){
+		if (ref !== undefined) {
+			return _restore(inode.insertBefore([ref.name,ref.inode],[node.name,node.inode]), inode);
+		} else {
+			// FIXME check the parent type
+			return _restore(inode.push([node.name,node.inode]), inode);
+		}
+	} else if(type == 5){
+		if (ref !== undefined) {
+			return _restore(inode.insertBefore(ref,node.inode), inode);
+		} else {
+			return _restore(inode.push(node.inode), inode);
+		}
+	} else if(type == 6){
+		return _restore(inode.set(node.name,node.inode), inode);
+	}
+	return inode;
+}
+
+export function stringify(inode){
+	return inode.toString();
+}
