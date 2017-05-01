@@ -63,10 +63,12 @@ export function toJS(doc) {
 			} else {
 				out[key] = e;
 			}
-		} else if (type == 3) {
-			out[key] = node.value;
-		} else if (type == 12) {
-			out[key] = node.value;
+		} else if (type == 3 || type == 12) {
+			if (out === undefined) {
+				out = node.value;
+			} else {
+				out[key] = node.value;
+			}
 		} else if (type == 5) {
 			let arr = [];
 			for (let n of children(node)) {

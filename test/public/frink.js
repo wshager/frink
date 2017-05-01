@@ -2607,7 +2607,6 @@ const validator = {
 		if (schemas.length) return _validate(schemas, params, node.name, newpath, err);
 	},
 	additionalProperties: function (schema, key, params, index, path, err, node) {
-		var additionalProps = get(schema, key);
 		if (additionalProps === false) {
 			var props = get(schema, "properties");
 			var pattProps = get(schema, "patternProperties");
@@ -2652,9 +2651,9 @@ const validator = {
 		var test = schema[key];
 		var ret = false;
 		if (node.value && node.value.constructor == Big) {
-			ret = node.value.gte(test);
+			ret = node.value.greaterThan(test);
 		} else {
-			ret = node.value >= test;
+			ret = node.value > test;
 		}
 		if (!ret) err.push(x(schema, key, path + "/" + index));
 	},
@@ -2662,9 +2661,9 @@ const validator = {
 		var test = schema[key];
 		var ret = false;
 		if (node.value && node.value.constructor == Big) {
-			ret = node.value.lte(test);
+			ret = node.value.lessThan(test);
 		} else {
-			ret = node.value <= test;
+			ret = node.value < test;
 		}
 		if (!ret) err.push(x(schema, key, path + "/" + index));
 	}

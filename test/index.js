@@ -33,5 +33,6 @@ function handle(out){
     var test = n.fromL3(l3);
     console.log(n.firstChild(test)+"");
 
-    console.log(n.toJS(out))
+    console.log(n.toJS(out));
+    
 }
