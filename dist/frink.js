@@ -59,8 +59,9 @@ VNodeIterator.prototype.next = function () {
 	return { value: this.f(v.value, this.parent, this.indexInParent) };
 };
 
-function Step(inode, parent, depth, indexInParent) {
+function Step(inode, name, parent, depth, indexInParent) {
 	this.inode = inode;
+	this.name = name;
 	this.parent = parent;
 	this.depth = depth;
 	this.indexInParent = indexInParent;
@@ -107,7 +108,7 @@ function nextNode(node /* VNode */) {
 			node = node.parent;
 			if (depth === 0 || !node) return;
 			inode = node.inode;
-			node = new Step(inode, node.parent, depth, node.indexInParent);
+			node = new Step(inode, node.name, node.parent, depth, node.indexInParent);
 			//console.log("found step", node.name, depth, indexInParent);
 			return node;
 		} else {
@@ -461,7 +462,7 @@ function name($a) {
 	if (!_isVNode($a)) throw new Error("This is not a node");
 	return $a.name;
 }
-},{"./construct":2,"./pretty":8,"./seq":11,"./transducers":12}],2:[function(require,module,exports){
+},{"./construct":2,"./pretty":10,"./seq":12,"./transducers":13}],2:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -480,7 +481,9 @@ exports.ensureRoot = ensureRoot;
 exports._isQName = _isQName;
 exports.QName = QName;
 
-var _pvnode = require("./pvnode");
+var _vnode = require("./vnode");
+
+var _form = require("./form");
 
 var _seq = require("./seq");
 
@@ -493,7 +496,7 @@ function _n(type, name, children) {
 		if (!children.__is_VNode) children = x(children);
 		children = [children];
 	}
-	var node = new _pvnode.VNode(function (parent, ref) {
+	var node = new _vnode.VNode(function (parent, ref) {
 		let pinode = parent.inode;
 		let name = node.name,
 		    ns;
@@ -505,7 +508,7 @@ function _n(type, name, children) {
 				// TODO where are the namespaces?
 			}
 		}
-		node.inode = _pvnode.emptyINode(type, name, type == 1 ? _pvnode.emptyAttrMap() : undefined, ns);
+		node.inode = _form.emptyINode(type, name, type == 1 ? _form.emptyAttrMap() : undefined, ns);
 		for (let i = 0; i < children.length; i++) {
 			let child = children[i];
 			child = child.inode(node);
@@ -521,7 +524,7 @@ function _n(type, name, children) {
 }
 
 function _a(type, name, val) {
-	var node = new _pvnode.VNode(function (parent, ref) {
+	var node = new _vnode.VNode(function (parent, ref) {
 		node.parent = parent.setAttribute(name, val, ref);
 		return node;
 	}, type, name, val);
@@ -529,11 +532,11 @@ function _a(type, name, val) {
 }
 
 function _v(type, val, name) {
-	var node = new _pvnode.VNode(function (parent, ref) {
+	var node = new _vnode.VNode(function (parent, ref) {
 		let pinode = parent.inode;
 		// reuse insertIndex here to create a named map entry
 		if (node.name === undefined) node.name = node.count() + 1;
-		node.inode = _pvnode.ivalue(node.type, node.name, val);
+		node.inode = _form.ivalue(node.type, node.name, val);
 		// we don't want to do checks here
 		// we just need to call a function that will insert the node into the parent
 		node.parent = parent.modify(node, ref);
@@ -597,14 +600,14 @@ function d(uri = null, prefix = null, doctype = null) {
 	if (doctype) {
 		attrs.DOCTYPE = doctype;
 	}
-	return new _pvnode.VNode(_pvnode.emptyINode(9, "#document", 0, _pvnode.emptyAttrMap(attrs)), 9, "#document");
+	return new _vnode.VNode(_form.emptyINode(9, "#document", 0, _form.emptyAttrMap(attrs)), 9, "#document");
 }
 
 function ensureRoot(node) {
 	if (!node) return;
 	if (!node.inode) {
-		let root = _pvnode.first(node);
-		return _pvnode.vnode(root, _pvnode.vnode(node), 1, 0);
+		let root = _form.first(node);
+		return _form.vnode(root, _form.vnode(node), 1, 0);
 	}
 	if (typeof node.inode === "function") {
 		node.inode(d());
@@ -628,7 +631,7 @@ function QName(uri, name) {
 }
 
 const q = exports.q = QName;
-},{"./pvnode":9,"./seq":11}],3:[function(require,module,exports){
+},{"./form":5,"./seq":12,"./vnode":15}],3:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -661,6 +664,15 @@ var _seq = require("./seq");
 
 var _transducers = require("./transducers");
 
+function domify(n) {
+    // render
+} /**
+   * DOM util module
+   * @module dom-util
+   */
+
+/// <reference path="./typings/lib.es6.d.ts"/>
+
 function ready() {
     return new Promise(function (resolve, reject) {
         function completed() {
@@ -681,12 +693,7 @@ function ready() {
             window.addEventListener("load", completed, false);
         }
     });
-} /**
-   * DOM util module
-   * @module dom-util
-   */
-
-/// <reference path="./typings/lib.es6.d.ts"/>
+}
 
 function byId(id, doc = document) {
     return doc.getElementById(id);
@@ -716,7 +723,7 @@ function on(elm, type, fn, context = document) {
         if (typeof elm == "string") {
             return on(query(elm, context), type, fn);
         }
-        if (_access.isVNode(elm)) elm = elm._domNode || domify(elm);
+        if (_access.isNode(elm)) elm = elm._domNode || domify(elm);
         elm.addEventListener(type, fn);
         return function () {
             elm.removeEventListener(type, fn);
@@ -784,8 +791,8 @@ function hide(elm) {
 }
 
 function place(node, target, position) {
-    if (_access.isVNode(node)) node = node._domNode || domify(node);
-    if (_access.isVNode(target)) target = target._domNode || domify(target);
+    if (_access.isNode(node)) node = node._domNode || domify(node);
+    if (_access.isNode(target)) target = target._domNode || domify(target);
     if (position == 1) {
         empty(target);
     }
@@ -827,7 +834,7 @@ function text(value) {
 }
 
 function empty(node) {
-    if (_access.isVNode(node)) node = node._domNode;
+    if (_access.isNode(node)) node = node._domNode;
     if (!node) return;
     while (node.firstChild) {
         node.removeChild(node.firstChild);
@@ -864,7 +871,7 @@ function matchAncestorOrSelf(elem, selector) {
         if (!!(node && node.matches(selector))) return node;
     }
 }
-},{"./access":1,"./seq":11,"./transducers":12}],4:[function(require,module,exports){
+},{"./access":1,"./seq":12,"./transducers":13}],4:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -933,6 +940,89 @@ function nextNode(node /* Node */) {
 	}
 }
 },{}],5:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+exports.ivalue = ivalue;
+exports.vnode = vnode;
+exports.next = next;
+exports.count = count;
+exports.keys = keys;
+exports.cached = cached;
+exports.first = first;
+exports.get = get;
+
+var _vnode = require("./vnode");
+
+var _transducers = require("./transducers");
+
+function _inferType(node) {
+	var t = node.dataType;
+	if (t) {
+		switch (t) {
+			case "string":
+				return 3;
+			case "boolean":
+			case "number":
+				return 12;
+			case "array":
+				return 5;
+			case "object":
+				return 6;
+		}
+	}
+	if (node.nodeName == "fieldset") return 6;
+	if (node.type == "number" || node.type == "checkbox") return 12;
+	return 3;
+}
+function ivalue(type, name, value) {
+	return value;
+}
+
+function vnode(inode, parent, depth, indexInParent) {
+	var type = _inferType(inode);
+	var format = inode.type;
+	var val = inode.value;
+	if (type == 12 && typeof val == "string") {
+		if (format == "checkbox") {
+			val = inode.checked;
+		} else if (format == "number") {
+			val = parseFloat(inode.value);
+		}
+	}
+	return new _vnode.VNode(inode, type, inode.name, val, parent, depth, indexInParent);
+}
+
+function next(inode, node, type) {
+	//type = type || _inferType(type);
+	var idx = node.indexInParent;
+	// FIXME detect fieldset elements
+	var elems = inode.elements;
+	if (elems) return elems[idx + 1];
+}
+
+function count(inode, type) {
+	return inode.elements ? inode.elements.length : 0;
+}
+
+function keys(inode, type) {
+	// TODO cached
+	return inode.elements ? _transducers.forEach(inode.elements, _ => _.name) : [];
+}
+
+function cached() {}
+
+function first(inode, type) {
+	// FIXME detect / filter fieldset elements
+	if (inode.elements) return inode.elements[0];
+}
+
+function get(inode, idx, type) {
+	return inode[idx];
+}
+},{"./transducers":13,"./vnode":15}],6:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1097,7 +1187,19 @@ Object.keys(_domUtil).forEach(function (key) {
     }
   });
 });
-},{"./access":1,"./construct":2,"./dom-util":3,"./l3":6,"./modify":7,"./render":10,"./validate":13}],6:[function(require,module,exports){
+
+var _form = require("./form");
+
+Object.keys(_form).forEach(function (key) {
+  if (key === "default" || key === "__esModule") return;
+  Object.defineProperty(exports, key, {
+    enumerable: true,
+    get: function () {
+      return _form[key];
+    }
+  });
+});
+},{"./access":1,"./construct":2,"./dom-util":3,"./form":5,"./l3":7,"./modify":8,"./render":11,"./validate":14}],7:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1112,7 +1214,7 @@ exports.fromNative = fromNative;
 exports.toL3 = toL3;
 exports.fromL3 = fromL3;
 
-var _pvnode = require("./pvnode");
+var _persist = require("./persist");
 
 var _access = require("./access");
 
@@ -1183,7 +1285,7 @@ function toL3(doc) {
         names = {},
         i = 0,
         j = 0;
-    for (let attr of _pvnode.attrEntries(doc)) {
+    for (let attr of _persist.attrEntries(doc)) {
         let name = attr[0],
             attrname = "@" + name;
         if (!names[attrname]) {
@@ -1216,7 +1318,7 @@ function toL3(doc) {
         out[i++] = depth;
         if (nameIndex) out[i++] = nameIndex;
         if (type == 1) {
-            for (let attr of _pvnode.attrEntries(inode)) {
+            for (let attr of _persist.attrEntries(inode)) {
                 let name = attr[0],
                     attrname = "@" + name;
                 if (!names[attrname]) {
@@ -1311,7 +1413,7 @@ function fromL3(l3) {
         n = 0,
         parents = [],
         depth = 0;
-    var doc = _pvnode.emptyINode(9, "#document", _pvnode.emptyAttrMap());
+    var doc = _persist.emptyINode(9, "#document", _persist.emptyAttrMap());
     parents[0] = doc;
     const process = function (entry) {
         let type = entry[0];
@@ -1319,9 +1421,9 @@ function fromL3(l3) {
         if (type == 2) {
             let parent = parents[depth];
             let name = names[entry[1]];
-            parent = _pvnode.setAttribute(parent, name, array2str(entry, 2));
+            parent = _persist.setAttribute(parent, name, array2str(entry, 2));
         } else if (type == 7 || type == 10) {
-            doc = _pvnode.setAttribute(doc, entry[1], array2str(entry, 2));
+            doc = _persist.setAttribute(doc, entry[1], array2str(entry, 2));
         } else if (type == 15) {
             n++;
             names[n] = array2str(entry, 1);
@@ -1333,30 +1435,30 @@ function fromL3(l3) {
             if (type == 1 || type == 5 || type == 6) {
                 name = names[entry[2]];
                 if (parents[depth]) {
-                    parents[depth] = _pvnode.finalize(parents[depth]);
+                    parents[depth] = _persist.finalize(parents[depth]);
                 }
-                node = _pvnode.emptyINode(type, name, _pvnode.emptyAttrMap());
+                node = _persist.emptyINode(type, name, _persist.emptyAttrMap());
                 parents[depth] = node;
             } else if (type == 3) {
                 if (parentType == 1 || parentType == 9) {
-                    name = _pvnode.count(parent);
+                    name = _persist.count(parent);
                     valIndex = 2;
                 } else {
                     name = names[entry[2]];
                     valIndex = 3;
                 }
-                node = _pvnode.ivalue(type, name, array2str(entry, valIndex));
+                node = _persist.ivalue(type, name, array2str(entry, valIndex));
             } else if (type == 12) {
                 if (parentType == 1 || parentType == 9) {
-                    name = _pvnode.count(parent);
+                    name = _persist.count(parent);
                     valIndex = 2;
                 } else {
                     name = names[entry[2]];
                     valIndex = 3;
                 }
-                node = _pvnode.ivalue(type, name, convert(array2str(entry, valIndex)), depth);
+                node = _persist.ivalue(type, name, convert(array2str(entry, valIndex)), depth);
             }
-            if (parent) parent = _pvnode.push(parent, [name, node]);
+            if (parent) parent = _persist.push(parent, [name, node]);
         }
     };
     var entry = [];
@@ -1369,9 +1471,9 @@ function fromL3(l3) {
         }
     }
     process(entry);
-    return _pvnode.finalize(parents[0]);
+    return _persist.finalize(parents[0]);
 }
-},{"./access":1,"./pvnode":9}],7:[function(require,module,exports){
+},{"./access":1,"./persist":9}],8:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -1434,7 +1536,275 @@ function removeChild(node, child) {
 	node = node.removeChild(child);
 	return _ascend(node);
 }
-},{"./access":1,"./construct":2}],8:[function(require,module,exports){
+},{"./access":1,"./construct":2}],9:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+exports.ivalue = ivalue;
+exports.vnode = vnode;
+exports.emptyINode = emptyINode;
+exports.emptyAttrMap = emptyAttrMap;
+exports.get = get;
+exports.next = next;
+exports.push = push;
+exports.set = set;
+exports.removeChild = removeChild;
+exports.cached = cached;
+exports.keys = keys;
+exports.values = values;
+exports.finalize = finalize;
+exports.setAttribute = setAttribute;
+exports.count = count;
+exports.first = first;
+exports.last = last;
+exports.attrEntries = attrEntries;
+exports.modify = modify;
+exports.stringify = stringify;
+
+var _ohamt = require("ohamt");
+
+var ohamt = _interopRequireWildcard(_ohamt);
+
+var _rrbVector = require("rrb-vector");
+
+var rrb = _interopRequireWildcard(_rrbVector);
+
+var _vnode = require("./vnode");
+
+var _construct = require("./construct");
+
+var _pretty = require("./pretty");
+
+var _transducers = require("./transducers");
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+
+// helpers ---------------
+
+function Value(type, name, value) {
+	this._type = type;
+	this._name = name;
+	this._value = value;
+}
+
+Value.prototype.__is_Value = true;
+
+Value.prototype.get = function () {
+	return this._value;
+};
+
+Value.prototype[Symbol.iterator] = function* () {
+	yield this;
+};
+
+Value.prototype.values = function () {
+	return this[Symbol.iterator]();
+};
+
+Value.prototype.count = function () {
+	return 0;
+};
+
+Value.prototype.size = 0;
+
+Value.prototype.toString = function (root = true, json = false) {
+	var str = this._value + "";
+	if (this._type == 3 && json) return '"' + str + '"';
+	return str;
+};
+
+function _restore(next, node) {
+	next._type = node._type;
+	next._name = node._name;
+	next.$attrs = node.$attrs;
+	next._ns = node._ns;
+	return next;
+}
+
+function _elemToString(e) {
+	const attrFunc = (z, v, k) => {
+		return z += " " + k + "=\"" + v + "\"";
+	};
+	let str = "<" + e._name;
+	let ns = e._ns;
+	if (ns) str += " xmlns" + (ns.prefix ? ":" + ns.prefix : "") + "=\"" + ns.uri + "\"";
+	str = e.$attrs.reduce(attrFunc, str);
+	if (e.size > 0) {
+		str += ">";
+		for (let c of e.values()) {
+			str += c.toString(false);
+		}
+		str += "</" + e._name + ">";
+	} else {
+		str += "/>";
+	}
+	return str;
+}
+
+var OrderedMap = ohamt.empty.constructor;
+
+OrderedMap.prototype.__is_Map = true;
+
+OrderedMap.prototype.toString = function (root = true, json = false) {
+	var str = "";
+	var type = this._type;
+	const docAttrFunc = (z, v, k) => z += k == "DOCTYPE" ? "<!" + k + " " + v + ">" : "<?" + k + " " + v + "?>";
+	const objFunc = kv => "\"" + kv[0] + "\":" + kv[1].toString(false, true);
+	if (type == 1) {
+		str += _elemToString(this);
+	} else if (type == 3 || type == 12) {
+		str += this.toString();
+	} else if (type == 6) {
+		str += "{";
+		str += _transducers.into(this, _transducers.forEach(objFunc), []).join(",");
+		str += "}";
+	} else if (type == 9) {
+		str = this.$attrs.reduce(docAttrFunc, str);
+		for (let c of this.values()) {
+			str += c.toString(false);
+		}
+	}
+	return root ? _pretty.prettyXML(str) : str;
+};
+
+var List = rrb.empty.constructor;
+
+List.prototype.__is_List = true;
+
+List.prototype.toString = function (root = true, json = false) {
+	var str = "[";
+	for (var i = 0, l = this.size; i < l;) {
+		str += this.get(i).toString(false, true);
+		i++;
+		if (i < l) str += ",";
+	}
+	return str + "]";
+};
+
+// -----------------------
+
+function ivalue(type, name, value) {
+	return new Value(type, name, value);
+}
+
+function vnode(inode, parent, depth, indexInParent) {
+	return new _vnode.VNode(inode, inode._type, inode._ns ? _construct.q(inode._ns.uri, inode._name) : inode._name, inode._value, parent, depth, indexInParent);
+}
+
+function emptyINode(type, name, attrs, ns) {
+	var inode = type == 5 ? rrb.empty.beginMutation() : ohamt.make().beginMutation();
+	inode._type = type;
+	inode._name = name;
+	inode.$attrs = attrs;
+	inode._ns = ns;
+	return inode;
+}
+
+function emptyAttrMap(init) {
+	var attrs = ohamt.empty.beginMutation();
+	if (init) for (var k in init) attrs = attrs.set(k, init[k]);
+	return attrs;
+}
+
+function get(inode, idx) {
+	return inode.get(idx);
+}
+
+function next(inode, node) {
+	return inode.next(node.name, node.inode);
+}
+
+function push(inode, val, type) {
+	type = type || inode._type;
+	if (type == 1 || type == 9) {
+		return _restore(inode.push(val), inode);
+	} else if (type == 5) {
+		return _restore(inode.push(val[1]), inode);
+	} else if (type == 6) {
+		return _restore(inode.set(val[0], val[1]), inode);
+	}
+	return inode;
+}
+
+function set(inode, key, val) {
+	return _restore(inode.set(key, val), inode);
+}
+
+function removeChild(inode, child, type) {
+	type = type || inode._type;
+	var key = child.name,
+	    val = child.inode;
+	if (type == 1 || type == 9) {
+		return _restore(inode.removeValue(key, val), inode);
+	} else if (type == 5 || type == 6) {
+		return _restore(inode.remove(key), inode);
+	}
+	return inode;
+}
+
+function cached(inode, type) {}
+
+function keys(inode, type) {
+	return inode.keys();
+}
+
+function values(inode) {
+	return inode.values();
+}
+
+function finalize(inode) {
+	if (inode.$attrs) inode.$attrs = inode.$attrs.endMutation();
+	return inode.endMutation();
+}
+
+function setAttribute(inode, key, val) {
+	if (inode.$attrs) inode.$attrs = inode.$attrs.set(key, val);
+	return inode;
+}
+
+function count(inode) {
+	return inode.count();
+}
+
+function first(inode) {
+	return inode.first();
+}
+
+function last(inode) {
+	return inode.last();
+}
+
+function attrEntries(inode) {
+	return inode.$attrs.entries();
+}
+
+function modify(inode, node, ref, type) {
+	type = type || inode._type;
+	if (type == 1 || type == 9) {
+		if (ref !== undefined) {
+			return _restore(inode.insertBefore([ref.name, ref.inode], [node.name, node.inode]), inode);
+		} else {
+			// FIXME check the parent type
+			return _restore(inode.push([node.name, node.inode]), inode);
+		}
+	} else if (type == 5) {
+		if (ref !== undefined) {
+			return _restore(inode.insertBefore(ref, node.inode), inode);
+		} else {
+			return _restore(inode.push(node.inode), inode);
+		}
+	} else if (type == 6) {
+		return _restore(inode.set(node.name, node.inode), inode);
+	}
+	return inode;
+}
+
+function stringify(inode) {
+	return inode.toString();
+}
+},{"./construct":2,"./pretty":10,"./transducers":13,"./vnode":15,"ohamt":22,"rrb-vector":20}],10:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -1507,329 +1877,7 @@ function prettyXML(text) {
 
 	return str[0] == '\n' ? str.slice(1) : str;
 }
-},{}],9:[function(require,module,exports){
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-	value: true
-});
-exports.Value = Value;
-exports.ivalue = ivalue;
-exports.VNode = VNode;
-exports.vnode = vnode;
-exports.emptyINode = emptyINode;
-exports.restoreNode = restoreNode;
-exports.emptyAttrMap = emptyAttrMap;
-exports.push = push;
-exports.finalize = finalize;
-exports.setAttribute = setAttribute;
-exports.count = count;
-exports.first = first;
-exports.attrEntries = attrEntries;
-
-var _ohamt = require("ohamt");
-
-var ohamt = _interopRequireWildcard(_ohamt);
-
-var _rrbVector = require("rrb-vector");
-
-var rrb = _interopRequireWildcard(_rrbVector);
-
-var _construct = require("./construct");
-
-var _access = require("./access");
-
-var _pretty = require("./pretty");
-
-var _transducers = require("./transducers");
-
-function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
-
-function Value(type, name, value) {
-	this._type = type;
-	this._name = name;
-	this._value = value;
-}
-
-Value.prototype.__is_Value = true;
-
-Value.prototype.get = function () {
-	return this._value;
-};
-
-Value.prototype[Symbol.iterator] = function* () {
-	yield this;
-};
-
-Value.prototype.values = function () {
-	return this[Symbol.iterator]();
-};
-
-Value.prototype.count = function () {
-	return 0;
-};
-
-Value.prototype.size = 0;
-
-Value.prototype.toString = function (root = true, json = false) {
-	var str = this._value + "";
-	if (this._type == 3 && json) return '"' + str + '"';
-	return str;
-};
-
-function ivalue(type, name, value) {
-	return new Value(type, name, value);
-}
-
-// TODO create iterator that yields a node seq
-// position() should overwrite get(), but the check should be name or indexInParent
-VNode.prototype[Symbol.iterator] = function () {
-	return new _access.VNodeIterator(this.values(), this, vnode);
-};
-
-VNode.prototype.get = function (idx) {
-	var val = this._get(idx);
-	if (!val) return [];
-	val = val.constructor == Array ? val : [val];
-	return new _access.VNodeIterator(val[Symbol.iterator](), this, vnode);
-};
-
-function VNode(inode, type, name, value, parent, depth, indexInParent) {
-	this.inode = inode;
-	this.type = type;
-	this.name = name;
-	this.value = value;
-	this.parent = parent;
-	this.depth = depth | 0;
-	this.indexInParent = indexInParent;
-}
-
-VNode.prototype.__is_VNode = true;
-
-VNode.prototype.toString = function () {
-	var root = _construct.ensureRoot(this);
-	return root.inode.toString();
-};
-
-VNode.prototype._get = function (idx) {
-	return this.inode.get(idx);
-};
-
-VNode.prototype.count = function () {
-	if (typeof this.inode == "function") return 0;
-	return this.inode.count();
-};
-
-VNode.prototype.keys = function () {
-	return this.inode.keys();
-};
-
-VNode.prototype.values = function () {
-	return this.inode.values();
-};
-
-VNode.prototype.first = function () {
-	return this.inode.first();
-};
-
-VNode.prototype.last = function () {
-	return this.inode.last();
-};
-
-VNode.prototype.next = function (node) {
-	var inode = node.inode;
-	return this.inode.next(inode._name, inode);
-};
-
-VNode.prototype.push = function (child) {
-	var type = this.type,
-	    name = child.name,
-	    val = child.inode;
-	this.inode = restoreNode(this.inode.push([name, val]), this.inode);
-	return this;
-};
-
-VNode.prototype.set = function (key, val) {
-	this.inode = restoreNode(this.inode.set(key, val), this.inode);
-	return this;
-};
-
-VNode.prototype.removeChild = function (child) {
-	var type = this.type,
-	    key = child.name,
-	    val = child.inode;
-	if (type == 1 || type == 9) {
-		this.inode = restoreNode(this.inode.removeValue(key, val), this.inode);
-	} else if (type == 5 || type == 6) {
-		this.inode = restoreNode(this.inode.remove(key), this.inode);
-	}
-	return this;
-};
-
-VNode.prototype.modify = function (node, ref) {
-	var pinode = this.inode;
-	var type = this.type;
-	if (type == 1 || type == 9) {
-		if (ref !== undefined) {
-			this.inode = restoreNode(pinode.insertBefore([ref.name, ref.inode], [node.name, node.inode]), pinode);
-		} else {
-			// FIXME check the parent type
-			this.inode = restoreNode(pinode.push([node.name, node.inode]), pinode);
-		}
-	} else if (type == 5) {
-		if (ref !== undefined) {
-			this.inode = restoreNode(pinode.insertBefore(ref, node.inode), pinode);
-		} else {
-			this.inode = restoreNode(pinode.push(node.inode), pinode);
-		}
-	} else if (type == 6) {
-		this.inode = restoreNode(pinode.set(node.name, node.inode), pinode);
-	}
-	return this;
-};
-
-VNode.prototype.finalize = function () {
-	this.inode.$attrs = this.inode.$attrs.endMutation();
-	this.inode = this.inode.endMutation();
-	return this;
-};
-
-VNode.prototype.setAttribute = function (key, value, ref) {
-	// ignore ref for now
-	this.inode.$attrs = this.inode.$attrs.set(key, value);
-	return this;
-};
-
-function vnode(inode, parent, depth, indexInParent) {
-	return new VNode(inode, inode._type, inode._ns ? _construct.q(inode._ns.uri, inode._name) : inode._name, inode._value, parent, depth, indexInParent);
-}
-
-// hitch this on VNode for reuse
-VNode.prototype.vnode = vnode;
-
-VNode.prototype.ivalue = ivalue;
-
-function emptyINode(type, name, attrs, ns) {
-	var inode = type == 5 ? rrb.empty.beginMutation() : ohamt.make().beginMutation();
-	inode._type = type;
-	inode._name = name;
-	inode.$attrs = attrs;
-	inode._ns = ns;
-	return inode;
-}
-
-function restoreNode(next, node) {
-	next._type = node._type;
-	next._name = node._name;
-	next.$attrs = node.$attrs;
-	next._ns = node._ns;
-	return next;
-}
-
-function emptyAttrMap(init) {
-	var attrs = ohamt.empty.beginMutation();
-	if (init) for (var k in init) attrs = attrs.set(k, init[k]);
-	return attrs;
-}
-
-function push(inode, val) {
-	var type = inode._type;
-	if (type == 1 || type == 9) {
-		return inode.push(val);
-	} else if (type == 5) {
-		return inode.push(val[1]);
-	} else if (type == 6) {
-		return inode.set(val[0], val[1]);
-	}
-	return inode;
-}
-
-function finalize(inode) {
-	if (inode.$attrs) inode.$attrs = inode.$attrs.endMutation();
-	return inode.endMutation();
-}
-
-function setAttribute(inode, key, val) {
-	if (inode.$attrs) inode.$attrs = inode.$attrs.set(key, val);
-	return inode;
-}
-
-function count(inode) {
-	return inode.count();
-}
-
-function first(inode) {
-	return inode.first();
-}
-
-function attrEntries(inode) {
-	return inode.$attrs.entries();
-}
-
-function elemToString(e) {
-	const attrFunc = (z, v, k) => {
-		return z += " " + k + "=\"" + v + "\"";
-	};
-	let str = "<" + e._name;
-	let ns = e._ns;
-	if (ns) str += " xmlns" + (ns.prefix ? ":" + ns.prefix : "") + "=\"" + ns.uri + "\"";
-	str = e.$attrs.reduce(attrFunc, str);
-	if (e.size > 0) {
-		str += ">";
-		for (let c of e.values()) {
-			str += c.toString(false);
-		}
-		str += "</" + e._name + ">";
-	} else {
-		str += "/>";
-	}
-	return str;
-}
-
-var OrderedMap = ohamt.empty.constructor;
-
-OrderedMap.prototype.__is_Map = true;
-
-OrderedMap.prototype.toString = function (root = true, json = false) {
-	var str = "";
-	var type = this._type;
-	const docAttrFunc = (z, v, k) => z += k == "DOCTYPE" ? "<!" + k + " " + v + ">" : "<?" + k + " " + v + "?>";
-	const objFunc = kv => "\"" + kv[0] + "\":" + kv[1].toString(false, true);
-	if (type == 1) {
-		str += elemToString(this);
-	} else if (type == 3 || type == 12) {
-		str += this.toString();
-	} else if (type == 6) {
-		str += "{";
-		str += _transducers.into(this, _transducers.forEach(objFunc), []).join(",");
-		str += "}";
-	} else if (type == 9) {
-		str = this.$attrs.reduce(docAttrFunc, str);
-		for (let c of this.values()) {
-			str += c.toString(false);
-		}
-	}
-	return root ? _pretty.prettyXML(str) : str;
-};
-
-var List = rrb.empty.constructor;
-
-List.prototype.__is_List = true;
-
-List.prototype.toString = function (root = true, json = false) {
-	var str = "[";
-	for (var i = 0, l = this.size; i < l;) {
-		str += this.get(i).toString(false, true);
-		i++;
-		if (i < l) str += ",";
-	}
-	return str + "]";
-};
-
-List.prototype.values = function () {
-	return this[Symbol.iterator]();
-};
-},{"./access":1,"./construct":2,"./pretty":8,"./transducers":12,"ohamt":20,"rrb-vector":18}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1943,7 +1991,7 @@ function render(vnode, root) {
 		if (node.nodeType == 1) node.parentNode.removeChild(node);
 	}
 }
-},{"./access":1,"./dom":4}],11:[function(require,module,exports){
+},{"./access":1,"./dom":4}],12:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2122,7 +2170,7 @@ function exactlyOne($arg) {
 	if ($arg.size != 1) return error("FORG0005");
 	return $arg;
 }
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2376,15 +2424,18 @@ function range(n, s = 0) {
 
 // TODO:
 // rewindable/fastforwardable iterators
-},{"./seq":11}],13:[function(require,module,exports){
+},{"./seq":12}],14:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
 });
 exports.validate = validate;
+exports.validation = validation;
 
 var _access = require("./access");
+
+var _transducers = require("./transducers");
 
 var _big = require("big.js");
 
@@ -2396,29 +2447,30 @@ function get(obj, prop) {
 	if (obj.hasOwnProperty(prop)) return obj[prop];
 }
 
-function ValidationIterator(node, f, cf) {
-	this.node = node;
-	this.f = f;
-	this.cf = cf;
+function _formAttrNameToKey(k) {
+	if (k == "data-type") return "type";
+	if (k == "type") return "format";
+	if (k == "min") return "minimum";
+	if (k == "max") return "maximum";
+	if (k == "maxlength") return "maxLength";
+	return k;
 }
 
-ValidationIterator.prototype.next = function () {
-	var node = _access.nextNode(this.node);
-	if (!node) return DONE;
-	var depth = node.depth;
-	if (next.depth === depth + 1) {
-		this.f = this.cf;
-		var entry = this.f.call(null, next);
-		entry[0].call(null, next);
-	} else if (next.depth === depth) {
-		this.f.call(null, node);
+function _formNodeToSchema(node) {
+	var inode = node.inode;
+	var attrs = inode.attributes;
+	var s = {};
+	for (let a of attrs) {
+		let k = _formAttrNameToKey(a.name);
+		if (validator[k]) {
+			s[k] = a.value;
+		}
 	}
-	return { value: this.f(node) };
-};
-
-ValidationIterator.prototype[Symbol.iterator] = function () {
-	return this;
-};
+	if (inode.type == "select-one") {
+		s.enum = _transducers.into(inode.options, _transducers.forEach(o => o.value), []);
+	}
+	return s;
+}
 
 /**
  * Validate a doc against a schema
@@ -2428,40 +2480,48 @@ ValidationIterator.prototype[Symbol.iterator] = function () {
  */
 function validate(node, schema, params = {}) {
 	node = node.inode ? node : _access.firstChild(node);
-	var depth = node.depth;
-	var entries = [];
-	var err = [];
-	var entry = _validate(schema, params, "#", "", err);
+	var depth = node.depth,
+	    entries = [],
+	    err = [],
+	    index = "#",
+	    path = "";
+	if (params.form) {
+		index = node.name;
+		path = node.parent.name;
+		schema = _formNodeToSchema(node);
+	}
+	var entry = validation(schema, params, index, path, err);
 	entry[0].call(null, node);
 	//var errCount = [err.length];
 	while (node) {
 		node = _access.nextNode(node);
 		if (!node) return err;
-		if (node.type == 17) {
-			depth--;
-			//errCount[depth] = 0;
-			entry = entries[depth];
-		} else if (node.depth == depth + 1) {
-			entries[depth] = entry;
-			depth++;
-			if (!entry[1]) {
-				//console.log("skipping",node.name);
-				continue;
-			}
-			entry = entry[1](node);
+		if (params.form) {
+			if (node.type == 17) continue;
+			entry = validation(_formNodeToSchema(node), params, node.name, path, err);
 			if (entry) entry[0].call(null, node);
-			//let errLen = err.length;
-			//errCount[depth] = errLen - (errCount[depth] | 0);
-		} else if (node.depth == depth) {
-			entry = entries[depth - 1];
-			if (!entry[1]) {
-				//console.log("skipping",node.name);
-				continue;
+		} else {
+			if (node.type == 17) {
+				depth--;
+				entry = entries[depth];
+			} else if (node.depth == depth + 1) {
+				entries[depth] = entry;
+				depth++;
+				if (!entry[1]) {
+					console.log("skipping", node.name);
+					continue;
+				}
+				entry = entry[1](node);
+				if (entry) entry[0].call(null, node);
+			} else if (node.depth == depth) {
+				entry = entries[depth - 1];
+				if (!entry[1]) {
+					console.log("skipping", node.name);
+					continue;
+				}
+				entry = entry[1].call(null, node);
+				if (entry) entry[0].call(null, node);
 			}
-			entry = entry[1].call(null, node);
-			if (entry) entry[0].call(null, node);
-			//let errLen = err.length;
-			//errCount[depth] = errLen - errCount[depth] || 0;
 		}
 	}
 	return err;
@@ -2483,7 +2543,7 @@ function compose(funcs) {
 	};
 }
 
-function _validate(schema, params, index, path, err) {
+function validation(schema, params, index, path, err) {
 	var sc = schema.constructor;
 	var entry;
 	if (sc === Object) {
@@ -2511,7 +2571,7 @@ function _validate(schema, params, index, path, err) {
 		let funcs = [];
 		let childFuncs = [];
 		for (let i = 0, len = schema.length; i < len; i++) {
-			let entry = _validate(schema[i], params, index, path, err);
+			let entry = validation(schema[i], params, index, path, err);
 			funcs.push(entry[0]);
 			childFuncs.push(entry[1]);
 		}
@@ -2522,14 +2582,15 @@ function _validate(schema, params, index, path, err) {
 	return entry;
 }
 
-function X(schema, key, path) {
+function X(schema, key, path, validationMessage) {
 	this.schema = schema;
 	this.key = key;
 	this.path = path;
+	this.validationMessage = validationMessage;
 }
 
-function x(schema, key, path) {
-	return new X(schema, key, path);
+function x(schema, key, path, node) {
+	return new X(schema, key, path, node.get("validationMessage"));
 }
 
 // TODO types are functions, so allow adding custom functions
@@ -2539,13 +2600,16 @@ const types = {
 		return node.type == 3;
 	},
 	number: function (node) {
-		return node.type == 12 && node.value.constructor == Number;
+		return node.type == 12 && node.value.constructor == Number && !isNaN(node.value);
 	},
 	double: function (node) {
-		return node.type == 12 && node.value.constructor == Number;
+		return node.type == 12 && node.value.constructor == Number && !isNaN(node.value);
+	},
+	boolean: function (node) {
+		return node.type == 12 && node.value.constructor == Boolean;
 	},
 	integer: function (node) {
-		return node.type == 12 && node.value.constructor == Big && node.value.e === 0;
+		return node.type == 3 && node.value.constructor == Big && node.value.e === 0;
 	},
 	element: function (node) {
 		return node.type == 1;
@@ -2557,7 +2621,7 @@ const types = {
 		return node.type == 6;
 	},
 	map: function (node) {
-		return node.type == 5;
+		return node.type == 6;
 	}
 };
 
@@ -2568,10 +2632,88 @@ const patternMatcher = function (patterns, key) {
 	return false;
 };
 
+var HOSTNAME = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[-0-9a-z]{0,61}[0-9a-z])?)*$/i;
+var URI = /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[a-f0-9]{2})*@)?(?:\[(?:(?:(?:(?:[a-f0-9]{1,4}:){6}|::(?:[a-f0-9]{1,4}:){5}|(?:[a-f0-9]{1,4})?::(?:[a-f0-9]{1,4}:){4}|(?:(?:[a-f0-9]{1,4}:){0,1}[a-f0-9]{1,4})?::(?:[a-f0-9]{1,4}:){3}|(?:(?:[a-f0-9]{1,4}:){0,2}[a-f0-9]{1,4})?::(?:[a-f0-9]{1,4}:){2}|(?:(?:[a-f0-9]{1,4}:){0,3}[a-f0-9]{1,4})?::[a-f0-9]{1,4}:|(?:(?:[a-f0-9]{1,4}:){0,4}[a-f0-9]{1,4})?::)(?:[a-f0-9]{1,4}:[a-f0-9]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[a-f0-9]{1,4}:){0,5}[a-f0-9]{1,4})?::[a-f0-9]{1,4}|(?:(?:[a-f0-9]{1,4}:){0,6}[a-f0-9]{1,4})?::)|[Vv][a-f0-9]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'()*+,;=]|%[a-f0-9]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[a-f0-9]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[a-f0-9]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[a-f0-9]{2})*)*)?|(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[a-f0-9]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[a-f0-9]{2})*)*)(?:\?(?:[a-z0-9\-._~!$&'()*+,;=:@\/?]|%[a-f0-9]{2})*)?(?:\#(?:[a-z0-9\-._~!$&'()*+,;=:@\/?]|%[a-f0-9]{2})*)?$/i;
+var URIREF = /^(?:[a-z][a-z0-9+\-.]*:)?(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[a-f0-9]{2})*@)?(?:\[(?:(?:(?:(?:[a-f0-9]{1,4}:){6}|::(?:[a-f0-9]{1,4}:){5}|(?:[a-f0-9]{1,4})?::(?:[a-f0-9]{1,4}:){4}|(?:(?:[a-f0-9]{1,4}:){0,1}[a-f0-9]{1,4})?::(?:[a-f0-9]{1,4}:){3}|(?:(?:[a-f0-9]{1,4}:){0,2}[a-f0-9]{1,4})?::(?:[a-f0-9]{1,4}:){2}|(?:(?:[a-f0-9]{1,4}:){0,3}[a-f0-9]{1,4})?::[a-f0-9]{1,4}:|(?:(?:[a-f0-9]{1,4}:){0,4}[a-f0-9]{1,4})?::)(?:[a-f0-9]{1,4}:[a-f0-9]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[a-f0-9]{1,4}:){0,5}[a-f0-9]{1,4})?::[a-f0-9]{1,4}|(?:(?:[a-f0-9]{1,4}:){0,6}[a-f0-9]{1,4})?::)|[Vv][a-f0-9]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'"()*+,;=]|%[a-f0-9]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[a-f0-9]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[a-f0-9]{2})+(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[a-f0-9]{2})*)*)?|(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[a-f0-9]{2})+(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[a-f0-9]{2})*)*)?(?:\?(?:[a-z0-9\-._~!$&'"()*+,;=:@\/?]|%[a-f0-9]{2})*)?(?:\#(?:[a-z0-9\-._~!$&'"()*+,;=:@\/?]|%[a-f0-9]{2})*)?$/i;
+// uri-template: https://tools.ietf.org/html/rfc6570
+var URITEMPLATE = /^(?:(?:[^\x00-\x20"'<>%\\^`{|}]|%[a-f0-9]{2})|\{[+#.\/;?&=,!@|]?(?:[a-z0-9_]|%[a-f0-9]{2})+(?:\:[1-9][0-9]{0,3}|\*)?(?:,(?:[a-z0-9_]|%[a-f0-9]{2})+(?:\:[1-9][0-9]{0,3}|\*)?)*\})*$/i;
+// For the source: https://gist.github.com/dperini/729294
+// For test cases: https://mathiasbynens.be/demo/url-regex
+// @todo Delete current URL in favour of the commented out URL rule when this issue is fixed https://github.com/eslint/eslint/issues/7983.
+// var URL = /^(?:(?:https?|ftp):\/\/)(?:\S+(?::\S*)?@)?(?:(?!10(?:\.\d{1,3}){3})(?!127(?:\.\d{1,3}){3})(?!169\.254(?:\.\d{1,3}){2})(?!192\.168(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\u{00a1}-\u{ffff}0-9]+-?)*[a-z\u{00a1}-\u{ffff}0-9]+)(?:\.(?:[a-z\u{00a1}-\u{ffff}0-9]+-?)*[a-z\u{00a1}-\u{ffff}0-9]+)*(?:\.(?:[a-z\u{00a1}-\u{ffff}]{2,})))(?::\d{2,5})?(?:\/[^\s]*)?$/iu;
+var URL = /^(?:(?:http[s\u017F]?|ftp):\/\/)(?:(?:[\0-\x08\x0E-\x1F!-\x9F\xA1-\u167F\u1681-\u1FFF\u200B-\u2027\u202A-\u202E\u2030-\u205E\u2060-\u2FFF\u3001-\uD7FF\uE000-\uFEFE\uFF00-\uFFFF]|[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])+(?::(?:[\0-\x08\x0E-\x1F!-\x9F\xA1-\u167F\u1681-\u1FFF\u200B-\u2027\u202A-\u202E\u2030-\u205E\u2060-\u2FFF\u3001-\uD7FF\uE000-\uFEFE\uFF00-\uFFFF]|[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])*)?@)?(?:(?!10(?:\.[0-9]{1,3}){3})(?!127(?:\.[0-9]{1,3}){3})(?!169\.254(?:\.[0-9]{1,3}){2})(?!192\.168(?:\.[0-9]{1,3}){2})(?!172\.(?:1[6-9]|2[0-9]|3[01])(?:\.[0-9]{1,3}){2})(?:[1-9][0-9]?|1[0-9][0-9]|2[01][0-9]|22[0-3])(?:\.(?:1?[0-9]{1,2}|2[0-4][0-9]|25[0-5])){2}(?:\.(?:[1-9][0-9]?|1[0-9][0-9]|2[0-4][0-9]|25[0-4]))|(?:(?:(?:[0-9KSa-z\xA1-\uD7FF\uE000-\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])+\-?)*(?:[0-9KSa-z\xA1-\uD7FF\uE000-\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])+)(?:\.(?:(?:[0-9KSa-z\xA1-\uD7FF\uE000-\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])+\-?)*(?:[0-9KSa-z\xA1-\uD7FF\uE000-\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])+)*(?:\.(?:(?:[KSa-z\xA1-\uD7FF\uE000-\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]){2,})))(?::[0-9]{2,5})?(?:\/(?:[\0-\x08\x0E-\x1F!-\x9F\xA1-\u167F\u1681-\u1FFF\u200B-\u2027\u202A-\u202E\u2030-\u205E\u2060-\u2FFF\u3001-\uD7FF\uE000-\uFEFE\uFF00-\uFFFF]|[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])*)?$/i;
+var UUID = /^(?:urn\:uuid\:)?[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
+var JSON_POINTER = /^(?:\/(?:[^~\/]|~0|~1)*)*$|^\#(?:\/(?:[a-z0-9_\-\.!$&'()*+,;:=@]|%[a-f0-9]{2}|~0|~1)*)*$/i;
+var RELATIVE_JSON_POINTER = /^(?:0|[1-9][0-9]*)(?:\#|(?:\/(?:[^~\/]|~0|~1)*)*)$/;
+
+const formats = {
+	// date: http://tools.ietf.org/html/rfc3339#section-5.6
+	date: /^\d\d\d\d-[0-1]\d-[0-3]\d$/,
+	// date-time: http://tools.ietf.org/html/rfc3339#section-5.6
+	time: /^[0-2]\d:[0-5]\d:[0-5]\d(?:\.\d+)?(?:z|[+-]\d\d:\d\d)?$/i,
+	'date-time': /^\d\d\d\d-[0-1]\d-[0-3]\d[t\s][0-2]\d:[0-5]\d:[0-5]\d(?:\.\d+)?(?:z|[+-]\d\d:\d\d)$/i,
+	// uri: https://github.com/mafintosh/is-my-json-valid/blob/master/formats.js
+	uri: /^(?:[a-z][a-z0-9+-.]*)(?:\:|\/)\/?[^\s]*$/i,
+	'uri-reference': /^(?:(?:[a-z][a-z0-9+-.]*:)?\/\/)?[^\s]*$/i,
+	'uri-template': URITEMPLATE,
+	url: URL,
+	// email (sources from jsen validator):
+	// http://stackoverflow.com/questions/201323/using-a-regular-expression-to-validate-an-email-address#answer-8829363
+	// http://www.w3.org/TR/html5/forms.html#valid-e-mail-address (search for 'willful violation')
+	email: /^[a-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/i,
+	hostname: HOSTNAME,
+	// optimized https://www.safaribooksonline.com/library/view/regular-expressions-cookbook/9780596802837/ch07s16.html
+	ipv4: /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/,
+	// optimized http://stackoverflow.com/questions/53497/regular-expression-that-matches-valid-ipv6-addresses
+	ipv6: /^\s*(?:(?:(?:[a-f0-9]{1,4}:){7}(?:[a-f0-9]{1,4}|:))|(?:(?:[a-f0-9]{1,4}:){6}(?::[a-f0-9]{1,4}|(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(?:(?:[a-f0-9]{1,4}:){5}(?:(?:(?::[a-f0-9]{1,4}){1,2})|:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(?:(?:[a-f0-9]{1,4}:){4}(?:(?:(?::[a-f0-9]{1,4}){1,3})|(?:(?::[a-f0-9]{1,4})?:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(?:(?:[a-f0-9]{1,4}:){3}(?:(?:(?::[a-f0-9]{1,4}){1,4})|(?:(?::[a-f0-9]{1,4}){0,2}:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(?:(?:[a-f0-9]{1,4}:){2}(?:(?:(?::[a-f0-9]{1,4}){1,5})|(?:(?::[a-f0-9]{1,4}){0,3}:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(?:(?:[a-f0-9]{1,4}:){1}(?:(?:(?::[a-f0-9]{1,4}){1,6})|(?:(?::[a-f0-9]{1,4}){0,4}:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(?::(?:(?:(?::[a-f0-9]{1,4}){1,7})|(?:(?::[a-f0-9]{1,4}){0,5}:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(?:%.+)?\s*$/i,
+	regex: regex,
+	// uuid: http://tools.ietf.org/html/rfc4122
+	uuid: UUID,
+	// JSON-pointer: https://tools.ietf.org/html/rfc6901
+	// uri fragment: https://tools.ietf.org/html/rfc3986#appendix-A
+	'json-pointer': JSON_POINTER,
+	// relative JSON-pointer: http://tools.ietf.org/html/draft-luff-relative-json-pointer-00
+	'relative-json-pointer': RELATIVE_JSON_POINTER
+};
+
+const Z_ANCHOR = /[^\\]\\Z/;
+function regex(str) {
+	if (Z_ANCHOR.test(str)) return false;
+	try {
+		new RegExp(str);
+		return true;
+	} catch (e) {
+		return false;
+	}
+}
+
 const validator = {
+	value: function (schema, key, params, index, path, err, node) {
+		if (params.form) {
+			if (!node.inode.checkValidity()) {
+				err.push(x(schema, key, path + "/" + index, node));
+			}
+		}
+	},
 	type: function (schema, key, params, index, path, err, node) {
 		var type = schema[key];
-		if (!types[type](node)) err.push(x(schema, key, path + "/" + index));
+		if (!types[type](node)) err.push(x(schema, key, path + "/" + index, node));
+	},
+	format: function (schema, key, params, index, path, err, node) {
+		var name = schema[key];
+		var format = params.formats ? params.formats[name] : formats[name];
+		if (!format) {
+			console.log("Unknown format " + name);
+		} else {
+			let fn = typeof format == "function" ? format : v => !!v.match(format);
+			if (!fn(node.value)) err.push(x(schema, key, path + "/" + index, node));
+		}
+	},
+	required: function (schema, key, params, index, path, err, node) {
+		// for forms:
+		if (params.form) {
+			if (!node.value) err.push(x(schema, key, path + "/" + index, node));
+		}
 	},
 	properties: function (schema, key, params, index, path, err, node) {
 		// default is allErrors=true, so all children should be validated
@@ -2579,7 +2721,7 @@ const validator = {
 		// when applied, the function uses the matching prop and updated path
 		var props = schema[key];
 		schema = get(props, node.name);
-		if (schema) return _validate(schema, params, node.name, path + "/" + index, err);
+		if (schema) return validation(schema, params, node.name, path + "/" + index, err);
 	},
 	patternProperties: function (schema, key, params, index, path, err, node) {
 		var pattProps = get(schema, key);
@@ -2604,7 +2746,7 @@ const validator = {
 		};
 		let newpath = path + "/" + index;
 		var schemas = patternMatcher(node.name);
-		if (schemas.length) return _validate(schemas, params, node.name, newpath, err);
+		if (schemas.length) return validation(schemas, params, node.name, newpath, err);
 	},
 	additionalProperties: function (schema, key, params, index, path, err, node) {
 		var additionalProps = get(schema, key);
@@ -2634,19 +2776,19 @@ const validator = {
 			for (let k of keys) {
 				if (props[k] || patternMatcher(k)) len--;
 			}
-			if (len > 0) err.push(x(schema, key, newpath));
+			if (len > 0) err.push(x(schema, key, newpath, node));
 		}
 	},
 	items: function (schema, key, params, index, path, err, node) {
 		var schemas = schema[key];
 		let newpath = path + "/" + index;
 		schema = schemas[node.indexInParent];
-		if (schema) return _validate(schema, params, node.name, newpath, err);
+		if (schema) return validation(schema, params, node.name, newpath, err);
 	},
 	additionalItems: function (schema, key, params, index, path, err, node) {
 		var additionalItems = schema[key];
 		var items = schema.items;
-		if (items.length !== node.count()) err.push(x(schema, key, path + "/" + index));
+		if (items.length !== node.count()) err.push(x(schema, key, path + "/" + index, node));
 	},
 	minimum: function (schema, key, params, index, path, err, node) {
 		var test = schema[key];
@@ -2656,7 +2798,7 @@ const validator = {
 		} else {
 			ret = node.value >= test;
 		}
-		if (!ret) err.push(x(schema, key, path + "/" + index));
+		if (!ret) err.push(x(schema, key, path + "/" + index, node));
 	},
 	maximum: function (schema, key, params, index, path, err, node) {
 		var test = schema[key];
@@ -2666,10 +2808,111 @@ const validator = {
 		} else {
 			ret = node.value <= test;
 		}
-		if (!ret) err.push(x(schema, key, path + "/" + index));
+		if (!ret) err.push(x(schema, key, path + "/" + index, node));
 	}
 };
-},{"./access":1,"big.js":14}],14:[function(require,module,exports){
+},{"./access":1,"./transducers":13,"big.js":16}],15:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+exports.VNode = VNode;
+
+var _construct = require('./construct');
+
+var _access = require('./access');
+
+var _form = require('./form');
+
+function VNode(inode, type, name, value, parent, depth, indexInParent, cache) {
+	this.inode = inode;
+	this.type = type;
+	this.name = name;
+	this.value = value;
+	this.parent = parent;
+	this.depth = depth | 0;
+	this.indexInParent = indexInParent;
+	this.cache = cache;
+}
+
+VNode.prototype.__is_VNode = true;
+
+VNode.prototype.toString = function () {
+	var root = _construct.ensureRoot(this);
+	return _form.stringify(root.inode);
+};
+
+VNode.prototype.count = function () {
+	if (typeof this.inode == "function") return 0;
+	return _form.count(this.inode);
+};
+
+VNode.prototype.keys = function () {
+	var cache = this.cache || _form.cached(this.inode, this.type);
+	if (cache) return cache.keys();
+	return _form.keys(this.inode, this.type);
+};
+
+VNode.prototype.values = function () {
+	return _form.values(this.inode, this.type);
+};
+
+VNode.prototype.first = function () {
+	return _form.first(this.inode, this.type);
+};
+
+VNode.prototype.last = function () {
+	return _form.last(this.inode, this.type);
+};
+
+VNode.prototype.next = function (node) {
+	return _form.next(this.inode, node, this.type);
+};
+
+VNode.prototype.push = function (child) {
+	this.inode = _form.push(this.inode, [child.name, child.inode], this.type);
+	return this;
+};
+
+VNode.prototype.set = function (key, val) {
+	this.inode = _form.set(this.inode, key, val, this.type);
+	return this;
+};
+
+VNode.prototype.removeChild = function (child) {
+	this.inode = _form.removeChild(this.inode, child, this.type);
+	return this;
+};
+
+VNode.prototype.finalize = function () {
+	this.inode = _form.finalize(this.inode);
+	return this;
+};
+
+VNode.prototype.modify = function (node, ref) {
+	this.inode = _form.modify(this.inode, node, ref, this.type);
+	return this;
+};
+
+// hitch this on VNode for reuse
+VNode.prototype.vnode = _form.vnode;
+
+VNode.prototype.ivalue = _form.ivalue;
+
+// TODO create iterator that yields a node seq
+// position() should overwrite get(), but the check should be name or indexInParent
+VNode.prototype[Symbol.iterator] = function () {
+	return new _access.VNodeIterator(this.values(), this, _form.vnode);
+};
+
+VNode.prototype.get = function (idx) {
+	var val = _form.get(this.inode, idx, this.type, this.cache);
+	if (!val) return [];
+	val = val.constructor == Array ? val : [val];
+	return new _access.VNodeIterator(val[Symbol.iterator](), this, _form.vnode);
+};
+},{"./access":1,"./construct":2,"./form":5}],16:[function(require,module,exports){
 /* big.js v3.1.3 https://github.com/MikeMcl/big.js/LICENCE */
 ;(function (global) {
     'use strict';
@@ -3813,7 +4056,7 @@ const validator = {
     }
 })(this);
 
-},{}],15:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -4104,7 +4347,7 @@ function sumOfLengths(table) {
 	for (var i = 0; len > i; i++) sum += table[i].length;
 	return sum;
 }
-},{"./const":16,"./util":19}],16:[function(require,module,exports){
+},{"./const":18,"./util":21}],18:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -4113,7 +4356,7 @@ Object.defineProperty(exports, "__esModule", {
 const B = exports.B = 5;
 const M = exports.M = 1 << B;
 const E = exports.E = 2;
-},{}],17:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -4190,7 +4433,7 @@ function sliceRight(to, list) {
 	tbl.sizes = sizes;
 	return tbl;
 }
-},{"./util":19}],18:[function(require,module,exports){
+},{"./util":21}],20:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -4540,7 +4783,7 @@ Tree.prototype[Symbol.iterator] = function () {
 	return new TreeIterator(this);
 };
 
-},{"./concat":15,"./const":16,"./slice":17,"./util":19}],19:[function(require,module,exports){
+},{"./concat":17,"./const":18,"./slice":19,"./util":21}],21:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -4722,7 +4965,7 @@ function rootToArray(a, f, out = []) {
 	return out;
 }
 
-},{"./const":16}],20:[function(require,module,exports){
+},{"./const":18}],22:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -5922,5 +6165,6 @@ const toMap = exports.toMap = map => map.fold((acc, v, k) => (acc[k] = v && v.to
 Map.prototype.toJS = function () {
     return toMap(this);
 };
-},{}]},{},[5])(5)
+
+},{}]},{},[6])(6)
 });
