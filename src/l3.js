@@ -1,10 +1,6 @@
-// optional:
-//import FastIntCompression from "fastintcompression";
-
-import { emptyINode, emptyAttrMap, attrEntries, setAttribute, ivalue, count, push, finalize } from './persist';
+import * as inode from './inode';
 
 import { iter } from "./access";
-
 
 export function str2array(str, ar, idx){
     for (var i=0, strLen=str.length; i<strLen; i++) {
@@ -27,27 +23,6 @@ export function convert(v){
 	if(!isNaN(i)) return i;
 	if(v === "true" || v === "false") return v !== "false";
 	return v;
-}
-
-export function toNative1(val){
-    if(val === 1) return false;
-    if(val === 2) return true;
-    if(val === 3) return 0;
-    if(val === 4) return null;
-}
-
-export function toNative(v,i){
-    if(v.length == 1) return new Float64Array(new Uint32Array([0,v[i]]))[0];
-    return new Float64Array(new Uint32Array([v[i],v[i+1]]))[0];
-}
-
-
-export function fromNative(v,arr){
-    var f = new Float64Array(1);
-    f[0] = v;
-    var i = new Uint32Array(f.buffer);
-    if(i[0]) arr.push(i[0]);
-    arr.push(i[1]);
 }
 
 function docAttrType(k) {
@@ -80,9 +55,9 @@ export function toL3(doc){
 		i = str2array(attr[0],out,i);
 		i = str2array(attr[1],out,i);
 	}
-	iter(doc, function (node) {
+    var cx = this.vnode ? this : inode;
+	iter.bind(cx)(doc, function (node) {
 		let type = node.type,
-		    inode = node.inode,
 		    depth = node.depth,
 		    name = node.name;
         var nameIndex = 0;
@@ -100,7 +75,7 @@ export function toL3(doc){
         out[i++] = depth;
         if(nameIndex) out[i++] = nameIndex;
 		if (type == 1) {
-			for (let attr of attrEntries(inode)) {
+			for (let attr of node.attrEntries()) {
 				let name = attr[0], attrname = "@"+name;
 				if (!names[attrname]) {
 					names[attrname] = ++j;
@@ -123,78 +98,14 @@ export function toL3(doc){
     //out.shift();
 	return out.subarray(1,i+1);
 }
-/*
-
-export function toL3(doc){
-   var out = [],
-       names = {},
-       i = 1;
-   for (let attr of doc._attrs.entries()) {
-       let name = attr[0], attrname = "@"+name;
-       if (!names[attrname]) {
-           names[attrname] = i;
-           i++;
-           out.push(0);
-           out.push(15);
-           str2array(name,out);
-       }
-       out.push(docAttrType(attr[0]));
-       str2array(attr[0],out);
-       str2array(attr[1],out);
-   }
-   iter(doc, function (node) {
-       let type = node.type,
-           inode = node.inode,
-           depth = inode._depth,
-           name = node.name;
-       var nameIndex = 0;
-       if (typeof name === "string") {
-           if(!names[name]) {
-               names[name] = i;
-               i++;
-               out.push(0);
-               out.push(15);
-               str2array(name,out);
-           }
-           nameIndex = names[name];
-       }
-       out.push(0);
-       out.push(type);
-       out.push(depth);
-       if(nameIndex) out.push(nameIndex);
-       if (type == 1) {
-           for (let attr of inode._attrs.entries()) {
-               let name = attr[0], attrname = "@"+name;
-               if (!names[attrname]) {
-                   names[attrname] = i;
-                   i++;
-                   out.push(0);
-                   out.push(15);
-                   str2array(name,out);
-               }
-               out.push(0);
-               out.push(2);
-               out.push(names[attrname]);
-               str2array(attr[1],out);
-           }
-       } else if (type == 3) {
-           str2array(node.value,out);
-       } else if(type == 12){
-           str2array(node.value+"",out);
-       }
-   });
-   // remove first 0
-   out.shift();
-   return out;
-}
- */
 
 export function fromL3(l3) {
 	var names = {},
 	    n = 0,
 	    parents = [],
 		depth = 0;
-	var doc = emptyINode(9, "#document", emptyAttrMap());
+    var cx = this.vnode ? this : inode;
+	var doc = cx.emptyINode(9, "#document", cx.emptyAttrMap());
 	parents[0] = doc;
 	const process = function(entry){
 		let type = entry[0];
@@ -202,9 +113,9 @@ export function fromL3(l3) {
         if(type == 2){
             let parent = parents[depth];
             let name = names[entry[1]];
-			parent = setAttribute(parent, name, array2str(entry,2));
+			parent = cx.setAttribute(parent, name, array2str(entry,2));
         } else if(type == 7 || type == 10){
-            doc = setAttribute(doc, entry[1], array2str(entry,2));
+            doc = cx.setAttribute(doc, entry[1], array2str(entry,2));
         } else if(type == 15){
             n++;
             names[n] = array2str(entry,1);
@@ -216,9 +127,9 @@ export function fromL3(l3) {
     		if(type == 1 || type == 5 || type == 6) {
                 name = names[entry[2]];
                 if(parents[depth]) {
-                    parents[depth] = finalize(parents[depth]);
+                    parents[depth] = cx.finalize(parents[depth]);
                 }
-    			node = emptyINode(type, name, emptyAttrMap());
+    			node = cx.emptyINode(type, name, cx.emptyAttrMap());
     			parents[depth] = node;
     		} else if(type == 3){
                 if(parentType == 1 || parentType == 9){
@@ -228,16 +139,16 @@ export function fromL3(l3) {
                     name = names[entry[2]];
                     valIndex = 3;
                 }
-    			node = ivalue(type,name,array2str(entry,valIndex));
+    			node = cx.ivalue(type,name,array2str(entry,valIndex));
             } else  if(type == 12){
                 if(parentType == 1 || parentType == 9){
-                    name = count(parent);
+                    name = cx.count(parent);
                     valIndex = 2;
                 } else {
                     name = names[entry[2]];
                     valIndex = 3;
                 }
-                node = ivalue(type,name,convert(array2str(entry,valIndex)),depth);
+                node = cx.ivalue(type,name,convert(array2str(entry,valIndex)),depth);
             }
             if (parent) parent = push(parent,[name, node]);
         }
@@ -252,5 +163,5 @@ export function fromL3(l3) {
 		}
 	}
     process(entry);
-	return finalize(parents[0]);
+	return cx.finalize(parents[0]);
 }
