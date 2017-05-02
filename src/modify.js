@@ -1,6 +1,4 @@
-import { ensureRoot } from './construct';
-
-import { firstChild, lastChild } from './access';
+import { ensureRoot, firstChild, lastChild } from './access';
 
 function _ascend(node){
 	var child;

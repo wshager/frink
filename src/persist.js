@@ -234,5 +234,3 @@ export function modify(inode,node,ref,type) {
 export function stringify(inode){
 	return inode.toString();
 }
-
-export { VNode };

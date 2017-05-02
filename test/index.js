@@ -1,5 +1,8 @@
 const n = require("../lib/index");
+const form = require("../lib/form");
 const microtime = require("microtime");
+
+n.setAccessModule("inode",form);
 
 var s = microtime.now();
 handle(n.parse(`<persoon id="243">
@@ -7,7 +10,6 @@ handle(n.parse(`<persoon id="243">
   <achternaam>Hager</achternaam>
   <beroep>programmeur</beroep>
 </persoon>`));
-
 function handle(out){
     var e = microtime.now();
 
@@ -34,5 +36,5 @@ function handle(out){
     console.log(n.firstChild(test)+"");
 
     console.log(n.toJS(out));
-    
+
 }

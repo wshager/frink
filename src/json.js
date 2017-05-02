@@ -1,6 +1,5 @@
 import { VNode, emptyINode, emptyAttrMap, attrEntries, ivalue, finalize, push } from './persist';
-import { children } from "./access";
-import { ensureRoot } from "./construct";
+import { children, ensureRoot } from "./access";
 import { array2str, str2array, convert } from "./l3";
 
 function process(entry, parent, key) {

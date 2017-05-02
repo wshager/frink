@@ -4,7 +4,9 @@
 Object.defineProperty(exports, "__esModule", {
 	value: true
 });
-exports.isNode = exports.last = exports.position = undefined;
+exports.last = exports.position = exports.isVNode = undefined;
+exports.setAccessModule = setAccessModule;
+exports.ensureRoot = ensureRoot;
 exports.VNodeIterator = VNodeIterator;
 exports.Step = Step;
 exports.docIter = docIter;
@@ -32,13 +34,37 @@ exports.selectAttribute = selectAttribute;
 exports.isEmptyNode = isEmptyNode;
 exports.name = name;
 
-var _construct = require("./construct");
-
 var _transducers = require("./transducers");
 
 var _seq = require("./seq");
 
 var _pretty = require("./pretty");
+
+var _persist = require("./persist");
+
+const modules = {
+	inode: {
+		first: _persist.first,
+		vnode: _persist.vnode
+	}
+};
+
+function setAccessModule(name, module) {
+	modules[name] = module;
+}
+
+function ensureRoot(node) {
+	if (!node) return;
+	if (!node.inode) {
+		let root = modules.inode.first(node);
+		return modules.inode.vnode(root, modules.inode.vnode(node), 1, 0);
+	}
+	if (typeof node.inode === "function") {
+		node.inode(d());
+		return node;
+	}
+	return node;
+}
 
 function VNodeIterator(iter, parent, f) {
 	this.iter = iter;
@@ -74,7 +100,7 @@ Step.prototype.toString = function () {
 };
 
 function* docIter(node, reverse = false) {
-	node = _construct.ensureRoot(node);
+	node = ensureRoot(node);
 	yield node;
 	while (node) {
 		node = nextNode(node);
@@ -168,14 +194,14 @@ function stringify(input) {
 
 function firstChild(node, fltr = 0) {
 	// FIXME return root if doc (or something else?)
-	var next = _construct.ensureRoot(node);
+	var next = ensureRoot(node);
 	if (!node.inode) return next;
 	next = nextNode(next);
 	if (node.depth == next.depth - 1) return next;
 }
 
 function nextSibling(node) {
-	node = _construct.ensureRoot(node);
+	node = ensureRoot(node);
 	var parent = node.parent;
 	var next = parent.next(node);
 	// create a new node
@@ -203,19 +229,19 @@ function getDoc(node) {
 }
 
 function lastChild(node) {
-	node = _construct.ensureRoot(node);
+	node = ensureRoot(node);
 	var last = node.last();
 	return node.vnode(last, node, node.depth + 1, node.count() - 1);
 }
 
 function parent(node) {
 	if (!arguments.length) return Axis(parent);
-	return node.parent ? _seq.seq(new VNodeIterator([node.parent.inode][Symbol.iterator](), node.parent.parent, vnode)) : _seq.seq();
+	return node.parent ? _seq.seq(new VNodeIterator([node.parent.inode][Symbol.iterator](), node.parent.parent, _persist.vnode)) : _seq.seq();
 }
 
 function self(node) {
 	if (!arguments.length) return Axis(self);
-	return node ? _seq.seq(new VNodeIterator([node.inode][Symbol.iterator](), node.parent, vnode)) : _seq.seq();
+	return node ? _seq.seq(new VNodeIterator([node.inode][Symbol.iterator](), node.parent, _persist.vnode)) : _seq.seq();
 }
 
 function iter(node, f) {
@@ -225,7 +251,7 @@ function iter(node, f) {
 	if (!f) f = node => {
 		prev = node;
 	};
-	node = _construct.ensureRoot(node);
+	node = ensureRoot(node);
 	f(node, i++);
 	while (node) {
 		node = nextNode(node);
@@ -236,19 +262,19 @@ function iter(node, f) {
 	return prev;
 }
 
-const _isVNode = n => !!n && n.__is_VNode;
+const isVNode = exports.isVNode = n => !!n && n.__is_VNode;
 
-const _isElement = n => _isVNode(n) && n.type == 1;
+const _isElement = n => isVNode(n) && n.type == 1;
 
-const _isAttribute = n => _isVNode(n) && n.type == 2;
+const _isAttribute = n => isVNode(n) && n.type == 2;
 
-const _isText = n => _isVNode(n) && n.type == 3;
+const _isText = n => isVNode(n) && n.type == 3;
 
-const _isList = n => _isVNode(n) && n.type == 5;
+const _isList = n => isVNode(n) && n.type == 5;
 
-const _isMap = n => _isVNode(n) && n.type == 6;
+const _isMap = n => isVNode(n) && n.type == 6;
 
-const _isLiteral = n => _isVNode(n) && n.type == 12;
+const _isLiteral = n => isVNode(n) && n.type == 12;
 
 function _get(idx, type) {
 	return {
@@ -261,7 +287,7 @@ function _get(idx, type) {
 
 function cxFilter(iterable, f) {
 	return _transducers.filter(iterable, function (v, k, i) {
-		if (!_seq.isSeq(v) && !isNode(v)) v = _seq.seq(v);
+		if (!_seq.isSeq(v) && !isVNode(v)) v = _seq.seq(v);
 		v.__cx = [k, i];
 		return f(v, k, i);
 	});
@@ -345,12 +371,12 @@ function Axis(f, type) {
 	};
 }
 function child() {
-	return Axis(x => _seq.seq(_construct.ensureRoot(x)));
+	return Axis(x => _seq.seq(ensureRoot(x)));
 }
 
 const _isSiblingIterator = n => !!n && n.__is_SiblingIterator;
 
-const _isVNodeIterator = n => !!n && n.__is_VNodeIterator;
+const isVNodeIterator = n => !!n && n.__is_VNodeIterator;
 
 function SiblingIterator(inode, parent, depth, indexInParent, dir) {
 	this.inode = inode;
@@ -375,7 +401,7 @@ SiblingIterator.prototype[Symbol.iterator] = function () {
 
 function followingSibling(node) {
 	if (arguments.length === 0) return Axis(followingSibling);
-	node = _construct.ensureRoot(node);
+	node = ensureRoot(node);
 	return _seq.seq(new SiblingIterator(node.inode, node.parent, node.depth, node.indexInParent, next));
 }
 
@@ -413,7 +439,7 @@ function _comparer() {
 	return f;
 }
 
-// TODO use direct functions as much as passible, e.g. _isNode instead of node
+// TODO use direct functions as much as passible, e.g. isVNode instead of node
 function _selectImpl(node, path) {
 	if (!_seq.isSeq(path)) path = _seq.seq(path);
 	var axis = self(),
@@ -440,29 +466,27 @@ function _selectImpl(node, path) {
 
 	var attr = axis.__type == 2;
 	var composed = _transducers.compose.apply(null, filtered.toArray());
-	const process = n => _transducers.into(directAccess && !_isVNodeIterator(n) && !_isSiblingIterator(n) ? n.get(directAccess) : n, composed, _seq.seq());
-	//var nodeFilter = n => _isElement(n) || _isVNodeIterator(n) || _isSiblingIterator(n) || _isMap(n) || _isList(n);
+	const process = n => _transducers.into(directAccess && !isVNodeIterator(n) && !_isSiblingIterator(n) ? n.get(directAccess) : n, composed, _seq.seq());
+	//var nodeFilter = n => _isElement(n) || isVNodeIterator(n) || _isSiblingIterator(n) || _isMap(n) || _isList(n);
 	// if seq, apply axis to seq first
 	// if no axis, expect context function call, so don't process + cat
 	var list = _seq.isSeq(node) ? node = _transducers.transform(node, _transducers.compose(_transducers.forEach(n => axis.f(n)), _transducers.cat)) : axis.f(node);
-	return _transducers.transform(list, _transducers.compose(_transducers.forEach(process), (n, k, i, z) => !isNode(n) || attr ? _transducers.cat(_seq.isSeq(n) ? n : [n], k, i, z) : _transducers.distinctCat(_comparer())(n, k, i, z)));
+	return _transducers.transform(list, _transducers.compose(_transducers.forEach(process), (n, k, i, z) => !isVNode(n) || attr ? _transducers.cat(_seq.isSeq(n) ? n : [n], k, i, z) : _transducers.distinctCat(_comparer())(n, k, i, z)));
 }
 
 function isEmptyNode(node) {
-	node = _construct.ensureRoot(node);
-	if (!_isVNode(node)) return false;
+	node = ensureRoot(node);
+	if (!isVNode(node)) return false;
 	if (_isText(node) || _isLiteral(node) || _isAttribute(node)) return node.value === undefined;
 	return !node.count();
 }
 
-const isNode = exports.isNode = _isVNode;
-
 function name($a) {
 	if (_seq.isSeq($a)) return _transducers.forEach($a, name);
-	if (!_isVNode($a)) throw new Error("This is not a node");
+	if (!isVNode($a)) throw new Error("This is not a node");
 	return $a.name;
 }
-},{"./construct":2,"./pretty":10,"./seq":12,"./transducers":13}],2:[function(require,module,exports){
+},{"./persist":9,"./pretty":10,"./seq":12,"./transducers":13}],2:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -477,7 +501,6 @@ exports.p = p;
 exports.x = x;
 exports.c = c;
 exports.d = d;
-exports.ensureRoot = ensureRoot;
 exports._isQName = _isQName;
 exports.QName = QName;
 
@@ -599,19 +622,6 @@ function d(uri = null, prefix = null, doctype = null) {
 		attrs.DOCTYPE = doctype;
 	}
 	return new _persist.VNode(_persist.emptyINode(9, "#document", 0, _persist.emptyAttrMap(attrs)), 9, "#document");
-}
-
-function ensureRoot(node) {
-	if (!node) return;
-	if (!node.inode) {
-		let root = _persist.first(node);
-		return _persist.vnode(root, _persist.vnode(node), 1, 0);
-	}
-	if (typeof node.inode === "function") {
-		node.inode(d());
-		return node;
-	}
-	return node;
 }
 
 function _isQName(maybe) {
@@ -1472,7 +1482,7 @@ function fromL3(l3) {
     return _persist.finalize(parents[0]);
 }
 },{"./access":1,"./persist":9}],8:[function(require,module,exports){
-'use strict';
+"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -1481,9 +1491,7 @@ exports.appendChild = appendChild;
 exports.insertChildBefore = insertChildBefore;
 exports.removeChild = removeChild;
 
-var _construct = require('./construct');
-
-var _access = require('./access');
+var _access = require("./access");
 
 function _ascend(node) {
 	var child;
@@ -1497,7 +1505,7 @@ function _ascend(node) {
 }
 
 function appendChild(node, child) {
-	node = _construct.ensureRoot(node);
+	node = _access.ensureRoot(node);
 	//if(!node || !node.size) return;
 	//let last = lastChild(node);
 	if (node.type == 9 && node.inode.size > 0) {
@@ -1514,7 +1522,7 @@ function appendChild(node, child) {
 }
 
 function insertChildBefore(node, ins) {
-	node = _construct.ensureRoot(node);
+	node = _access.ensureRoot(node);
 	//if(!node || !node.size) return;
 	let parent = node.parent;
 	if (typeof ins.inode == "function") {
@@ -1527,14 +1535,14 @@ function insertChildBefore(node, ins) {
 }
 
 function removeChild(node, child) {
-	node = _construct.ensureRoot(node);
+	node = _access.ensureRoot(node);
 	//if(!node || !node.size || !child) return;
 	// TODO error
 	if (child.parent.inode !== node.inode) return;
 	node = node.removeChild(child);
 	return _ascend(node);
 }
-},{"./access":1,"./construct":2}],9:[function(require,module,exports){
+},{"./access":1}],9:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2813,18 +2821,16 @@ const validator = {
 	}
 };
 },{"./access":1,"./transducers":13,"big.js":16}],15:[function(require,module,exports){
-'use strict';
+"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
 });
 exports.VNode = VNode;
 
-var _construct = require('./construct');
+var _access = require("./access");
 
-var _access = require('./access');
-
-var _persist = require('./persist');
+var _persist = require("./persist");
 
 function VNode(inode, type, name, value, parent, depth, indexInParent, cache) {
 	this.inode = inode;
@@ -2840,7 +2846,7 @@ function VNode(inode, type, name, value, parent, depth, indexInParent, cache) {
 VNode.prototype.__is_VNode = true;
 
 VNode.prototype.toString = function () {
-	var root = _construct.ensureRoot(this);
+	var root = _access.ensureRoot(this);
 	return _persist.stringify(root.inode);
 };
 
@@ -2913,7 +2919,7 @@ VNode.prototype.get = function (idx) {
 	val = val.constructor == Array ? val : [val];
 	return new _access.VNodeIterator(val[Symbol.iterator](), this, _persist.vnode);
 };
-},{"./access":1,"./construct":2,"./persist":9}],16:[function(require,module,exports){
+},{"./access":1,"./persist":9}],16:[function(require,module,exports){
 /* big.js v3.1.3 https://github.com/MikeMcl/big.js/LICENCE */
 ;(function (global) {
     'use strict';
@@ -6166,6 +6172,5 @@ const toMap = exports.toMap = map => map.fold((acc, v, k) => (acc[k] = v && v.to
 Map.prototype.toJS = function () {
     return toMap(this);
 };
-
 },{}]},{},[6])(6)
 });

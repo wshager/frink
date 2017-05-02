@@ -1,6 +1,17 @@
-import { VNode, emptyINode, emptyAttrMap, vnode, ivalue, first } from "./persist";
+import * as inode from "./persist";
 
 import { seq, isSeq } from "./seq";
+
+// faux VNode
+function vnode(inode,type,name,value){
+	return {
+		inode:inode,
+		type:type,
+		name:name,
+		value:value,
+		__is_VNode:true
+	};
+}
 
 function _n(type, name, children){
 	if(children === undefined) {
@@ -11,9 +22,8 @@ function _n(type, name, children){
 		if(!children.__is_VNode) children = x(children);
 		children = [children];
 	}
-	var node = new VNode(function (parent, ref) {
-		let pinode = parent.inode;
-		let name = node.name, ns;
+	return vnode(function (parent, ref) {
+		var ns;
 		if(type == 1) {
 			if(_isQName(name)) {
 				ns = name;
@@ -22,7 +32,8 @@ function _n(type, name, children){
 				// TODO where are the namespaces?
 			}
 		}
-		node.inode = emptyINode(type, name, type == 1 ? emptyAttrMap() : undefined, ns);
+		// convert to real VNode instance
+		var node = parent.vnode(parent.emptyINode(type, name, type == 1 ? parent.emptyAttrMap() : undefined, ns));
 		for (let i = 0; i < children.length; i++) {
 			let child = children[i];
 			child = child.inode(node);
@@ -34,29 +45,25 @@ function _n(type, name, children){
 		node.parent = parent.modify(node, ref);
 		return node;
 	}, type, name);
-	return node;
 }
 
 function _a(type, name, val) {
-	var node = new VNode(function (parent, ref) {
+	return vnode(function (parent, ref) {
+		var node = parent.vnode(parent.ivalue(type, name, val));
 		node.parent = parent.setAttribute(name,val,ref);
 		return node;
 	}, type, name, val);
-	return node;
 }
 
 function _v(type,val,name) {
-	var node = new VNode(function (parent, ref) {
-		let pinode = parent.inode;
+	return vnode(function (parent, ref) {
 		// reuse insertIndex here to create a named map entry
-		if(node.name === undefined) node.name = node.count() + 1;
-		node.inode = ivalue(node.type, node.name, val);
+		var node = parent.vnode(parent.ivalue(type, name ? name : parent.count() + 1, val));
 		// we don't want to do checks here
 		// we just need to call a function that will insert the node into the parent
 		node.parent = parent.modify(node,ref);
 		return node;
 	}, type, name, val);
-	return node;
 }
 
 /**
@@ -75,27 +82,27 @@ export function l(name, children) {
 		children = name;
 		name = "#";
 	}
-	return _n(5,name,children);
+	return _n(5,name, children);
 }
 
-export function m(name,children){
+export function m(name, children){
 	if(arguments.length == 1) {
 		children = name;
 		name = "#";
 	}
-	return _n(6,name,children);
+	return _n(6, name, children);
 }
 
-export function a(name,value){
+export function a(name, value){
 	return _a(2,name,value);
 }
 
-export function p(name,value){
+export function p(name, value){
 	return _a(7,name,value);
 }
 
-export function x(name, value) {
-	if(arguments.length == 1) {
+export function x(name, value = null) {
+	if(value === null) {
 		value = name;
 		return _v(typeof value == "string" ? 3 : 12, value);
 	}
@@ -106,7 +113,7 @@ export function c(value, name){
 	return _v(8, value, name);
 }
 
-export function d(uri = null,prefix = null,doctype = null) {
+export function d(uri = null,prefix = null,doctype = null, cx = inode) {
 	var attrs = {};
 	if(uri) {
 		attrs["xmlns" + (prefix ? ":" + prefix : "")] = uri;
@@ -114,20 +121,7 @@ export function d(uri = null,prefix = null,doctype = null) {
 	if(doctype) {
 		attrs.DOCTYPE = doctype;
 	}
-	return new VNode(emptyINode(9,"#document",0, emptyAttrMap(attrs)), 9, "#document");
-}
-
-export function ensureRoot(node){
-	if(!node) return;
-	if(!node.inode) {
-		let root = first(node);
-		return vnode(root, vnode(node), 1, 0);
-	}
-	if(typeof node.inode === "function") {
-		node.inode(d());
-		return node;
-	}
-	return node;
+	return cx.vnode(cx.emptyINode(9,"#document",0, cx.emptyAttrMap(attrs)), 9, "#document");
 }
 
 export function _isQName(maybe){

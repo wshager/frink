@@ -1,11 +1,23 @@
-import { ensureRoot } from './construct';
-
 import { compose, into, transform, forEach, filter, cat, distinctCat } from "./transducers";
 
 import { seq, isSeq } from "./seq";
 
 import { prettyXML } from "./pretty";
 
+import * as inode from "./persist";
+
+export function ensureRoot(node, cx = inode){
+	if(!node) return;
+	if(!node.inode) {
+		let root = cx.first(node);
+		return cx.vnode(root, cx.vnode(node), 1, 0);
+	}
+	if(typeof node.inode === "function") {
+		node.inode(d());
+		return node;
+	}
+	return node;
+}
 
 export function VNodeIterator(iter, parent, f){
 	this.iter = iter;
@@ -200,19 +212,19 @@ export function iter(node, f) {
 	return prev;
 }
 
-const _isVNode = n => !!n && n.__is_VNode;
+export const isVNode = n => !!n && n.__is_VNode;
 
-const _isElement = n => _isVNode(n) && n.type == 1;
+const _isElement = n => isVNode(n) && n.type == 1;
 
-const _isAttribute = n => _isVNode(n) && n.type == 2;
+const _isAttribute = n => isVNode(n) && n.type == 2;
 
-const _isText = n => _isVNode(n) && n.type == 3;
+const _isText = n => isVNode(n) && n.type == 3;
 
-const _isList = n => _isVNode(n) && n.type == 5;
+const _isList = n => isVNode(n) && n.type == 5;
 
-const _isMap = n => _isVNode(n) && n.type == 6;
+const _isMap = n => isVNode(n) && n.type == 6;
 
-const _isLiteral = n => _isVNode(n) && n.type == 12;
+const _isLiteral = n => isVNode(n) && n.type == 12;
 
 function _get(idx, type){
 	return {
@@ -225,7 +237,7 @@ function _get(idx, type){
 
 export function cxFilter(iterable,f){
     return filter(iterable,function(v,k,i){
-        if(!isSeq(v) && !isNode(v)) v = seq(v);
+        if(!isSeq(v) && !isVNode(v)) v = seq(v);
         v.__cx = [k,i];
         return f(v,k,i);
 	});
@@ -314,7 +326,7 @@ export function child(){
 
 const _isSiblingIterator = n => !!n && n.__is_SiblingIterator;
 
-const _isVNodeIterator = n => !!n && n.__is_VNodeIterator;
+const isVNodeIterator = n => !!n && n.__is_VNodeIterator;
 
 function SiblingIterator(inode, parent, depth, indexInParent, dir){
 	this.inode = inode;
@@ -375,7 +387,7 @@ function _comparer() {
 	return f;
 }
 
-// TODO use direct functions as much as passible, e.g. _isNode instead of node
+// TODO use direct functions as much as passible, e.g. isVNode instead of node
 function _selectImpl(node, path) {
 	if(!isSeq(path)) path = seq(path);
 	var axis = self(), directAccess;
@@ -401,28 +413,25 @@ function _selectImpl(node, path) {
 
 	var attr = axis.__type == 2;
 	var composed = compose.apply(null,filtered.toArray());
-	const process = n => into(directAccess && !_isVNodeIterator(n) && !_isSiblingIterator(n) ? n.get(directAccess) : n, composed, seq());
-	//var nodeFilter = n => _isElement(n) || _isVNodeIterator(n) || _isSiblingIterator(n) || _isMap(n) || _isList(n);
+	const process = n => into(directAccess && !isVNodeIterator(n) && !_isSiblingIterator(n) ? n.get(directAccess) : n, composed, seq());
+	//var nodeFilter = n => _isElement(n) || isVNodeIterator(n) || _isSiblingIterator(n) || _isMap(n) || _isList(n);
 	// if seq, apply axis to seq first
 	// if no axis, expect context function call, so don't process + cat
 	var list = isSeq(node) ? node = transform(node, compose(forEach(n => axis.f(n)), cat)) : axis.f(node);
 	return transform(list,compose(forEach(process), (n,k,i,z) =>
-		!isNode(n) || attr ? cat(isSeq(n) ? n : [n],k,i,z) : distinctCat(_comparer())(n,k,i,z)));
+		!isVNode(n) || attr ? cat(isSeq(n) ? n : [n],k,i,z) : distinctCat(_comparer())(n,k,i,z)));
 }
 
 
 export function isEmptyNode(node){
 	node = ensureRoot(node);
-	if(!_isVNode(node)) return false;
+	if(!isVNode(node)) return false;
 	if(_isText(node) || _isLiteral(node) || _isAttribute(node)) return node.value === undefined;
 	return !node.count();
 }
 
-export const isNode = _isVNode;
-
-
 export function name($a) {
 	if(isSeq($a)) return forEach($a,name);
-	if(!_isVNode($a)) throw new Error("This is not a node");
+	if(!isVNode($a)) throw new Error("This is not a node");
 	return $a.name;
 }

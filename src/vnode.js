@@ -1,30 +1,6 @@
-import { ensureRoot } from './construct';
+import { ensureRoot, VNodeIterator } from './access';
 
-import { VNodeIterator } from './access';
-
-
-import {
-	ivalue,
-	vnode,
-	emptyINode,
-	emptyAttrMap,
-	get,
-	next,
-	push,
-	set,
-	removeChild,
-	cached,
-	keys,
-	values,
-	finalize,
-	setAttribute,
-	count,
-	first,
-	last,
-	attrEntries,
-	modify,
-	stringify
-} from "./persist";
+import * as cx from "./persist";
 
 export function VNode(inode,type,name,value,parent,depth,indexInParent,cache){
 	this.inode = inode;
@@ -35,6 +11,7 @@ export function VNode(inode,type,name,value,parent,depth,indexInParent,cache){
 	this.depth = depth | 0;
 	this.indexInParent = indexInParent;
 	this.cache = cache;
+	this.cx = cx;
 }
 
 VNode.prototype.__is_VNode = true;
@@ -101,6 +78,10 @@ VNode.prototype.modify = function(node,ref) {
 VNode.prototype.vnode = vnode;
 
 VNode.prototype.ivalue = ivalue;
+
+VNode.prototype.emptyINode = emptyINode;
+
+VNode.prototype.emptyAttrMap = emptyAttrMap;
 
 
 // TODO create iterator that yields a node seq
