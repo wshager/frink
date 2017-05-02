@@ -1,8 +1,9 @@
-import { ensureRoot, VNodeIterator } from './access';
+import { VNodeIterator } from './access';
 
 import * as cx from "./persist";
 
-export function VNode(inode,type,name,value,parent,depth,indexInParent,cache){
+export function VNode(cx,inode,type,name,value,parent,depth,indexInParent,cache){
+	this.cx = cx;
 	this.inode = inode;
 	this.type = type;
 	this.name = name;
@@ -11,88 +12,97 @@ export function VNode(inode,type,name,value,parent,depth,indexInParent,cache){
 	this.depth = depth | 0;
 	this.indexInParent = indexInParent;
 	this.cache = cache;
-	this.cx = cx;
 }
 
 VNode.prototype.__is_VNode = true;
 
 VNode.prototype.toString = function(){
-	var root = ensureRoot(this);
-	return stringify(root.inode);
+	return this.cx.stringify(this.inode);
 };
 
 VNode.prototype.count = function(){
 	if(typeof this.inode == "function") return 0;
-	return count(this.inode);
+	return this.cx.count(this.inode);
 };
 
 VNode.prototype.keys = function(){
-	var cache = this.cache || cached(this.inode, this.type);
+	var cache = this.cache || this.cx.cached(this.inode, this.type);
 	if(cache) return cache.keys();
-	return keys(this.inode,this.type);
+	return this.cx.keys(this.inode,this.type);
 };
 
 VNode.prototype.values = function(){
-	return values(this.inode,this.type);
+	return this.cx.values(this.inode,this.type);
 };
 
 VNode.prototype.first = function(){
-	return first(this.inode,this.type);
+	return this.cx.first(this.inode,this.type);
 };
 
 VNode.prototype.last = function(){
-	return last(this.inode,this.type);
+	return this.cx.last(this.inode,this.type);
 };
 
 VNode.prototype.next = function(node){
-	return next(this.inode,node,this.type);
+	return this.cx.next(this.inode,node,this.type);
 };
 
 VNode.prototype.push = function(child){
-	this.inode = push(this.inode,[child.name,child.inode],this.type);
+	this.inode = this.cx.push(this.inode,[child.name,child.inode],this.type);
 	return this;
 };
 
 VNode.prototype.set = function(key,val){
-	this.inode = set(this.inode,key,val,this.type);
+	this.inode = this.cx.set(this.inode,key,val,this.type);
 	return this;
 };
 
 VNode.prototype.removeChild = function(child){
-	this.inode = removeChild(this.inode,child,this.type);
+	this.inode = this.cx.removeChild(this.inode,child,this.type);
 	return this;
 };
 
 VNode.prototype.finalize = function(){
-	this.inode = finalize(this.inode);
+	this.inode = this.cx.finalize(this.inode);
 	return this;
 };
 
+VNode.prototype.attrEntries = function(){
+	return this.cx.attrEntries(this.inode);
+};
+
 VNode.prototype.modify = function(node,ref) {
-	this.inode = modify(this.inode,node,ref,this.type);
+	this.inode = this.cx.modify(this.inode,node,ref,this.type);
 	return this;
 };
 
 
 // hitch this on VNode for reuse
-VNode.prototype.vnode = vnode;
+VNode.prototype.vnode = function(inode, parent, depth, indexInParent){
+	return this.cx.vnode(inode, parent, depth, indexInParent);
+};
 
-VNode.prototype.ivalue = ivalue;
+VNode.prototype.ivalue = function(type, name, value) {
+	return this.cx.ivalue(type, name, value);
+};
 
-VNode.prototype.emptyINode = emptyINode;
+VNode.prototype.emptyINode = function(type, name, attrs, ns){
+	return this.cx.emptyINode(type, name, attrs, ns);
+};
 
-VNode.prototype.emptyAttrMap = emptyAttrMap;
-
+VNode.prototype.emptyAttrMap = function(init) {
+	return this.cx.emptyAttrMap(init);
+};
 
 // TODO create iterator that yields a node seq
 // position() should overwrite get(), but the check should be name or indexInParent
 VNode.prototype[Symbol.iterator] = function(){
-	return new VNodeIterator(this.values(),this, vnode);
+	return new VNodeIterator(this.values(),this, this.cx.vnode);
 };
 
 VNode.prototype.get = function(idx){
-	var val = get(this.inode,idx,this.type,this.cache);
+	var val = this.cx.get(this.inode,idx,this.type,this.cache);
 	if(!val) return [];
 	val = val.constructor == Array ? val : [val];
-	return new VNodeIterator(val[Symbol.iterator](), this, vnode);
+	return new VNodeIterator(val[Symbol.iterator](), this, this.cx.vnode);
 };
