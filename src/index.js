@@ -5,7 +5,11 @@ export function parseString(str, cb) {
     return parser.parseString(str, cb);
 }
 
+export * from "./doc";
+
 export * from "./construct";
+
+export * from "./qname";
 
 export * from "./modify";
 
