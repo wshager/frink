@@ -1,7 +1,5 @@
 import { VNodeIterator } from './access';
 
-import * as cx from "./persist";
-
 export function VNode(cx,inode,type,name,value,parent,depth,indexInParent,cache){
 	this.cx = cx;
 	this.inode = inode;
