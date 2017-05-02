@@ -1,46 +1,47 @@
-import { VNode, emptyINode, emptyAttrMap, attrEntries, ivalue, finalize, push } from './persist';
-import { children, ensureRoot } from "./access";
+import * as inode from './persist';
+import { ensureDoc } from "./doc";
 import { array2str, str2array, convert } from "./l3";
 
-function process(entry, parent, key) {
+function process(entry, parent, key, cx) {
 	var cc = entry.constructor;
 	if (cc === Object) {
 		if(entry.$children){
 			let name = entry.$name;
-			let node = emptyINode(1, name,emptyAttrMap(entry.$attrs));
-			parent = push(parent, [name, node]);
+			let node = cx.emptyINode(1, name,cx.emptyAttrMap(entry.$attrs));
+			parent = cx.push(parent, [name, node]);
 			for (var i = 0, l = entry.$children.length; i<l; i++) {
-				process(entry.$children[i], node, i);
+				process(entry.$children[i], node, i, cx);
 			}
-			node = finalize(node);
+			node = cx.finalize(node);
 		} else {
 			let name = key !== undefined ? key : "#object";
-			let node = emptyINode(6, name);
-			parent = push(parent, [name, node]);
+			let node = cx.emptyINode(6, name);
+			parent = cx.push(parent, [name, node]);
 			let keys = Object.keys(entry);
 			for (let k of keys) {
-				process(entry[k], node, k);
+				process(entry[k], node, k, cx);
 			}
-			node = finalize(node);
+			node = cx.finalize(node);
 		}
 	} else if (cc === Array) {
 		let name = key !== undefined ? key : "#array";
-		let node = emptyINode(5, name);
-		parent = push(parent, [name, node]);
+		let node = cx.emptyINode(5, name);
+		parent = cx.push(parent, [name, node]);
 		for (let i = 0, len = entry.length; i < len; i++) {
-			process(entry[i], node, i);
+			process(entry[i], node, i, cx);
 		}
-		node = finalize(node);
+		node = cx.finalize(node);
 	} else {
-		let node = ivalue(entry.constructor === String ? 3 : 12, key, entry);
-		parent = push(parent,[key, node]);
+		let node = cx.ivalue(entry.constructor === String ? 3 : 12, key, entry);
+		parent = cx.push(parent,[key, node]);
 	}
 }
 
 export function fromJS(json) {
-	var doc = emptyINode(9, "#document", emptyAttrMap());
-	process(json, doc);
-	return finalize(doc);
+	var cx = this.vnode ? this : inode;
+	var doc = cx.emptyINode(9, "#document", cx.emptyAttrMap());
+	process(json, doc, undefined, cx);
+	return cx.finalize(doc);
 }
 
 export function toJS(doc) {
@@ -50,10 +51,10 @@ export function toJS(doc) {
 			inode = node.inode;
 		if (type == 1) {
 			let attrs = {}, arr = [];
-			for (let attr of attrEntries(inode)) {
+			for (let attr of node.attrEntries(inode)) {
 				attrs[attr[0]] = attr[1];
 			}
-			for (let n of children(node)) {
+			for (let n of node) {
 				process(n, arr, n.name);
 			}
 			let e = { $name: name, $attrs: attrs, $children: arr };
@@ -70,7 +71,7 @@ export function toJS(doc) {
 			}
 		} else if (type == 5) {
 			let arr = [];
-			for (let n of children(node)) {
+			for (let n of node) {
 				process(n, arr, n.indexInParent);
 			}
 			if (out === undefined) {
@@ -80,7 +81,7 @@ export function toJS(doc) {
 			}
 		} else if (type == 6) {
 			var obj = {};
-			for (let n of children(node)) {
+			for (let n of node) {
 				process(n, obj, n.name);
 			}
 			if (out === undefined) {
@@ -92,18 +93,10 @@ export function toJS(doc) {
 		return out;
 	}
 	// discard DOC for now
-	return process(ensureRoot(doc));
+	return process(ensureDoc.bind((this,inode))(doc));
 }
 
-function step(node,depth){
-	return {
-		__isStep:true,
-		node:node,
-		depth:depth
-	};
-}
-
-function getType(val){
+function _inferType(val){
 	let cc = val.constructor;
 	return cc == Array ? 5 : cc == Object ? 6 : cc == String ? 3 : 12;
 }
@@ -127,7 +120,7 @@ export function iter(json,fn){
 				pindexes[depth] = 0;
 				let key = ks[0];
 				let val = entry[key];
-				return [getType(val),depth,key,val];
+				return [_inferType(val),depth,key,val];
 			} else {
 				pindexes[depth] = ++indexInParent;
 				if(indexInParent < klen){
@@ -135,14 +128,14 @@ export function iter(json,fn){
 					// continue with next
 					let key = ks[indexInParent];
 					let val = entry[key];
-					return [getType(val),depth,key,val];
+					return [_inferType(val),depth,key,val];
 				} else {
 					// go up
 					depth--;
 					if(depth == 1) return;
 					indexInParent = pindexes[depth];
 					let parent = parents[depth-1];
-					return next([getType(parent),depth,0,parent],true);
+					return next([_inferType(parent),depth,0,parent],true);
 				}
 			}
 		} else if (type == 5) {
@@ -157,7 +150,7 @@ export function iter(json,fn){
 				pindexes[depth] = 0;
 				let key = 0;
 				let val = entry[key];
-				return [getType(val),depth,key,val];
+				return [_inferType(val),depth,key,val];
 			} else {
 				pindexes[depth] = ++indexInParent;
 				if(indexInParent < len){
@@ -165,7 +158,7 @@ export function iter(json,fn){
 					// continue with next
 					let key = indexInParent;
 					let val = entry[key];
-					return [getType(val),depth,key,val];
+					return [_inferType(val),depth,key,val];
 				} else {
 					// go up
 					depth--;
@@ -173,17 +166,17 @@ export function iter(json,fn){
 					indexInParent = pindexes[depth];
 					//console.log("go up a",depth,indexInParent);
 					let parent = parents[depth-1];
-					return next([getType(parent),depth,0,parent],true);
+					return next([_inferType(parent),depth,0,parent],true);
 				}
 			}
 		} else {
 			indexInParent = pindexes[depth];
 			let parent = parents[depth-1];
-			return next([getType(parent),depth,0,parent],true);
+			return next([_inferType(parent),depth,0,parent],true);
 		}
 	}
 	// this is not the doc, so depth starts at 1
-	var node = [getType(json),1,"#",json];
+	var node = [_inferType(json),1,"#",json];
 	fn(node);
 	do {
 		node = next(node);
@@ -191,9 +184,7 @@ export function iter(json,fn){
 	} while(node);
 }
 
-const isObject = function(parent){
-	return !!parent && parent.constructor === Object;
-};
+const _isObject = parent => !!(parent && parent.constructor === Object);
 
 export function fromL3(l3) {
 	var names = {},
@@ -207,7 +198,7 @@ export function fromL3(l3) {
 			names[n] = array2str(entry,1);
 		} else {
 			let parent = parents[depth - 1];
-			let isObj = isObject(parent);
+			let isObj = _isObject(parent);
 			let index = isObj ? 3 : 2;
 			let key = isObj ? names[entry[2]] : null;
 			//console.log("key",key, depth, parents[depth]);
