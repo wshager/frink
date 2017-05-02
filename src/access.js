@@ -1,23 +1,10 @@
+import { ensureDoc } from "./doc";
+
 import { compose, into, transform, forEach, filter, cat, distinctCat } from "./transducers";
 
 import { seq, isSeq } from "./seq";
 
 import { prettyXML } from "./pretty";
-
-import * as inode from "./persist";
-
-export function ensureRoot(node, cx = inode){
-	if(!node) return;
-	if(!node.inode) {
-		let root = cx.first(node);
-		return cx.vnode(root, cx.vnode(node), 1, 0);
-	}
-	if(typeof node.inode === "function") {
-		node.inode(d());
-		return node;
-	}
-	return node;
-}
 
 export function VNodeIterator(iter, parent, f){
 	this.iter = iter;
@@ -53,7 +40,7 @@ Step.prototype.toString = function(){
 };
 
 export function* docIter(node, reverse = false) {
-	node = ensureRoot(node);
+	node = ensureDoc.bind(this)(node);
 	yield node;
 	while (node) {
 		node = nextNode(node);
@@ -147,14 +134,15 @@ export function stringify(input){
 
 export function firstChild(node, fltr = 0) {
 	// FIXME return root if doc (or something else?)
-	var next = ensureRoot(node);
-	if(!node.inode) return next;
-	next = nextNode(next);
-	if (node.depth == next.depth - 1) return next;
+	var next = ensureDoc.bind(this)(node);
+	if(node !== next) return next;
+	// next becomes parent, node = firstChild
+	node = next.first();
+	if(node) return next.vnode(node,next,next.depth + 1, 0);
 }
 
 export function nextSibling(node){
-	node = ensureRoot(node);
+	node = ensureDoc.bind(this)(node);
 	var parent = node.parent;
 	var next = parent.next(node);
 	// create a new node
@@ -163,26 +151,23 @@ export function nextSibling(node){
 }
 
 export function* children(node){
-	var inode = node;
+	node = ensureDoc.bind(this)(node);
 	var i = 0;
 	for(var c of node.values()){
 		if(c) yield node.vnode(c, node, node.depth + 1, i++);
 	}
 }
 
-export function getRoot(node) {
+export function getDoc(node) {
+	node = ensureDoc.bind(this)(node);
 	do {
 		node = node.parent;
 	} while(node.parent);
 	return node;
 }
 
-export function getDoc(node) {
-	return getRoot(node);
-}
-
 export function lastChild(node){
-	node = ensureRoot(node);
+	node = ensureDoc.bind(this)(node);
 	var last = node.last();
 	return node.vnode(last,node,node.depth+1, node.count() - 1);
 }
@@ -201,7 +186,7 @@ export function iter(node, f) {
 	// FIXME pass doc?
 	var i=0,prev;
 	if(!f) f = (node) => {prev = node;};
-	node = ensureRoot(node);
+	node = ensureDoc.bind(this)(node);
 	f(node,i++);
 	while (node) {
 		node = nextNode(node);
@@ -321,7 +306,7 @@ function Axis(f,type){
 	};
 }
 export function child(){
-	return Axis(x => seq(ensureRoot(x)));
+	return Axis(x => seq(x));
 }
 
 const _isSiblingIterator = n => !!n && n.__is_SiblingIterator;
@@ -351,7 +336,7 @@ SiblingIterator.prototype[Symbol.iterator] = function () {
 
 export function followingSibling(node) {
 	if (arguments.length === 0) return Axis(followingSibling);
-	node = ensureRoot(node);
+	node = ensureDoc.bind(this)(node);
 	return seq(new SiblingIterator(node.inode, node.parent, node.depth, node.indexInParent, next));
 }
 
@@ -410,21 +395,21 @@ function _selectImpl(node, path) {
 			return path;
 		}
 	}),filter(_ => !!_)));
-
+	var bed = ensureDoc.bind(this);
 	var attr = axis.__type == 2;
 	var composed = compose.apply(null,filtered.toArray());
 	const process = n => into(directAccess && !isVNodeIterator(n) && !_isSiblingIterator(n) ? n.get(directAccess) : n, composed, seq());
 	//var nodeFilter = n => _isElement(n) || isVNodeIterator(n) || _isSiblingIterator(n) || _isMap(n) || _isList(n);
 	// if seq, apply axis to seq first
 	// if no axis, expect context function call, so don't process + cat
-	var list = isSeq(node) ? node = transform(node, compose(forEach(n => axis.f(n)), cat)) : axis.f(node);
+	var list = isSeq(node) ? node = transform(node, compose(forEach(n => axis.f(bed(n))), cat)) : axis.f(bed(node));
 	return transform(list,compose(forEach(process), (n,k,i,z) =>
 		!isVNode(n) || attr ? cat(isSeq(n) ? n : [n],k,i,z) : distinctCat(_comparer())(n,k,i,z)));
 }
 
 
 export function isEmptyNode(node){
-	node = ensureRoot(node);
+	node = ensureDoc.bind(this)(node);
 	if(!isVNode(node)) return false;
 	if(_isText(node) || _isLiteral(node) || _isAttribute(node)) return node.value === undefined;
 	return !node.count();
