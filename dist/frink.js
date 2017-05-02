@@ -5,8 +5,6 @@ Object.defineProperty(exports, "__esModule", {
 	value: true
 });
 exports.last = exports.position = exports.isVNode = undefined;
-exports.setAccessModule = setAccessModule;
-exports.ensureRoot = ensureRoot;
 exports.VNodeIterator = VNodeIterator;
 exports.Step = Step;
 exports.docIter = docIter;
@@ -16,7 +14,6 @@ exports.stringify = stringify;
 exports.firstChild = firstChild;
 exports.nextSibling = nextSibling;
 exports.children = children;
-exports.getRoot = getRoot;
 exports.getDoc = getDoc;
 exports.lastChild = lastChild;
 exports.parent = parent;
@@ -34,37 +31,13 @@ exports.selectAttribute = selectAttribute;
 exports.isEmptyNode = isEmptyNode;
 exports.name = name;
 
+var _doc = require("./doc");
+
 var _transducers = require("./transducers");
 
 var _seq = require("./seq");
 
 var _pretty = require("./pretty");
-
-var _persist = require("./persist");
-
-const modules = {
-	inode: {
-		first: _persist.first,
-		vnode: _persist.vnode
-	}
-};
-
-function setAccessModule(name, module) {
-	modules[name] = module;
-}
-
-function ensureRoot(node) {
-	if (!node) return;
-	if (!node.inode) {
-		let root = modules.inode.first(node);
-		return modules.inode.vnode(root, modules.inode.vnode(node), 1, 0);
-	}
-	if (typeof node.inode === "function") {
-		node.inode(d());
-		return node;
-	}
-	return node;
-}
 
 function VNodeIterator(iter, parent, f) {
 	this.iter = iter;
@@ -100,7 +73,7 @@ Step.prototype.toString = function () {
 };
 
 function* docIter(node, reverse = false) {
-	node = ensureRoot(node);
+	node = _doc.ensureDoc.bind(this)(node);
 	yield node;
 	while (node) {
 		node = nextNode(node);
@@ -194,14 +167,15 @@ function stringify(input) {
 
 function firstChild(node, fltr = 0) {
 	// FIXME return root if doc (or something else?)
-	var next = ensureRoot(node);
-	if (!node.inode) return next;
-	next = nextNode(next);
-	if (node.depth == next.depth - 1) return next;
+	var next = _doc.ensureDoc.bind(this)(node);
+	if (node !== next) return next;
+	// next becomes parent, node = firstChild
+	node = next.first();
+	if (node) return next.vnode(node, next, next.depth + 1, 0);
 }
 
 function nextSibling(node) {
-	node = ensureRoot(node);
+	node = _doc.ensureDoc.bind(this)(node);
 	var parent = node.parent;
 	var next = parent.next(node);
 	// create a new node
@@ -210,38 +184,35 @@ function nextSibling(node) {
 }
 
 function* children(node) {
-	var inode = node;
+	node = _doc.ensureDoc.bind(this)(node);
 	var i = 0;
 	for (var c of node.values()) {
 		if (c) yield node.vnode(c, node, node.depth + 1, i++);
 	}
 }
 
-function getRoot(node) {
+function getDoc(node) {
+	node = _doc.ensureDoc.bind(this)(node);
 	do {
 		node = node.parent;
 	} while (node.parent);
 	return node;
 }
 
-function getDoc(node) {
-	return getRoot(node);
-}
-
 function lastChild(node) {
-	node = ensureRoot(node);
+	node = _doc.ensureDoc.bind(this)(node);
 	var last = node.last();
 	return node.vnode(last, node, node.depth + 1, node.count() - 1);
 }
 
 function parent(node) {
 	if (!arguments.length) return Axis(parent);
-	return node.parent ? _seq.seq(new VNodeIterator([node.parent.inode][Symbol.iterator](), node.parent.parent, _persist.vnode)) : _seq.seq();
+	return node.parent ? _seq.seq(new VNodeIterator([node.parent.inode][Symbol.iterator](), node.parent.parent, vnode)) : _seq.seq();
 }
 
 function self(node) {
 	if (!arguments.length) return Axis(self);
-	return node ? _seq.seq(new VNodeIterator([node.inode][Symbol.iterator](), node.parent, _persist.vnode)) : _seq.seq();
+	return node ? _seq.seq(new VNodeIterator([node.inode][Symbol.iterator](), node.parent, vnode)) : _seq.seq();
 }
 
 function iter(node, f) {
@@ -251,7 +222,7 @@ function iter(node, f) {
 	if (!f) f = node => {
 		prev = node;
 	};
-	node = ensureRoot(node);
+	node = _doc.ensureDoc.bind(this)(node);
 	f(node, i++);
 	while (node) {
 		node = nextNode(node);
@@ -371,7 +342,7 @@ function Axis(f, type) {
 	};
 }
 function child() {
-	return Axis(x => _seq.seq(ensureRoot(x)));
+	return Axis(x => _seq.seq(x));
 }
 
 const _isSiblingIterator = n => !!n && n.__is_SiblingIterator;
@@ -401,7 +372,7 @@ SiblingIterator.prototype[Symbol.iterator] = function () {
 
 function followingSibling(node) {
 	if (arguments.length === 0) return Axis(followingSibling);
-	node = ensureRoot(node);
+	node = _doc.ensureDoc.bind(this)(node);
 	return _seq.seq(new SiblingIterator(node.inode, node.parent, node.depth, node.indexInParent, next));
 }
 
@@ -463,19 +434,19 @@ function _selectImpl(node, path) {
 			return path;
 		}
 	}), _transducers.filter(_ => !!_)));
-
+	var bed = _doc.ensureDoc.bind(this);
 	var attr = axis.__type == 2;
 	var composed = _transducers.compose.apply(null, filtered.toArray());
 	const process = n => _transducers.into(directAccess && !isVNodeIterator(n) && !_isSiblingIterator(n) ? n.get(directAccess) : n, composed, _seq.seq());
 	//var nodeFilter = n => _isElement(n) || isVNodeIterator(n) || _isSiblingIterator(n) || _isMap(n) || _isList(n);
 	// if seq, apply axis to seq first
 	// if no axis, expect context function call, so don't process + cat
-	var list = _seq.isSeq(node) ? node = _transducers.transform(node, _transducers.compose(_transducers.forEach(n => axis.f(n)), _transducers.cat)) : axis.f(node);
+	var list = _seq.isSeq(node) ? node = _transducers.transform(node, _transducers.compose(_transducers.forEach(n => axis.f(bed(n))), _transducers.cat)) : axis.f(bed(node));
 	return _transducers.transform(list, _transducers.compose(_transducers.forEach(process), (n, k, i, z) => !isVNode(n) || attr ? _transducers.cat(_seq.isSeq(n) ? n : [n], k, i, z) : _transducers.distinctCat(_comparer())(n, k, i, z)));
 }
 
 function isEmptyNode(node) {
-	node = ensureRoot(node);
+	node = _doc.ensureDoc.bind(this)(node);
 	if (!isVNode(node)) return false;
 	if (_isText(node) || _isLiteral(node) || _isAttribute(node)) return node.value === undefined;
 	return !node.count();
@@ -486,13 +457,12 @@ function name($a) {
 	if (!isVNode($a)) throw new Error("This is not a node");
 	return $a.name;
 }
-},{"./persist":9,"./pretty":10,"./seq":12,"./transducers":13}],2:[function(require,module,exports){
+},{"./doc":3,"./pretty":11,"./seq":14,"./transducers":15}],2:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
 });
-exports.q = undefined;
 exports.e = e;
 exports.l = l;
 exports.m = m;
@@ -500,13 +470,22 @@ exports.a = a;
 exports.p = p;
 exports.x = x;
 exports.c = c;
-exports.d = d;
-exports._isQName = _isQName;
-exports.QName = QName;
 
-var _persist = require("./persist");
+var _qname = require("./qname");
 
 var _seq = require("./seq");
+
+// faux VNode
+function vnode(inode, type, name, value) {
+	return {
+		inode: inode,
+		type: type,
+		name: name,
+		value: value,
+		__is_VNode: true,
+		__is_Faux: true
+	};
+}
 
 function _n(type, name, children) {
 	if (children === undefined) {
@@ -517,19 +496,18 @@ function _n(type, name, children) {
 		if (!children.__is_VNode) children = x(children);
 		children = [children];
 	}
-	var node = new _persist.VNode(function (parent, ref) {
-		let pinode = parent.inode;
-		let name = node.name,
-		    ns;
+	return vnode(function (parent, ref) {
+		var ns;
 		if (type == 1) {
-			if (_isQName(name)) {
+			if (_qname.isQName(name)) {
 				ns = name;
 				name = name.name;
 			} else if (/:/.test(name)) {
 				// TODO where are the namespaces?
 			}
 		}
-		node.inode = _persist.emptyINode(type, name, type == 1 ? _persist.emptyAttrMap() : undefined, ns);
+		// convert to real VNode instance
+		var node = parent.vnode(parent.emptyINode(type, name, type == 1 ? parent.emptyAttrMap() : undefined, ns));
 		for (let i = 0; i < children.length; i++) {
 			let child = children[i];
 			child = child.inode(node);
@@ -541,29 +519,25 @@ function _n(type, name, children) {
 		node.parent = parent.modify(node, ref);
 		return node;
 	}, type, name);
-	return node;
 }
 
 function _a(type, name, val) {
-	var node = new _persist.VNode(function (parent, ref) {
+	return vnode(function (parent, ref) {
+		var node = parent.vnode(parent.ivalue(type, name, val));
 		node.parent = parent.setAttribute(name, val, ref);
 		return node;
 	}, type, name, val);
-	return node;
 }
 
 function _v(type, val, name) {
-	var node = new _persist.VNode(function (parent, ref) {
-		let pinode = parent.inode;
+	return vnode(function (parent, ref) {
 		// reuse insertIndex here to create a named map entry
-		if (node.name === undefined) node.name = node.count() + 1;
-		node.inode = _persist.ivalue(node.type, node.name, val);
+		var node = parent.vnode(parent.ivalue(type, name ? name : parent.count() + 1, val));
 		// we don't want to do checks here
 		// we just need to call a function that will insert the node into the parent
 		node.parent = parent.modify(node, ref);
 		return node;
 	}, type, name, val);
-	return node;
 }
 
 /**
@@ -601,8 +575,8 @@ function p(name, value) {
 	return _a(7, name, value);
 }
 
-function x(name, value) {
-	if (arguments.length == 1) {
+function x(name, value = null) {
+	if (value === null) {
 		value = name;
 		return _v(typeof value == "string" ? 3 : 12, value);
 	}
@@ -612,34 +586,47 @@ function x(name, value) {
 function c(value, name) {
 	return _v(8, value, name);
 }
+},{"./qname":12,"./seq":14}],3:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+exports.ensureDoc = ensureDoc;
+exports.d = d;
+
+var _persist = require("./persist");
+
+var inode = _interopRequireWildcard(_persist);
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+
+function ensureDoc(node) {
+	if (!node) return;
+	var cx = this.vnode ? this : inode;
+	if (!node.inode) {
+		let root = cx.first(node);
+		return cx.vnode(root, cx.vnode(node), 1, 0);
+	}
+	if (typeof node.inode === "function") {
+		node.inode(d.bind(cx)());
+		return node;
+	}
+	return node;
+}
 
 function d(uri = null, prefix = null, doctype = null) {
 	var attrs = {};
+	var cx = this.vnode ? this : inode;
 	if (uri) {
 		attrs["xmlns" + (prefix ? ":" + prefix : "")] = uri;
 	}
 	if (doctype) {
 		attrs.DOCTYPE = doctype;
 	}
-	return new _persist.VNode(_persist.emptyINode(9, "#document", 0, _persist.emptyAttrMap(attrs)), 9, "#document");
+	return cx.vnode(cx.emptyINode(9, "#document", 0, cx.emptyAttrMap(attrs)), 9, "#document");
 }
-
-function _isQName(maybe) {
-	return !!(maybe && maybe.__is_QName);
-}
-
-function QName(uri, name) {
-	var prefix = /:/.test(name) ? name.replace(/:.+$/, "") : null;
-	return {
-		__is_QName: true,
-		name: name,
-		prefix,
-		uri: uri
-	};
-}
-
-const q = exports.q = QName;
-},{"./persist":9,"./seq":12}],3:[function(require,module,exports){
+},{"./persist":10}],4:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -879,7 +866,7 @@ function matchAncestorOrSelf(elem, selector) {
         if (!!(node && node.matches(selector))) return node;
     }
 }
-},{"./access":1,"./seq":12,"./transducers":13}],4:[function(require,module,exports){
+},{"./access":1,"./seq":14,"./transducers":15}],5:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -947,7 +934,7 @@ function nextNode(node /* Node */) {
 		}
 	}
 }
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1030,7 +1017,7 @@ function first(inode, type) {
 function get(inode, idx, type) {
 	return inode[idx];
 }
-},{"./transducers":13,"./vnode":15}],6:[function(require,module,exports){
+},{"./transducers":15,"./vnode":17}],7:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1207,7 +1194,7 @@ Object.keys(_form).forEach(function (key) {
     }
   });
 });
-},{"./access":1,"./construct":2,"./dom-util":3,"./form":5,"./l3":7,"./modify":8,"./render":11,"./validate":14}],7:[function(require,module,exports){
+},{"./access":1,"./construct":2,"./dom-util":4,"./form":6,"./l3":8,"./modify":9,"./render":13,"./validate":16}],8:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1481,7 +1468,7 @@ function fromL3(l3) {
     process(entry);
     return _persist.finalize(parents[0]);
 }
-},{"./access":1,"./persist":9}],8:[function(require,module,exports){
+},{"./access":1,"./persist":10}],9:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1490,6 +1477,8 @@ Object.defineProperty(exports, "__esModule", {
 exports.appendChild = appendChild;
 exports.insertChildBefore = insertChildBefore;
 exports.removeChild = removeChild;
+
+var _doc = require("./doc");
 
 var _access = require("./access");
 
@@ -1505,7 +1494,7 @@ function _ascend(node) {
 }
 
 function appendChild(node, child) {
-	node = _access.ensureRoot(node);
+	node = _doc.ensureDoc.bind(this)(node);
 	//if(!node || !node.size) return;
 	//let last = lastChild(node);
 	if (node.type == 9 && node.inode.size > 0) {
@@ -1522,7 +1511,7 @@ function appendChild(node, child) {
 }
 
 function insertChildBefore(node, ins) {
-	node = _access.ensureRoot(node);
+	node = _doc.ensureDoc.bind(this)(node);
 	//if(!node || !node.size) return;
 	let parent = node.parent;
 	if (typeof ins.inode == "function") {
@@ -1535,20 +1524,19 @@ function insertChildBefore(node, ins) {
 }
 
 function removeChild(node, child) {
-	node = _access.ensureRoot(node);
+	node = _doc.ensureDoc.bind(this)(node);
 	//if(!node || !node.size || !child) return;
 	// TODO error
 	if (child.parent.inode !== node.inode) return;
 	node = node.removeChild(child);
 	return _ascend(node);
 }
-},{"./access":1}],9:[function(require,module,exports){
+},{"./access":1,"./doc":3}],10:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
 });
-exports.VNode = undefined;
 exports.ivalue = ivalue;
 exports.vnode = vnode;
 exports.emptyINode = emptyINode;
@@ -1580,11 +1568,15 @@ var rrb = _interopRequireWildcard(_rrbVector);
 
 var _vnode = require("./vnode");
 
-var _construct = require("./construct");
+var _qname = require("./qname");
 
 var _pretty = require("./pretty");
 
 var _transducers = require("./transducers");
+
+var _persist = require("./persist");
+
+var cx = _interopRequireWildcard(_persist);
 
 function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
 
@@ -1595,6 +1587,9 @@ function Value(type, name, value) {
 	this._name = name;
 	this._value = value;
 }
+
+// import self!
+
 
 Value.prototype.__is_Value = true;
 
@@ -1697,7 +1692,7 @@ function ivalue(type, name, value) {
 }
 
 function vnode(inode, parent, depth, indexInParent) {
-	return new _vnode.VNode(inode, inode._type, inode._ns ? _construct.q(inode._ns.uri, inode._name) : inode._name, inode._value, parent, depth, indexInParent);
+	return new _vnode.VNode(cx, inode, inode._type, inode._ns ? _qname.q(inode._ns.uri, inode._name) : inode._name, inode._value, parent, depth, indexInParent);
 }
 
 function emptyINode(type, name, attrs, ns) {
@@ -1811,9 +1806,7 @@ function modify(inode, node, ref, type) {
 function stringify(inode) {
 	return inode.toString();
 }
-
-exports.VNode = _vnode.VNode;
-},{"./construct":2,"./pretty":10,"./transducers":13,"./vnode":15,"ohamt":22,"rrb-vector":20}],10:[function(require,module,exports){
+},{"./persist":10,"./pretty":11,"./qname":12,"./transducers":15,"./vnode":17,"ohamt":24,"rrb-vector":22}],11:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -1886,7 +1879,30 @@ function prettyXML(text) {
 
 	return str[0] == '\n' ? str.slice(1) : str;
 }
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.isQName = isQName;
+exports.QName = QName;
+function isQName(maybe) {
+  return !!(maybe && maybe.__is_QName);
+}
+
+function QName(uri, name) {
+  var prefix = /:/.test(name) ? name.replace(/:.+$/, "") : null;
+  return {
+    __is_QName: true,
+    name: name,
+    prefix,
+    uri: uri
+  };
+}
+
+const q = exports.q = QName;
+},{}],13:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2000,7 +2016,7 @@ function render(vnode, root) {
 		if (node.nodeType == 1) node.parentNode.removeChild(node);
 	}
 }
-},{"./access":1,"./dom":4}],12:[function(require,module,exports){
+},{"./access":1,"./dom":5}],14:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2179,7 +2195,7 @@ function exactlyOne($arg) {
 	if ($arg.size != 1) return error("FORG0005");
 	return $arg;
 }
-},{}],13:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2433,7 +2449,7 @@ function range(n, s = 0) {
 
 // TODO:
 // rewindable/fastforwardable iterators
-},{"./seq":12}],14:[function(require,module,exports){
+},{"./seq":14}],16:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2820,7 +2836,7 @@ const validator = {
 		if (!ret) err.push(x(schema, key, path + "/" + index, node));
 	}
 };
-},{"./access":1,"./transducers":13,"big.js":16}],15:[function(require,module,exports){
+},{"./access":1,"./transducers":15,"big.js":18}],17:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2832,7 +2848,12 @@ var _access = require("./access");
 
 var _persist = require("./persist");
 
-function VNode(inode, type, name, value, parent, depth, indexInParent, cache) {
+var cx = _interopRequireWildcard(_persist);
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+
+function VNode(cx, inode, type, name, value, parent, depth, indexInParent, cache) {
+	this.cx = cx;
 	this.inode = inode;
 	this.type = type;
 	this.name = name;
@@ -2846,80 +2867,95 @@ function VNode(inode, type, name, value, parent, depth, indexInParent, cache) {
 VNode.prototype.__is_VNode = true;
 
 VNode.prototype.toString = function () {
-	var root = _access.ensureRoot(this);
-	return _persist.stringify(root.inode);
+	return this.cx.stringify(this.inode);
 };
 
 VNode.prototype.count = function () {
 	if (typeof this.inode == "function") return 0;
-	return _persist.count(this.inode);
+	return this.cx.count(this.inode);
 };
 
 VNode.prototype.keys = function () {
-	var cache = this.cache || _persist.cached(this.inode, this.type);
+	var cache = this.cache || this.cx.cached(this.inode, this.type);
 	if (cache) return cache.keys();
-	return _persist.keys(this.inode, this.type);
+	return this.cx.keys(this.inode, this.type);
 };
 
 VNode.prototype.values = function () {
-	return _persist.values(this.inode, this.type);
+	return this.cx.values(this.inode, this.type);
 };
 
 VNode.prototype.first = function () {
-	return _persist.first(this.inode, this.type);
+	return this.cx.first(this.inode, this.type);
 };
 
 VNode.prototype.last = function () {
-	return _persist.last(this.inode, this.type);
+	return this.cx.last(this.inode, this.type);
 };
 
 VNode.prototype.next = function (node) {
-	return _persist.next(this.inode, node, this.type);
+	return this.cx.next(this.inode, node, this.type);
 };
 
 VNode.prototype.push = function (child) {
-	this.inode = _persist.push(this.inode, [child.name, child.inode], this.type);
+	this.inode = this.cx.push(this.inode, [child.name, child.inode], this.type);
 	return this;
 };
 
 VNode.prototype.set = function (key, val) {
-	this.inode = _persist.set(this.inode, key, val, this.type);
+	this.inode = this.cx.set(this.inode, key, val, this.type);
 	return this;
 };
 
 VNode.prototype.removeChild = function (child) {
-	this.inode = _persist.removeChild(this.inode, child, this.type);
+	this.inode = this.cx.removeChild(this.inode, child, this.type);
 	return this;
 };
 
 VNode.prototype.finalize = function () {
-	this.inode = _persist.finalize(this.inode);
+	this.inode = this.cx.finalize(this.inode);
 	return this;
 };
 
+VNode.prototype.attrEntries = function () {
+	return this.cx.attrEntries(this.inode);
+};
+
 VNode.prototype.modify = function (node, ref) {
-	this.inode = _persist.modify(this.inode, node, ref, this.type);
+	this.inode = this.cx.modify(this.inode, node, ref, this.type);
 	return this;
 };
 
 // hitch this on VNode for reuse
-VNode.prototype.vnode = _persist.vnode;
+VNode.prototype.vnode = function (inode, parent, depth, indexInParent) {
+	return this.cx.vnode(inode, parent, depth, indexInParent);
+};
 
-VNode.prototype.ivalue = _persist.ivalue;
+VNode.prototype.ivalue = function (type, name, value) {
+	return this.cx.ivalue(type, name, value);
+};
+
+VNode.prototype.emptyINode = function (type, name, attrs, ns) {
+	return this.cx.emptyINode(type, name, attrs, ns);
+};
+
+VNode.prototype.emptyAttrMap = function (init) {
+	return this.cx.emptyAttrMap(init);
+};
 
 // TODO create iterator that yields a node seq
 // position() should overwrite get(), but the check should be name or indexInParent
 VNode.prototype[Symbol.iterator] = function () {
-	return new _access.VNodeIterator(this.values(), this, _persist.vnode);
+	return new _access.VNodeIterator(this.values(), this, this.cx.vnode);
 };
 
 VNode.prototype.get = function (idx) {
-	var val = _persist.get(this.inode, idx, this.type, this.cache);
+	var val = this.cx.get(this.inode, idx, this.type, this.cache);
 	if (!val) return [];
 	val = val.constructor == Array ? val : [val];
-	return new _access.VNodeIterator(val[Symbol.iterator](), this, _persist.vnode);
+	return new _access.VNodeIterator(val[Symbol.iterator](), this, this.cx.vnode);
 };
-},{"./access":1,"./persist":9}],16:[function(require,module,exports){
+},{"./access":1,"./persist":10}],18:[function(require,module,exports){
 /* big.js v3.1.3 https://github.com/MikeMcl/big.js/LICENCE */
 ;(function (global) {
     'use strict';
@@ -4063,7 +4099,7 @@ VNode.prototype.get = function (idx) {
     }
 })(this);
 
-},{}],17:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -4354,7 +4390,7 @@ function sumOfLengths(table) {
 	for (var i = 0; len > i; i++) sum += table[i].length;
 	return sum;
 }
-},{"./const":18,"./util":21}],18:[function(require,module,exports){
+},{"./const":20,"./util":23}],20:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -4363,7 +4399,7 @@ Object.defineProperty(exports, "__esModule", {
 const B = exports.B = 5;
 const M = exports.M = 1 << B;
 const E = exports.E = 2;
-},{}],19:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -4440,7 +4476,7 @@ function sliceRight(to, list) {
 	tbl.sizes = sizes;
 	return tbl;
 }
-},{"./util":21}],20:[function(require,module,exports){
+},{"./util":23}],22:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -4790,7 +4826,7 @@ Tree.prototype[Symbol.iterator] = function () {
 	return new TreeIterator(this);
 };
 
-},{"./concat":17,"./const":18,"./slice":19,"./util":21}],21:[function(require,module,exports){
+},{"./concat":19,"./const":20,"./slice":21,"./util":23}],23:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -4972,7 +5008,7 @@ function rootToArray(a, f, out = []) {
 	return out;
 }
 
-},{"./const":18}],22:[function(require,module,exports){
+},{"./const":20}],24:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -6172,5 +6208,6 @@ const toMap = exports.toMap = map => map.fold((acc, v, k) => (acc[k] = v && v.to
 Map.prototype.toJS = function () {
     return toMap(this);
 };
-},{}]},{},[6])(6)
+
+},{}]},{},[7])(7)
 });
