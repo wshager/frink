@@ -1,6 +1,6 @@
 import { VNode } from "./vnode";
 
-import { q } from './construct';
+import { q } from './qname';
 
 import { prettyXML } from "./pretty";
 
@@ -9,6 +9,9 @@ import { forEach, foldLeft, into, range } from "./transducers";
 import * as multimap from "./multimap";
 
 import * as entries from "entries";
+
+// import self!
+import * as cx from "./inode";
 
 // helpers ---------------
 
@@ -70,8 +73,6 @@ export function vnode(inode, parent, depth, indexInParent) {
 	    name,
 	    value,
 	    cc = inode.constructor;
-	// redirect to constructor(inode,type,name,value);
-	//if(cc == Function) return new VNode(inode,parent,depth,indexInParent);
 	if(type == 1 || type == 9){
 		name = inode.$name;
 	} else if (type == 5) {
@@ -82,7 +83,17 @@ export function vnode(inode, parent, depth, indexInParent) {
 		value = inode;
 		name = parent.keys()[indexInParent];
 	}
-	return new VNode(inode, type, inode.$ns ? q(inode.$ns.uri, name) : name, value, parent, depth, indexInParent);
+	// return vnode
+	return new VNode(
+		cx,
+		inode,
+		type,
+		inode.$ns ? q(inode.$ns.uri, name) : name,
+		value,
+		parent,
+		depth,
+		indexInParent
+	);
 }
 
 export function emptyINode(type, name, attrs, ns) {
