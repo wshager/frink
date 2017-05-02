@@ -2,7 +2,7 @@ import * as sax from 'sax';
 
 import { EventEmitter } from 'events';
 
-import { emptyINode, emptyAttrMap, ivalue, push, finalize, setAttribute, count } from './persist';
+import * as inode from './persist';
 
 import { stripBOM } from "./bom";
 
@@ -15,12 +15,14 @@ const saxParser = sax.parser(true, {
 });
 
 export class Parser extends EventEmitter {
-	constructor() {
+	constructor(cx) {
 		super();
+		this.cx = cx || inode;
 		this.reset();
 	}
 	reset() {
-		var last = emptyINode(9,"#document",emptyAttrMap());
+		var cx = this.cx;
+		var last = cx.emptyINode(9,"#document",cx.emptyAttrMap());
 		var parents = [];
 		this.removeAllListeners();
 		saxParser.errThrown = false;
@@ -67,9 +69,9 @@ export class Parser extends EventEmitter {
 				//ret = ret.concat(attribute(attr.uri ? qname(attr.uri, attr.name) : attr.name, attr.value));
 				attrs[attr.name] = attr.value;
 			}
-			let n = emptyINode(nodeType,nodeName,emptyAttrMap(attrs));
+			let n = cx.emptyINode(nodeType,nodeName,cx.emptyAttrMap(attrs));
 			if(last) {
-				last = push(last,[nodeName,n]);
+				last = cx.push(last,[nodeName,n]);
 				parents.push(last);
 			}
 			last = n;
@@ -78,18 +80,18 @@ export class Parser extends EventEmitter {
 			// here we can be sure that mutation has stopped
 			// BUT the problem is now that last children's parents are still mutable
 			// that's why we retain properties, because we won't be mutating until parsing is done
-			last = finalize(last);
+			last = cx.finalize(last);
 			last = parents.pop();
 		};
 		saxParser.onend = (function() {
 			saxParser.ended = true;
-			return this.emit("end", finalize(last));
+			return this.emit("end", cx.finalize(last));
 		}).bind(this);
 		var ontext = function(val, type=3) {
 			if (/\S/.test(val)) {
-				let name = count(last) + 1;
-				let n = ivalue(type,name,val);
-				last = push(last,[name,n]);
+				let name = cx.count(last) + 1;
+				let n = cx.ivalue(type,name,val);
+				last = cx.push(last,[name,n]);
 			}
 		};
 		saxParser.ontext = ontext;
@@ -97,10 +99,10 @@ export class Parser extends EventEmitter {
 			ontext(value, 4);
 		};
 		saxParser.ondoctype = function(value){
-			last = setAttribute(last,"DOCTYPE",value);
+			last = cx.setAttribute(last,"DOCTYPE",value);
 		};
 		saxParser.onprocessinginstruction = function(pi) {
-			last = setAttribute(last,pi.name,pi.body);
+			last = cx.setAttribute(last,pi.name,pi.body);
 		};
 		saxParser.oncomment = function(value) {
 			ontext(value, 8);
@@ -143,23 +145,3 @@ export class Parser extends EventEmitter {
 		}
 	}
 }
-
-
-/*
-function _inherits(subClass, superClass) {
-	subClass.prototype = Object.create(superClass && superClass.prototype, {
-		constructor: { value: subClass, enumerable: false, writable: true, configurable: true }
-	});
-	Object.setPrototypeOf(subClass, superClass);
-}
-
-_inherits(INode,OrderedMap);
- */
-
- /*
- function repeat(str,t) {
- 	let out = "";
- 	for(i = 0;i<t;i++) out += str;
- 	return out;
- }
- */
