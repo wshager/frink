@@ -1,4 +1,6 @@
-import { nextNode, firstChild } from "./access";
+import { ensureDoc } from "./doc";
+
+import { nextNode } from "./access";
 
 import { forEach, into } from "./transducers";
 
@@ -40,7 +42,7 @@ function _formNodeToSchema(node){
  * @return {VNode}        A document containing errors
  */
 export function validate(node, schema, params = {}) {
-	node = node.inode ? node : firstChild(node);
+	node = node.inode ? node : ensureDoc.bind(this)(node);
 	var depth = node.depth,
 		entries = [],
 		err = [],
