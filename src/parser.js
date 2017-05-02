@@ -2,7 +2,7 @@ import * as sax from 'sax';
 
 import { EventEmitter } from 'events';
 
-import * as inode from './persist';
+import * as inode from './inode';
 
 import { stripBOM } from "./bom";
 

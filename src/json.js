@@ -1,4 +1,4 @@
-import * as inode from './persist';
+import * as inode from './inode';
 import { ensureDoc } from "./doc";
 import { array2str, str2array, convert } from "./l3";
 

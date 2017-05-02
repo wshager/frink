@@ -1,4 +1,4 @@
-import * as inode from "./persist";
+import * as inode from "./inode";
 
 export function ensureDoc(node){
 	if(!node) return;
