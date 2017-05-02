@@ -1,7 +1,9 @@
+import * as inode from "./inode";
+
 import { Parser } from "./parser";
 
 export function parseString(str, cb) {
-    var parser = new Parser();
+    var parser = new Parser(inode);
     return parser.parseString(str, cb);
 }
 
