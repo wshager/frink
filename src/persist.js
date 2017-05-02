@@ -4,11 +4,14 @@ import * as rrb from "rrb-vector";
 
 import { VNode } from './vnode';
 
-import { q } from './construct';
+import { q } from './qname';
 
 import { prettyXML } from "./pretty";
 
 import { forEach, into } from "./transducers";
+
+// import self!
+import * as cx from "./persist";
 
 // helpers ---------------
 
@@ -120,7 +123,7 @@ export function ivalue(type, name, value){
 }
 
 export function vnode(inode, parent, depth, indexInParent){
-	return new VNode(inode, inode._type, inode._ns ? q(inode._ns.uri, inode._name) : inode._name, inode._value, parent, depth, indexInParent);
+	return new VNode(cx,inode, inode._type, inode._ns ? q(inode._ns.uri, inode._name) : inode._name, inode._value, parent, depth, indexInParent);
 }
 
 export function emptyINode(type, name, attrs, ns) {
