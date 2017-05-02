@@ -1,4 +1,4 @@
-import * as inode from "./persist";
+import { isQName } from "./qname";
 
 import { seq, isSeq } from "./seq";
 
@@ -25,7 +25,7 @@ function _n(type, name, children){
 	return vnode(function (parent, ref) {
 		var ns;
 		if(type == 1) {
-			if(_isQName(name)) {
+			if(isQName(name)) {
 				ns = name;
 				name = name.name;
 			} else if(/:/.test(name)){
@@ -112,30 +112,3 @@ export function x(name, value = null) {
 export function c(value, name){
 	return _v(8, value, name);
 }
-
-export function d(uri = null,prefix = null,doctype = null, cx = inode) {
-	var attrs = {};
-	if(uri) {
-		attrs["xmlns" + (prefix ? ":" + prefix : "")] = uri;
-	}
-	if(doctype) {
-		attrs.DOCTYPE = doctype;
-	}
-	return cx.vnode(cx.emptyINode(9,"#document",0, cx.emptyAttrMap(attrs)), 9, "#document");
-}
-
-export function _isQName(maybe){
-	return !!(maybe && maybe.__is_QName);
-}
-
-export function QName(uri, name) {
-	var prefix = /:/.test(name) ? name.replace(/:.+$/,"") : null;
-    return {
-        __is_QName: true,
-		name: name,
-		prefix,
-        uri: uri
-    };
-}
-
-export const q = QName;
