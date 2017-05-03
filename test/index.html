@@ -1,12 +1,25 @@
 <!DOCTYPE html>
 <html>
 	<head>
-		<script src="/dist/frink.js"></script>
+		<script src="/dist/frinkiform.js"></script>
 		<script>
 			var n = amd;
 			n.ready().then(function(){
-				console.log(n.validate(document.forms.test,null,{form:true}));
-				n.on(document.forms.test,"submit", f => n.validate(f,null,{form:true}));
+				console.log(n.process(document.forms.test));
+				/*n.on(document.forms.test,"submit", evt => {
+					evt.preventDefault();
+					var err = n.validate(evt.target,null,{form:true});
+					console.log(err)
+					if(err.length) return false;
+				});*/
+				n.on(document.forms.test,"change", evt => {
+					var t = evt.target;
+					if(t.matches("input[name = 'c']")){
+						var obj = t.form.elements.f;
+						obj.disabled = !t.checked;
+						obj.hidden = !t.checked;
+					}
+				});
 			});
 
 		</script>
@@ -23,6 +36,11 @@
 				<option name="d4" value="4">D</option>
 			</select>
 			<input name="e" type="email" data-type="string"/>
+			<fieldset name="f" data-appearance="hidden">
+				<input name="fa" type="number" data-type="number" required />
+				<input name="fb" type="text" data-type="string" />
+				<input name="fc" type="checkbox" data-type="boolean" />
+			</fieldset>
 			<input type="submit"/>
 		</form>
 	</body>
