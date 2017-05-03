@@ -3,9 +3,7 @@
  * @module dom-util
  */
 
-/// <reference path="./typings/lib.es6.d.ts"/>
-
-import { isNode } from "./access";
+import { isVNode } from "./access";
 import { isSeq } from "./seq";
 import { forEach, foldLeft } from "./transducers";
 
@@ -64,7 +62,7 @@ export function on(elm, type, fn, context = document) {
         if (typeof elm == "string") {
             return on(query(elm, context), type, fn);
         }
-        if (isNode(elm)) elm = elm._domNode || domify(elm);
+        if (isVNode(elm)) elm = elm._domNode || domify(elm);
         elm.addEventListener(type, fn);
         return function () {
             elm.removeEventListener(type, fn);
@@ -132,8 +130,8 @@ export function hide(elm) {
 }
 
 function place(node, target, position) {
-    if (isNode(node)) node = node._domNode || domify(node);
-    if (isNode(target)) target = target._domNode || domify(target);
+    if (isVNode(node)) node = node._domNode || domify(node);
+    if (isVNode(target)) target = target._domNode || domify(target);
     if (position == 1) {
         empty(target);
     }
@@ -176,7 +174,7 @@ export function text(value) {
 }
 
 export function empty(node) {
-    if (isNode(node)) node = node._domNode;
+    if (isVNode(node)) node = node._domNode;
     if (!node) return;
     while (node.firstChild) {
         node.removeChild(node.firstChild);
