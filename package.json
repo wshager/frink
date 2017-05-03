@@ -20,7 +20,8 @@
     "lib": "./lib"
   },
   "scripts": {
-    "build": "babel src --out-dir lib && browserify lib/frink.js -s amd > dist/frink.js",
+    "build": "babel src --out-dir lib && browserify lib/frink.js -s amd > dist/frink.js && babili dist/frink.js -o dist/frink.min.js",
+    "build-form": "babel src --out-dir lib && browserify lib/frinkiform.js -s amd > dist/frinkiform.js && babili dist/frinkiform.js -o dist/frinkiform.min.js",
     "test": ""
   },
   "repository": {
@@ -44,6 +45,7 @@
   "devDependencies": {
     "babel-cli": "^6.18.0",
     "babel-plugin-transform-es2015-modules-commonjs": "^6.18.0",
+    "babili": "0.0.12",
     "browserify": "^14.1.0"
   }
 }
