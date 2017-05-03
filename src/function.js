@@ -10,15 +10,8 @@ import { forEach, filter } from "./transducers";
 
 import { error } from "./error";
 
-import { Parser } from "./parser";
-
 import { glt, ggt } from "./op";
 
-// TODO update when loader spec is solid
-// TODO add easy access to a xhr / db module
-import { readFileSync, readdirSync } from 'fs';
-
-const parser = new Parser();
 const modules = {
     "http://www.w3.org/2005/xpath-functions":exports
 };
@@ -43,26 +36,6 @@ export function functionLookup($name,$arity){
     var fn = modules[uri][name+"$"+arity];
     if(!fn) fn = modules[uri][name+"$"];
     return !!fn ? fn : seq();
-}
-
-export function doc($file){
-    var file = first($file);
-    return parse(readFileSync(file.valueOf(),"utf-8"));
-}
-
-export function collection($uri) {
-    var uri = first($uri);
-    return seq(readDirSync(uri).map(file => doc(uri+"/"+file)));
-}
-
-export function parse($a){
-	var xml = first($a);
-    var result;
-    parser.parseString(xml,function(err,ret){
-        if(err) console.log(err);
-        result = ret;
-    });
-    return result;
 }
 
 export function apply($fn,$a) {
