@@ -2,6 +2,8 @@ import { VNode } from "./vnode";
 
 import { forEach } from "./transducers";
 
+import * as cx from "./iform";
+
 function _inferType(node){
 	var t = node.dataType;
 	if(t) {
@@ -17,7 +19,8 @@ function _inferType(node){
 			return 6;
 		}
 	}
-	if(node.nodeName == "fieldset") return 6;
+	var nodeName = node.nodeName.toUpperCase();
+	if(nodeName == "FIELDSET" || nodeName == "FORM") return 6;
 	if(node.type == "number" || node.type == "checkbox") return 12;
 	return 3;
 }
@@ -36,7 +39,7 @@ export function vnode(inode, parent, depth, indexInParent){
 			val = parseFloat(inode.value);
 		}
 	}
-	return new VNode(inode, type, inode.name, val, parent, depth, indexInParent);
+	return new VNode(cx, inode, type, inode.name, val, parent, depth, indexInParent);
 }
 
 export function next(inode, node, type){
