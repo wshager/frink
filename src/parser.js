@@ -96,7 +96,8 @@ export class Parser extends EventEmitter {
 		};
 		saxParser.ontext = ontext;
 		saxParser.oncdata = function(value) {
-			ontext(value, 4);
+			// TODO handle CDATA text
+			ontext(value, 3);
 		};
 		saxParser.ondoctype = function(value){
 			last = cx.setAttribute(last,"DOCTYPE",value);
