@@ -20,8 +20,11 @@
     "lib": "./lib"
   },
   "scripts": {
-    "build": "babel src --out-dir lib && browserify lib/frink.js -s amd > dist/frink.js && babili dist/frink.js -o dist/frink.min.js",
-    "build-form": "babel src --out-dir lib && browserify lib/frinkiform.js -s amd > dist/frinkiform.js && babili dist/frinkiform.js -o dist/frinkiform.min.js",
+    "build": "babel src --out-dir lib",
+    "client-build":"browserify src/layers/frink.js -s amd -o dist/frink.js -t [ babelify --presets [ es2015 ] ]",
+    "client-min":"uglifyjs --compress --mangle --verbose dist/frink.js -o dist/frink.min.js",
+    "form-build": "browserify src/layers/frinkiform.js -s amd -o dist/frinkiform.js -t [ babelify --presets [ es2015 ] ]",
+    "form-min":"uglifyjs --compress --mangle --verbose dist/frinkiform.js -o dist/frinkiform.min.js",
     "test": ""
   },
   "repository": {
