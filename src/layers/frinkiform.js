@@ -1,12 +1,12 @@
-import * as inode from "./iform";
+import * as inode from "../iform";
 
-import * as dc from "./doc";
+import * as dc from "../doc";
 
-import * as ac from "./access";
+import * as ac from "../access";
 
-import * as va from "./validate";
+import * as va from "../validate";
 
-import * as fu from "./form-util";
+import * as fu from "../form-util";
 
 export const ensureDoc = dc.ensureDoc.bind(inode);
 
@@ -22,6 +22,6 @@ export const validate = va.validate.bind(inode);
 
 export const process = fu.process.bind(inode);
 
-export * from "./transducers";
+export * from "../transducers";
 
-export * from "./dom-util";
+export * from "../dom-util";
