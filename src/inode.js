@@ -8,7 +8,7 @@ import { forEach, foldLeft, into, range } from "./transducers";
 
 import * as multimap from "./multimap";
 
-import * as entries from "entries";
+import * as entries from "./entries";
 
 // import self!
 import * as cx from "./inode";
