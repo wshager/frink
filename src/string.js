@@ -151,8 +151,8 @@ export function stringJoin($seq,$sep) {
 	return string(into($seq,forEach(s => string(s)),[]).join(sep !== undefined ? sep : ""));
 }
 
-export function concat(... a){
-    return string(transform(a,compose(forEach(s => string(s)),cat)).join(""));
+export function concat(... args){
+    return string(transform(args,compose(forEach(s => string(s)),cat)).join(""));
 }
 
 export function normalizeUnicode($str,$form) {
