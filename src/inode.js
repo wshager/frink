@@ -10,11 +10,21 @@ import * as multimap from "./multimap";
 
 import * as entries from "./entries";
 
+import * as ovalues from "./values";
+
 // import self!
 import * as cx from "./inode";
 
 // helpers ---------------
+if(!Object.values){
+	Object.values = function(o){
+		return ovalues.values(o);
+	};
 
+	Object.entries = function(o){
+		return entries(o);
+	};
+}
 function _inferType(inode){
 	var cc = inode.constructor;
 	if(cc == Array) {
@@ -127,8 +137,8 @@ export function next(inode, node, type){
 	}
 	if(type == 5) return inode[idx+1];
 	if(type == 6) {
-		var values = Object.values(inode);
-		return values[idx+1];
+		var vals = Object.values(inode);
+		return vals[idx+1];
 	}
 }
 
@@ -291,3 +301,5 @@ export function stringify(inode,type,root=true){
 	}
 	return root ? prettyXML(str) : str;
 }
+
+export const getType = _inferType;
