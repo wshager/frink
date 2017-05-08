@@ -4,8 +4,12 @@ export function ensureDoc(node){
 	if(!node) return;
 	var cx = this.vnode ? this : inode;
 	if(!node.inode) {
-		let root = cx.first(node);
-		return cx.vnode(root, cx.vnode(node), 1, 0);
+		if(cx.getType(node) == 9) {
+			let root = cx.first(node);
+			return cx.vnode(root, cx.vnode(node), 1, 0);
+		} else {
+			return cx.vnode(node, d(), 1, 0);
+		}
 	}
 	if(typeof node.inode === "function") {
 		node.inode(d.bind(cx)());
