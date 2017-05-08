@@ -20,7 +20,7 @@
     "lib": "./lib"
   },
   "scripts": {
-    "build": "babel src --out-dir lib",
+    "build": "babel src --out-dir lib --ignore layers",
     "client-build":"browserify src/layers/frink.js -s amd -o dist/frink.js -t [ babelify --presets [ es2015 ] ]",
     "client-min":"uglifyjs --compress --mangle --verbose dist/frink.js -o dist/frink.min.js",
     "form-build": "browserify src/layers/frinkiform.js -s amd -o dist/frinkiform.js -t [ babelify --presets [ es2015 ] ]",
