@@ -35,19 +35,19 @@ Frink integrates with legacy XML projects that don't rely on DTD validation.
 #### e(qname, children) ⇒ <code>VNode</code>
 Creates an element. 
 
-Note that this function is *lazy*: the temporary VNode holds a reference to a function. The element will be actualized when its parent VNode calls this function.
+Note that this constructor is *lazy*: the temporary VNode holds a reference to a function. The element will be actualized when its parent VNode calls this function.
  
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| qname  | <code>string,QName</code> | The name of the element |
-| children | <code>array,Sequence</code> | The children of the element |
+| qname  | <code>string, QName</code> | The name of the element |
+| children | <code>array, Sequence</code> | The children of the element |
 
 #### a(name,value) ⇒ <code>VNode</code>
 Creates an attribute.
 
 May be contained in an element constructor's *children*.
 
-Note that this function is *lazy*: the temporary VNode holds a reference to a function. The attribute will be actualized when its parent VNode calls this function.
+Note that this constructor is *lazy*: the temporary VNode holds a reference to a function. The attribute will be actualized when its parent VNode calls this function.
  
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
