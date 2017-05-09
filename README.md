@@ -33,7 +33,9 @@ Frink integrates with legacy XML projects that don't rely on DTD validation.
 ### Constructors
 
 #### e(qname, children) ⇒ <code>VNode</code>
-Creates an element. 
+Creates an element.
+
+May be contained in an element constructor's *children*.
 
 Note that this constructor is *lazy*: the temporary VNode holds a reference to a function. The element will be actualized when its parent VNode calls this function.
  
@@ -53,3 +55,15 @@ Note that this constructor is *lazy*: the temporary VNode holds a reference to a
 | ------ | ------------------- | ------------ |
 | name  | <code>string</code> | The name of the attribute |
 | value | <code>Value</code> | The value of the attribute |
+
+#### x(value[,name]) ⇒ <code>VNode</code>
+Creates a primitive value node, which can contain a javascript string, number or boolean.
+
+May be contained in an element constructor's *children*.
+
+Note that this constructor is *lazy*: the temporary VNode holds a reference to a function. The value node will be actualized when its parent VNode calls this function.
+ 
+| Param  | Type                | Description  |
+| ------ | ------------------- | ------------ |
+| value | <code>Value</code> | The value of the node |
+| name  | <code>string</code> | Optional. The name of the node |
