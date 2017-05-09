@@ -45,7 +45,7 @@ Note that this constructor is *lazy*: the temporary VNode holds a reference to a
 | children | <code>array, Sequence</code> | The children of the element |
 
 #### a(name,value) ⇒ <code>VNode</code>
-Creates an attribute.
+Creates an attribute, which can contain a javascript primitive (string, number or boolean).
 
 May be contained in an element constructor's *children*.
 
@@ -54,10 +54,10 @@ Note that this constructor is *lazy*: the temporary VNode holds a reference to a
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
 | name  | <code>string</code> | The name of the attribute |
-| value | <code>Value</code> | The value of the attribute |
+| value | <code>string, number, boolean</code> | The value of the attribute |
 
 #### x(value[,name]) ⇒ <code>VNode</code>
-Creates a primitive value node, which can contain a javascript string, number or boolean.
+Creates a primitive value node, which can contain a javascript primitive (string, number or boolean).
 
 May be contained in an element constructor's *children*.
 
@@ -65,5 +65,5 @@ Note that this constructor is *lazy*: the temporary VNode holds a reference to a
  
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| value | <code>Value</code> | The value of the node |
+| value | <code>string, number, boolean</code> | The value of the node |
 | name  | <code>string</code> | Optional. The name of the node |
