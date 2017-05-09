@@ -36,8 +36,8 @@ Note that this function is *lazy*: the temporary VNode holds a reference to a fu
  
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| qname  | <code>string|QName</code> | The name of the element |
-| children | <code>array|Sequence</code> | The children of the element |
+| qname  | <code>string,QName</code> | The name of the element |
+| children | <code>array,Sequence</code> | The children of the element |
 
 #### a(name,value) ⇒ <code>VNode</code>
 Creates an attribute. 
