@@ -113,3 +113,11 @@ This is a top level node, and may only be contained in a document node.
 | ------ | ------------------- | ------------ |
 | name  | <code>string</code> | Optional. The name of the node |
 | value | <code>string</code> | The value of the node |
+
+___
+
+Notes:
+
+* In some cases the name param is optional. A name must be provided to a constructor function when the parent node is of type *map*.
+* A document may also be constructed on demand, for example when accessing or modifying a temporary structure.
+* Documents can be both persistent (AKA immutable) or plain JSON under the hood. This can be decided when a document node is created.
