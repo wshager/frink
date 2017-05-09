@@ -28,7 +28,7 @@ However, what is called virtual DOM is actually not HTML anymore, as it must obe
 
 Frink integrates with legacy XML projects that don't rely on DTD validation.
 
-## API
+## API (WIP)
 
 ### Constructors
 
