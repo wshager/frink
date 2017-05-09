@@ -39,7 +39,7 @@ Note that this function is *lazy*: the temporary VNode holds a reference to a fu
 | qname  | <code>string|QName</code> | The name of the element |
 | children | <code>array|Sequence</code> | The children of the element |
 
-### a(name,value)
+#### a(name,value) ⇒ <code>VNode</code>
 Creates an attribute. 
 May be contained in an element constructor's *children*.
  
