@@ -31,7 +31,8 @@ However, what is called virtual DOM is actually not HTML anymore, as it must obe
 ### Constructors
 
 #### e(qname, children) ⇒ <code>VNode</code>
-Creates an element. Note that this function is lazy: the VNode is just a temporary reference that will be actualized by its parent VNode.
+Creates an element. 
+Note that this function is *lazy*: the VNode is just a temporary reference to a function. The element will be actualized when its parent VNode calls the function.
  
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
