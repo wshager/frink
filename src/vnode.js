@@ -69,6 +69,16 @@ VNode.prototype.attrEntries = function(){
 	return this.cx.attrEntries(this.inode);
 };
 
+VNode.prototype.attr = function(k,v){
+	if(arguments.length == 1) return this.cx.getAttribute(this.inode, k);
+	if(arguments.length === 0) {
+		this.inode = this.cx.clearAttributes(this.inode);
+	} else {
+		this.inode = this.cx.setAttribute(this.inode, k, v);
+	}
+	return this;
+};
+
 VNode.prototype.modify = function(node,ref) {
 	this.inode = this.cx.modify(this.inode,node,ref,this.type);
 	return this;
