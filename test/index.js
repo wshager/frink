@@ -1,6 +1,10 @@
 const n = require("../lib/index");
-const form = require("../lib/form");
-const microtime = require("microtime");
+//const microtime = require("microtime");
+const microtime = {
+    now:function(){
+        return (new Date()).getTime();
+    }
+}
 
 var s = microtime.now();
 handle(n.parse(`<persoon id="243">
@@ -33,6 +37,6 @@ function handle(out){
     var test = n.fromL3(l3);
     console.log(n.firstChild(test)+"");
 
-    console.log(n.toJS(out));
+    console.log(JSON.stringify(n.toJS(out)));
 
 }
