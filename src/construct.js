@@ -50,7 +50,7 @@ function _n(type, name, children){
 function _a(type, name, val) {
 	return vnode(function (parent, ref) {
 		var node = parent.vnode(parent.ivalue(type, name, val));
-		node.parent = parent.setAttribute(name,val,ref);
+		node.parent = parent.attr(name,val);
 		return node;
 	}, type, name, val);
 }
