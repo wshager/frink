@@ -4,13 +4,11 @@ import { q } from './qname';
 
 import { prettyXML } from "./pretty";
 
-import { forEach, foldLeft, into, range } from "./transducers";
+import { forEach, foldLeft, into, range, drop } from "./transducers";
 
 import * as multimap from "./multimap";
 
-import * as entries from "./entries";
-
-import * as ovalues from "./values";
+import * as ou from "./object-util";
 
 // import self!
 import * as cx from "./inode";
@@ -18,11 +16,10 @@ import * as cx from "./inode";
 // helpers ---------------
 if(!Object.values){
 	Object.values = function(o){
-		return ovalues.values(o);
+		return ou.values(o);
 	};
-
 	Object.entries = function(o){
-		return entries(o);
+		return ou.entries(o);
 	};
 }
 function _inferType(inode){
@@ -49,7 +46,7 @@ function _get(children,idx){
 }
 
 function _last(a){
-	return a[a.length-1];
+	return drop(a,a.length-1);
 }
 
 function _elemToString(e){
@@ -59,7 +56,7 @@ function _elemToString(e){
 	let str = "<"+e.$name;
 	let ns = e.$ns;
 	if(ns) str += " xmlns" + (ns.prefix ? ":" + ns.prefix : "") + "=\"" + ns.uri + "\"";
-	str = foldLeft(entries.default(e.$attrs),str,attrFunc);
+	str = foldLeft(Object.entries(e.$attrs),str,attrFunc);
 	if(e.$children.length > 0){
 		str += ">";
 		for(let c of e.$children){
@@ -108,11 +105,12 @@ export function vnode(inode, parent, depth, indexInParent) {
 
 export function emptyINode(type, name, attrs, ns) {
     var inode = type == 5 ? [] : {};
-	if(type == 1 || type == 9)
-    inode.$name = name;
-    inode.$attrs = attrs;
-	inode.$ns = ns;
-	inode.$children = [];
+	if(type == 1 || type == 9){
+	    inode.$name = name;
+	    inode.$attrs = attrs;
+		inode.$ns = ns;
+		inode.$children = [];
+	}
     return inode;
 }
 
@@ -137,7 +135,7 @@ export function next(inode, node, type){
 	}
 	if(type == 5) return inode[idx+1];
 	if(type == 6) {
-		var vals = Object.values(inode);
+		var vals = Array.from(Object.values(inode));
 		return vals[idx+1];
 	}
 }
@@ -226,6 +224,10 @@ export function setAttribute(inode,key,val){
 	return inode;
 }
 
+export function getAttribute(inode,key){
+	if(inode.$attrs) return inode.$attrs[key];
+}
+
 export function count(inode, type){
 	type = type || _inferType(inode);
 	if(type == 1 || type == 9){
@@ -245,7 +247,7 @@ export function first(inode,type){
 	} else if(type == 5) {
 		return inode[0];
 	} else if(type == 6){
-		return Object.values(inode)[0];
+		return Object.values(inode).next().value;
 	}
 }
 
@@ -259,7 +261,7 @@ export function last(inode,type){
 }
 
 export function attrEntries(inode){
-	if(inode.$attrs) return entries.default(inode.$attrs);
+	if(inode.$attrs) return Object.entries(inode.$attrs);
 	return [];
 }
 
@@ -294,7 +296,7 @@ export function stringify(inode,type,root=true){
 		str += "</json:array>";
 	} else if(type == 6){
 		str += "<json:map>";
-		str += forEach(entries.default(inode),c => '"'+c[0]+'":'+stringify(c[1],false,json)).join("");
+		str += forEach(Object.entries(inode),c => '"'+c[0]+'":'+stringify(c[1],false,json)).join("");
 		str += "</json:map>";
 	} else {
 		str = inode.toString();
