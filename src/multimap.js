@@ -30,7 +30,12 @@ MultiMap.prototype.get = function(key){
 };
 
 MultiMap.prototype.keys = function(){
-	return Object.keys(this._buckets);
+	// retain key types
+	var keys = [];
+	for(var i=0,l=this._buckets.length;i<l;i++) {
+		keys[i] = this._buckets[i][0];
+	}
+	return keys;
 };
 
 function Bucket(val){
