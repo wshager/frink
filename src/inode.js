@@ -210,7 +210,7 @@ export function keys(inode,type){
 
 export function values(inode,type){
 	type = type || _inferType(inode);
-	if(type == 1 || type == 9) return inode.$children;
+	if(type == 1 || type == 9) return inode.$children[Symbol.iterator]();
 	if(type == 6) return Object.values(inode);
 	return inode;
 }
