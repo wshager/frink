@@ -8,18 +8,25 @@ import { forEach, foldLeft, into, range, drop } from "./transducers";
 
 import * as multimap from "./multimap";
 
-import * as ou from "./object-util";
-
 // import self!
 import * as cx from "./inode";
 
 // helpers ---------------
 if(!Object.values){
+	const objUtil = (obj,f) => {
+		const keys = Object.keys(obj);
+		var entries = [];
+	    for (let i = 0; i < keys.length; i++) {
+	        const key = keys[i];
+	        entries.push(f(key));
+	    }
+		return entries;
+	}
 	Object.values = function(o){
-		return ou.values(o);
+		return objUtil(o,o[key]);
 	};
 	Object.entries = function(o){
-		return ou.entries(o);
+		return objUtil(o,key => [key, o[key]]);
 	};
 }
 function _inferType(inode){
@@ -210,7 +217,7 @@ export function keys(inode,type){
 
 export function values(inode,type){
 	type = type || _inferType(inode);
-	if(type == 1 || type == 9) return inode.$children[Symbol.iterator]();
+	if(type == 1 || type == 9) return inode.$children;
 	if(type == 6) return Object.values(inode);
 	return inode;
 }
@@ -247,7 +254,7 @@ export function first(inode,type){
 	} else if(type == 5) {
 		return inode[0];
 	} else if(type == 6){
-		return Object.values(inode).next().value;
+		return Object.values(inode)[0];
 	}
 }
 
