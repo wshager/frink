@@ -146,15 +146,16 @@ export function validation(schema, params, index, path, err) {
 	return entry;
 }
 
-function X(schema, key, path, validationMessage) {
+function X(schema, key, path, validationMessage, faults) {
 	this.schema = schema;
 	this.key = key;
 	this.path = path;
 	this.validationMessage = validationMessage;
+	this.faults = faults;
 }
 
-function x(schema, key, path, node) {
-	return new X(schema, key, path, node.get("validationMessage"));
+function x(schema, key, path, node, faults) {
+	return new X(schema, key, path, node.get("validationMessage"), faults);
 }
 
 // TODO types are functions, so allow adding custom functions
@@ -337,13 +338,18 @@ const validator = {
 				}
 				return false;
 			};
+			var faults = [];
 			let newpath = path + "/" + index;
 			let keys = node.keys();
 			var len = node.count();
 			for (let k of keys) {
-				if (props[k] || patternMatcher(k)) len--;
+				if (props[k] || patternMatcher(k)) {
+					len--;
+				} else {
+					faults.push(k);
+				}
 			}
-			if (len > 0) err.push(x(schema, key, newpath, node));
+			if (len > 0) err.push(x(schema, key, newpath, node, faults));
 		}
 	},
 	items:function(schema, key, params, index, path, err, node){
