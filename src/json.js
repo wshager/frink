@@ -54,8 +54,9 @@ export function toJS(doc) {
 			for (let attr of node.attrEntries(inode)) {
 				attrs[attr[0]] = attr[1];
 			}
-			for (let i=0, l = node.length; i < l; i++) {
-				process(node[i], arr, i);
+			let i = 0;
+			for (let n of node) {
+				process(n, arr, i++);
 			}
 			let e = { $name: name, $attrs: attrs, $children: arr };
 			if (out === undefined) {
@@ -71,8 +72,9 @@ export function toJS(doc) {
 			}
 		} else if (type == 5) {
 			let arr = [];
-			for (let i=0, l = node.length; i < l; i++) {
-				process(node[i], arr, i);
+			let i = 0;
+			for (let n of node) {
+				process(n, arr, i++);
 			}
 			if (out === undefined) {
 				out = arr;
