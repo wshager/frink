@@ -173,7 +173,10 @@ const types = {
 		return node.type == 12 && node.value.constructor == Boolean;
 	},
 	integer: function (node) {
-		return node.type == 3 && node.value.constructor == Big && node.value.e === 0;
+		var val = node.value;
+		var cc = val.constructor;
+		if(val.constructor != Big) val = new Big(val);
+		return node.type == 3 && val.constructor == Big && val.e === 0;
 	},
 	element: function (node) {
 		return node.type == 1;
@@ -373,5 +376,9 @@ const validator = {
 			ret = node.value <= test;
 		}
 		if(!ret) err.push(x(schema,key,path + "/" + index, node));
+	},
+	maxLength:function(schema, key, params, index, path, err, node){
+		var test = schema[key];
+		if(!node.value.length < test) err.push(x(schema,key,path + "/" + index, node));
 	}
 };
