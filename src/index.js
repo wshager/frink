@@ -61,3 +61,5 @@ export * from "./string";
 export * from "./function";
 
 export * from "./op";
+
+export * from "./validate";
