@@ -9,7 +9,7 @@
     "json",
     "immutable"
   ],
-  "version": "0.0.5",
+  "version": "0.1.0",
   "author": "Wouter Hager <wshager@gmail.com> (https://lagua.nl)",
   "contributors": [],
   "main": "./lib/index",
