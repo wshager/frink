@@ -389,6 +389,7 @@ const validator = {
 	},
 	maxLength:function(schema, key, params, index, path, err, node){
 		var test = schema[key];
-		if(!node.value.length < test) err.push(x(schema, key, params, path + "/" + index, node));
+		var val = node.value + "";
+		if(!val.length < test) err.push(x(schema, key, params, path + "/" + index, node));
 	}
 };
