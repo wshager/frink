@@ -68,7 +68,7 @@ function _elemToString(e){
 	if(e.$children.length > 0){
 		str += ">";
 		for(let c of e.$children){
-			str += stringify(c,false);
+			str += stringify(c);
 		}
 		str += "</"+e.$name+">";
 	} else {
@@ -142,7 +142,7 @@ export function next(inode, node, type){
 	}
 	if(type == 5) return inode[idx+1];
 	if(type == 6) {
-		var vals = Array.from(Object.values(inode));
+		var vals = Object.values(inode);
 		return vals[idx+1];
 	}
 }
