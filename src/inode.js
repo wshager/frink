@@ -30,6 +30,7 @@ if(!Object.values){
 	};
 }
 function _inferType(inode){
+	if(inode === null) return 12;
 	var cc = inode.constructor;
 	if(cc == Array) {
 		return 6;
@@ -85,8 +86,7 @@ export function ivalue(type, name, value){
 export function vnode(inode, parent, depth, indexInParent) {
 	var type = _inferType(inode),
 	    name,
-	    value,
-	    cc = inode.constructor;
+	    value;
 	if(type == 1 || type == 9){
 		name = inode.$name;
 	} else if (type == 5) {
