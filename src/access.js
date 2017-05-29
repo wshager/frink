@@ -80,7 +80,7 @@ export function nextNode(node /* VNode */) {
 		} else {
 			// return the next child
 			inode = parent.next(node);
-			if (inode) {
+			if (inode !== undefined) {
 				node = parent.vnode(inode, parent, depth, indexInParent);
 				//console.log("found next", node.name, depth, indexInParent);
 				return node;
