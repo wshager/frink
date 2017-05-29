@@ -4,7 +4,7 @@ import { nextNode } from "./access";
 
 import { forEach, into } from "./transducers";
 
-import * as Big from "big.js";
+import Big from "big.js";
 
 function get(obj, prop) {
 	if (obj.hasOwnProperty(prop)) return obj[prop];
@@ -154,13 +154,17 @@ function X(schema, key, path, validationMessage, faults) {
 	this.faults = faults;
 }
 
-function x(schema, key, path, node, faults) {
-	return new X(schema, key, path, node.get("validationMessage"), faults);
+function x(schema, key, params, path, node, faults) {
+	var validationMessage = params.form ? node.attr("validationMessage") : "";
+	return new X(schema, key, path, validationMessage, faults);
 }
 
 // TODO types are functions, so allow adding custom functions
 // TODO use XVType, coersion
 const types = {
+	null: function(node) {
+		return node.type == 12 && node.value === null;
+	},
 	string: function (node) {
 		return node.type == 3;
 	},
@@ -259,13 +263,13 @@ const validator = {
 	value:function(schema, key, params, index, path, err, node){
 		if(params.form){
 			if(!node.inode.checkValidity()){
-				err.push(x(schema, key, path + "/" + index, node));
+				err.push(x(schema, key, params, path + "/" + index, node));
 			}
 		}
 	},
 	type: function (schema, key, params, index, path, err, node) {
 		var type = schema[key];
-		if (!types[type](node)) err.push(x(schema, key, path + "/" + index, node));
+		if (!types[type](node)) err.push(x(schema, key, params, path + "/" + index, node));
 	},
 	format: function (schema, key, params, index, path, err, node) {
 		var name = schema[key];
@@ -274,13 +278,13 @@ const validator = {
 			console.log("Unknown format "+name);
 		} else {
 			let fn = typeof format == "function" ? format : v => !!v.match(format);
-			if(!fn(node.value)) err.push(x(schema, key, path + "/" + index, node));
+			if(!fn(node.value)) err.push(x(schema, key, params, path + "/" + index, node));
 		}
 	},
 	required: function (schema, key, params, index, path, err, node) {
 		// for forms:
 		if(params.form){
-			if(!node.value) err.push(x(schema, key, path + "/" + index, node));
+			if(!node.value) err.push(x(schema, key, params, path + "/" + index, node));
 		}
 	},
 	properties: function (schema, key, params, index, path, err, node) {
@@ -349,7 +353,7 @@ const validator = {
 					faults.push(k);
 				}
 			}
-			if (len > 0) err.push(x(schema, key, newpath, node, faults));
+			if (len > 0) err.push(x(schema, key, params, newpath, node, faults));
 		}
 	},
 	items:function(schema, key, params, index, path, err, node){
