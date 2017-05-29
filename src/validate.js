@@ -365,7 +365,7 @@ const validator = {
 	additionalItems:function(schema, key, params, index, path, err, node){
 		var additionalItems = schema[key];
 		var items = schema.items;
-		if(items.length !== node.count()) err.push(x(schema,key,path + "/" + index, node));
+		if(items.length !== node.count()) err.push(x(schema, key, params, path + "/" + index, node));
 	},
 	minimum:function(schema, key, params, index, path, err, node){
 		var test = schema[key];
@@ -375,7 +375,7 @@ const validator = {
 		} else {
 			ret = node.value >= test;
 		}
-		if(!ret) err.push(x(schema,key,path + "/" + index, node));
+		if(!ret) err.push(x(schema, key, params, path + "/" + index, node));
 	},
 	maximum:function(schema, key, params, index, path, err, node){
 		var test = schema[key];
@@ -385,10 +385,10 @@ const validator = {
 		} else {
 			ret = node.value <= test;
 		}
-		if(!ret) err.push(x(schema,key,path + "/" + index, node));
+		if(!ret) err.push(x(schema, key, params, path + "/" + index, node));
 	},
 	maxLength:function(schema, key, params, index, path, err, node){
 		var test = schema[key];
-		if(!node.value.length < test) err.push(x(schema,key,path + "/" + index, node));
+		if(!node.value.length < test) err.push(x(schema, key, params, path + "/" + index, node));
 	}
 };
