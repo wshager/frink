@@ -316,7 +316,7 @@ export function stringify(inode, type, root = true, key) {
 		if(key) {
 			str += "<" + key + (type == 12 ? " json:type=\"literal\"" : "") + (val ? ">" + val + "</" + key + ">" : "/>");
 		} else {
-			val;
+			str += type == 12 ? "<json:literal>" + val + "</json:literal>" : val;
 		}
 	}
 	return root ? prettyXML(str) : str;
