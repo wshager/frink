@@ -102,7 +102,7 @@ export function vnode(inode, parent, depth, indexInParent) {
 		cx,
 		inode,
 		type,
-		inode.$ns ? q(inode.$ns.uri, name) : name,
+		inode && inode.$ns ? q(inode.$ns.uri, name) : name,
 		value,
 		parent,
 		depth,
