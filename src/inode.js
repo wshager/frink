@@ -292,21 +292,32 @@ export function modify(inode, node, ref, type){
 	return inode;
 }
 
-export function stringify(inode,type,root=true){
+export function stringify(inode, type, root = true, key) {
 	var str = "";
 	type = type || _inferType(inode);
-	if(type == 1 || type == 9){
+	if (type == 1 || type == 9) {
 		str += _elemToString(inode);
-	} else if(type == 5){
-		str += "<json:array>";
-		str += forEach(inode,c => stringify(c,false,json)).join("");
-		str += "</json:array>";
-	} else if(type == 6){
-		str += "<json:map>";
-		str += forEach(Object.entries(inode),c => '"'+c[0]+'":'+stringify(c[1],false,json)).join("");
-		str += "</json:map>";
+	} else if (type == 5) {
+		let val = forEach(inode, c => stringify(c)).join("");
+		if(key) {
+			str += "<" + key + " json:type=\"array\"" + (val ? ">" + val + "</" + key + ">" : "/>");
+		} else {
+			str += "<json:array" + (val ? ">" + val + "</json:array>" : "/>");
+		}
+	} else if (type == 6) {
+		let val = forEach(Object.entries(inode), c => stringify(c[1], null, false, c[0])).join("");
+		if(key) {
+			str += "<" + key + " json:type=\"map\"" + (val ? ">" + val + "</" + key + ">" : "/>");
+		} else {
+			str += "<json:map" + (val ? ">" + val + "</json:map>" : "/>");
+		}
 	} else {
-		str = inode.toString();
+		let val = inode === null ? "null" : inode.toString();
+		if(key) {
+			str += "<" + key + (type == 12 ? " json:type=\"literal\"" : "") + (val ? ">" + val + "</" + key + ">" : "/>");
+		} else {
+			val;
+		}
 	}
 	return root ? prettyXML(str) : str;
 }
