@@ -2,7 +2,7 @@ import { ensureDoc } from "./doc";
 
 import { nextNode } from "./access";
 
-import { forEach, into } from "./transducers";
+import { forEach, foldLeft, into } from "./transducers";
 
 import Big from "big.js";
 
@@ -169,16 +169,17 @@ const types = {
 		return node.type == 3;
 	},
 	number: function (node) {
-		return node.type == 12 && node.value.constructor == Number && !isNaN(node.value);
+		return node.type == 12 && typeof node.value == "number" && !isNaN(node.value);
 	},
 	double: function (node) {
-		return node.type == 12 && node.value.constructor == Number && !isNaN(node.value);
+		return node.type == 12 && typeof node.value == "number" && !isNaN(node.value);
 	},
 	boolean: function (node) {
-		return node.type == 12 && node.value.constructor == Boolean;
+		return node.type == 12 && typeof node.value == "boolean";
 	},
 	integer: function (node) {
 		var val = node.value;
+		if(val === null || val === undefined) return false;
 		var cc = val.constructor;
 		if(val.constructor != Big) val = new Big(val);
 		return node.type == 3 && val.constructor == Big && val.e === 0;
@@ -269,7 +270,13 @@ const validator = {
 	},
 	type: function (schema, key, params, index, path, err, node) {
 		var type = schema[key];
-		if (!types[type](node)) err.push(x(schema, key, params, path + "/" + index, node));
+		var ret;
+		if(type instanceof Array){
+			ret = foldLeft(forEach(type, t => types[t](node)),false,(r,z) => r || z);
+		} else {
+			ret = types[type](node);
+		}
+		if(!ret) err.push(x(schema, key, params, path + "/" + index, node));
 	},
 	format: function (schema, key, params, index, path, err, node) {
 		var name = schema[key];
@@ -389,7 +396,7 @@ const validator = {
 	},
 	maxLength:function(schema, key, params, index, path, err, node){
 		var test = schema[key];
-		var val = node.value + "";
-		if(!val.length < test) err.push(x(schema, key, params, path + "/" + index, node));
+		if(!node.value) return;
+		if (node.value.length >= test) err.push(x(schema, key, params, path + "/" + index, node));
 	}
 };
