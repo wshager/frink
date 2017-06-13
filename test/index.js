@@ -2,7 +2,7 @@ const n = require("../lib/index");
 //const microtime = require("microtime");
 const microtime = {
     now:function(){
-        return (new Date()).getTime();
+        return (new Date()).getTime() * 1000;
     }
 }
 
@@ -36,7 +36,9 @@ function handle(out){
     console.log("toL3",(e - s)/1000);
     var test = n.fromL3(l3);
     console.log(n.firstChild(test)+"");
-
-    console.log(JSON.stringify(n.toJS(out)));
+    s = microtime.now();
+    var js = n.toJS(out);
+    e = microtime.now();
+    console.log("toJS", (e - s)/1000, JSON.stringify(js));
 
 }
