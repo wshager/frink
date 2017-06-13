@@ -94,7 +94,7 @@ export function toJS(doc) {
 		return out;
 	}
 	// discard DOC for now
-	return process(ensureDoc.bind(this,inode)(doc));
+	return process(ensureDoc.bind((this,inode))(doc));
 }
 
 function _inferType(val){
