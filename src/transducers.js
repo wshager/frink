@@ -28,7 +28,7 @@ export function compose(...funcs) {
     return (v, i, iterable, z) => {
         let reset = false, c = _append;
         for (var j = 0; j < l; j++) {
-            let ret = funcs[j].call(null, v, i, iterable, z);
+            let ret = funcs[j].call(this, v, i, iterable, z);
             if (ret === undefined) {
                 reset = true;
                 continue;
