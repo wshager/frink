@@ -47,11 +47,10 @@ export function fromJS(json) {
 export function toJS(doc) {
 	function process(node, out, key) {
 		let type = node.type,
-		    name = node.name,
-			inode = node.inode;
+		    name = node.name;
 		if (type == 1) {
 			let attrs = {}, arr = [];
-			for (let attr of node.attrEntries(inode)) {
+			for (let attr of node.attrEntries()) {
 				attrs[attr[0]] = attr[1];
 			}
 			let i = 0;
@@ -95,7 +94,7 @@ export function toJS(doc) {
 		return out;
 	}
 	// discard DOC for now
-	return process(ensureDoc.bind((this,inode))(doc));
+	return process(ensureDoc.bind(this,inode)(doc));
 }
 
 function _inferType(val){
