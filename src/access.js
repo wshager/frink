@@ -372,6 +372,40 @@ function _comparer() {
 	return f;
 }
 
+export function* select2(node,...paths) {
+	// TODO
+	// 1: node (or seq) is iterable, so get first as current context
+	// 2: each function is a filter (either a node is returned or the process stops)
+	// 3: pass each single result to a filter function, yielding a result for each
+	var bed = ensureDoc.bind(this);
+	var next = bed(node);
+	var cx = next;
+	if(next) {
+		next = nextNode(next);
+		while(next){
+			for(var i=0,l=paths.length,path=paths[i]; i<l; i++){
+				if(!isSeq(path)) path = seq(path);
+			    // process strings (can this be combined?)
+			    path = transform(path,compose(forEach(function(path){
+				    if(typeof path == "string") {
+					    var at = /^@/.test(path);
+					    if(at) path = path.substring(1);
+					    return at ? attribute(path) : element(path);
+				    }
+				    return [path];
+			    }),cat));
+			    var composed = compose.apply(null,path.toArray());
+				let ret = composed.call(cx,next);
+				if(node) {
+					yield ret;
+				} else {
+					break;
+				}
+		   });
+		}
+	}
+}
+
 // TODO use direct functions as much as passible, e.g. isVNode instead of node
 function _selectImpl(node, path) {
 	if(!isSeq(path)) path = seq(path);
