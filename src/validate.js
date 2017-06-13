@@ -180,9 +180,14 @@ const types = {
 	integer: function (node) {
 		var val = node.value;
 		if(val === null || val === undefined) return false;
-		var cc = val.constructor;
-		if(val.constructor != Big) val = new Big(val);
-		return node.type == 3 && val.constructor == Big && val.e === 0;
+		var ret = false;
+		try {
+			if(val.constructor != Big) val = new Big(val);
+			ret = (node.type == 3 || node.type == 12) && val.c.length - val.e === 1;
+		} catch(err) {
+			console.log(val,err);
+		}
+		return ret;
 	},
 	element: function (node) {
 		return node.type == 1;
