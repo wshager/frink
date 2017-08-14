@@ -56,6 +56,9 @@ assertEq(map.keys(m).toArray(),["a","b"]);
 var m1 = map.default(map.entry("c",3),map.entry("d",4));
 assertEq(map.merge(n.seq(m,m1)),{"a":1,"b":2,"c":3,"d":4});
 
+var m2 = map.default(map.entry("a",1),map.entry("a",2));
+assertEq(m2,{"a":2});
+
 console.log("all tests passed");
 
 //console.log(map.keys(operatorMap).toArray());
