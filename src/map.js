@@ -4,7 +4,7 @@ import { seq, first, isSeq } from "./seq";
 
 import { error } from "./error";
 
-import { into, transform, compose, filter, forEach, foldLeft, cat } from "./transducers";
+import { into, cat } from "./transducers";
 
 import { eq } from "./op";
 
@@ -49,7 +49,7 @@ export const merge = map;
 export function put($map,$k,$v) {
 	var k = first($k);
 	var map = first($map);
-	return map.set(k,isSeq($v) && $v.size != 1 ? $v : first($v));
+	return map.set(k,isSeq($v) && $v.size != 1 ? $v : first($v).valueOf());
 }
 
 export function keys($map) {
@@ -58,6 +58,10 @@ export function keys($map) {
 
 export function contains($map,$k){
 	return first($map).has(first($k));
+}
+
+export function size($map) {
+	return first($map).size;
 }
 
 export function forEachEntry($map,$fn){
@@ -76,7 +80,7 @@ export function entry(...a){
 	var m  = ohamt.empty,
 		k = first(a[0]),
 		v = a[1];
-	return m.set(k,isSeq(v) && v.size != 1 ? v : first(v));
+	return m.set(k,isSeq(v) && v.size != 1 ? v : first(v).valueOf());
 }
 
 export function get($map,$key) {
