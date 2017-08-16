@@ -1,10 +1,10 @@
 import { VNode } from "./vnode";
 
-import { q } from './qname';
+import { q } from "./qname";
 
 import { prettyXML } from "./pretty";
 
-import { forEach, foldLeft, into, range, drop } from "./transducers";
+import { forEach, foldLeft, range, drop } from "./transducers";
 
 import * as multimap from "./multimap";
 
@@ -16,14 +16,14 @@ if(!Object.values){
 	const objUtil = (obj,f) => {
 		const keys = Object.keys(obj);
 		var entries = [];
-	    for (let i = 0; i < keys.length; i++) {
-	        const key = keys[i];
-	        entries.push(f(key));
-	    }
+		for (let i = 0; i < keys.length; i++) {
+			const key = keys[i];
+			entries.push(f(key));
+		}
 		return entries;
-	}
+	};
 	Object.values = function(o){
-		return objUtil(o,o[key]);
+		return objUtil(o, key => o[key]);
 	};
 	Object.entries = function(o){
 		return objUtil(o,key => [key, o[key]]);
@@ -37,6 +37,10 @@ function _inferType(inode){
 	} else if(cc == Object){
 		if(inode.$children) {
 			return inode.$name == "#document" ? 9 : 1;
+		} else if(inode.$value){
+			return 2;
+		} else if(inode.$comment){
+			return 8;
 		} else {
 			return 6;
 		}
@@ -80,19 +84,29 @@ function _elemToString(e){
 // -----------------------
 
 export function ivalue(type, name, value){
+	if(type == 2) {
+		return {$name:name,$value:value};
+	} else if(type == 8) {
+		return {$comment:value};
+	}
 	return value;
 }
 
 export function vnode(inode, parent, depth, indexInParent) {
 	var type = _inferType(inode),
-	    name,
-	    value;
+		name,
+		value;
 	if(type == 1 || type == 9){
 		name = inode.$name;
+	} else if(type == 2) {
+		name = inode.$name;
+		value = inode.$value;
 	} else if (type == 5) {
 		name = parent.keys()[indexInParent];
 	} else if (type == 6) {
 		name = parent.keys()[indexInParent];
+	} else if (type == 8) {
+		value = inode.$comment;
 	} else if(type == 3 || type == 12){
 		value = inode;
 		name = parent.keys()[indexInParent];
@@ -111,14 +125,14 @@ export function vnode(inode, parent, depth, indexInParent) {
 }
 
 export function emptyINode(type, name, attrs, ns) {
-    var inode = type == 5 ? [] : {};
+	var inode = type == 5 ? [] : {};
 	if(type == 1 || type == 9){
-	    inode.$name = name;
-	    inode.$attrs = attrs;
+		inode.$name = name;
+		inode.$attrs = attrs;
 		inode.$ns = ns;
 		inode.$children = [];
 	}
-    return inode;
+	return inode;
 }
 
 export function emptyAttrMap(init){
@@ -159,7 +173,7 @@ export function push(inode,val,type){
 	return inode;
 }
 
-export function set(inode,key,val,type){
+export function set(inode /*,key,val,type*/){
 	// used to restore immutable parents, never modifies mutable
 	return inode;
 }
@@ -218,7 +232,9 @@ export function keys(inode,type){
 export function values(inode,type){
 	type = type || _inferType(inode);
 	if(type == 1 || type == 9) return inode.$children;
+	if (type == 2) return [[inode.$name,inode.$value]];
 	if(type == 6) return Object.values(inode);
+	if (type == 8) return [inode.$comment];
 	return inode;
 }
 
