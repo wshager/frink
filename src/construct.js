@@ -1,6 +1,6 @@
 import { isQName } from "./qname";
 
-import { seq, isSeq } from "./seq";
+import { isSeq } from "./seq";
 
 // faux VNode
 function vnode(inode,type,name,value){
@@ -48,7 +48,7 @@ function _n(type, name, children){
 }
 
 function _a(type, name, val) {
-	return vnode(function (parent, ref) {
+	return vnode(function (parent) {
 		var node = parent.vnode(parent.ivalue(type, name, val));
 		node.parent = parent.attr(name,val);
 		return node;
