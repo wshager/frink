@@ -20,7 +20,11 @@ Singleton.prototype.next = function(){
 };
 
 function _getIter(iterable) {
-    return iterable === undefined ? new Singleton() : isIterable(iterable) ? iterable[Symbol.iterator]() : typeof iterable.next === "function" ? iterable : new Singleton(iterable);
+    return iterable === undefined ? new Singleton() :
+        isIterable(iterable) ? iterable[Symbol.iterator]() :
+            iterable.constructor == Object ? Object.entries(iterable)[Symbol.iterator]() :
+                typeof iterable.next === "function" ? iterable :
+                    new Singleton(iterable);
 }
 
 export function compose(...funcs) {
@@ -28,7 +32,7 @@ export function compose(...funcs) {
     return (v, i, iterable, z) => {
         let reset = false, c = _append;
         for (var j = 0; j < l; j++) {
-            let ret = funcs[j].call(this, v, i, iterable, z);
+            let ret = reset ? z : funcs[j].call(null, v, i, iterable, z);
             if (ret === undefined) {
                 reset = true;
                 continue;
