@@ -1,13 +1,7 @@
 const n = require("../lib/index");
-//const microtime = require("microtime");
-const microtime = {
-    now:function(){
-        return (new Date()).getTime() * 1000;
-    }
-}
+const microtime = require("microtime");
 
-var s = microtime.now();
-handle(n.parse(`<persoon id="243">
+handle(n.parse(`<persoon id="243" test="test">
 <naam>
   <voornaam>Wouter</voornaam>
   <achternaam>Hager</achternaam>
@@ -16,8 +10,9 @@ handle(n.parse(`<persoon id="243">
   <!-- comment -->
   test
 </persoon>`));
-
 function handle(out){
-	var s = n.select(out,"@*",n.string);
-	console.log("s",s)
+	var s = microtime.now();
+	var ret = n.select(out,"@*",n.string);
+	console.log((microtime.now() - s)/1000);
+	console.log("ret",ret);
 }
