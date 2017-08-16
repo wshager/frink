@@ -1,37 +1,41 @@
 import * as inode from "./inode";
 
-import { first } from "./seq";
+import { seq, first } from "./seq";
 
 import { Parser } from "./parser";
+
+import * as array from "./array";
+
+import * as map from "./map";
 
 // TODO move to better location
 // TODO update when loader spec is solid
 // TODO add easy access to a xhr / db module
-import { readFileSync, readdirSync } from 'fs';
+import { readFileSync, readdirSync } from "fs";
 
 export function parseString(str, cb) {
-    var parser = new Parser(inode);
-    return parser.parseString(str, cb);
+	var parser = new Parser(inode);
+	return parser.parseString(str, cb);
 }
 
 export function parse($a){
 	var xml = first($a);
-    var result;
-    parseString(xml,function(err,ret){
-        if(err) console.log(err);
-        result = ret;
-    });
-    return result;
+	var result;
+	parseString(xml,function(err,ret){
+		if(err) console.log(err);
+		result = ret;
+	});
+	return result;
 }
 
 export function doc($file){
-    var file = first($file);
-    return parse(readFileSync(file.toString(),"utf-8"));
+	var file = first($file);
+	return parse(readFileSync(file.toString(),"utf-8"));
 }
 
 export function collection($uri) {
-    var uri = first($uri);
-    return seq(readDirSync(uri).map(file => doc(uri+"/"+file)));
+	var uri = first($uri);
+	return seq(readdirSync(uri).map(file => doc(uri+"/"+file)));
 }
 
 export * from "./doc";
@@ -63,3 +67,5 @@ export * from "./function";
 export * from "./op";
 
 export * from "./validate";
+
+export { array, map};
