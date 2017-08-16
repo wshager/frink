@@ -1,6 +1,6 @@
 import { ensureDoc } from "./doc";
 
-import { compose, into, transform, forEach, filter, cat, distinctCat, foldLeft } from "./transducers";
+import { compose, into, transform, forEach, filter, cat, foldLeft } from "./transducers";
 
 import { seq, isSeq } from "./seq";
 
@@ -15,14 +15,14 @@ export function VNodeIterator(iter, parent, f){
 }
 
 const DONE = {
-    done: true
+	done: true
 };
 
 VNodeIterator.prototype.next = function () {
-    var v = this.iter.next();
+	var v = this.iter.next();
 	this.indexInParent++;
-    if (v.done) return DONE;
-    return { value: this.f(v.value,this.parent,this.indexInParent) };
+	if (v.done) return DONE;
+	return { value: this.f(v.value,this.parent,this.indexInParent) };
 };
 
 export function Step(inode,name,parent,depth,indexInParent){
@@ -39,7 +39,7 @@ Step.prototype.toString = function(){
 	return "Step {depth:"+this.depth+", closes:"+this.parent.name+"}";
 };
 
-export function* docIter(node, reverse = false) {
+export function* docIter(node) {
 	node = ensureDoc.bind(this)(node);
 	yield node;
 	while (node) {
@@ -91,10 +91,10 @@ export function nextNode(node /* VNode */) {
 }
 
 export function* prevNode(node){
-	var depth = node.depth;
+	//var depth = node.depth;
 	while(node){
 		if(!node.size) {
-			depth--;
+			//depth--;
 			node = node.parent;
 			if(!node) break;
 			yield node;
@@ -112,7 +112,7 @@ export function stringify(input){
 		return z += " " + kv[0] + "=\"" + kv[1] + "\"";
 	};
 	const docAttrFunc = (z, kv) => {
-		return z += k == "DOCTYPE" ? "<!" + kv[0] + " " + kv[1] + ">" : "<?" + kv[0] + " " + kv[1] + "?>";
+		return z += kv[0] == "DOCTYPE" ? "<!" + kv[0] + " " + kv[1] + ">" : "<?" + kv[0] + " " + kv[1] + "?>";
 	};
 	for (let node of docIter(input)) {
 		let type = node.type;
@@ -132,7 +132,7 @@ export function stringify(input){
 	return prettyXML(str);
 }
 
-export function firstChild(node, fltr = 0) {
+export function firstChild(node) {
 	// FIXME return root if doc (or something else?)
 	var next = ensureDoc.bind(this)(node);
 	if(node !== next) return next;
@@ -174,12 +174,12 @@ export function lastChild(node){
 
 export function parent(node) {
 	if(!arguments.length) return Axis(parent);
-	return node.parent ? seq(new VNodeIterator([node.parent.inode][Symbol.iterator](),node.parent.parent, vnode)) : seq();
+	return node.parent ? seq(new VNodeIterator([node.parent.inode][Symbol.iterator](),node.parent.parent, node)) : seq();
 }
 
 export function self(node) {
 	if(!arguments.length) return Axis(self);
-	return node ? seq(new VNodeIterator([node.inode][Symbol.iterator](),node.parent, vnode)) : seq();
+	return node ? seq([node]) : seq();
 }
 
 export function iter(node, f) {
@@ -205,9 +205,9 @@ const _isAttribute = n => isVNode(n) && n.type == 2;
 
 const _isText = n => isVNode(n) && n.type == 3;
 
-const _isList = n => isVNode(n) && n.type == 5;
+//const _isList = n => isVNode(n) && n.type == 5;
 
-const _isMap = n => isVNode(n) && n.type == 6;
+//const _isMap = n => isVNode(n) && n.type == 6;
 
 const _isLiteral = n => isVNode(n) && n.type == 12;
 
@@ -221,10 +221,10 @@ function _get(idx, type){
 }
 
 export function cxFilter(iterable,f){
-    return filter(iterable,function(v,k,i){
-        if(!isSeq(v) && !isVNode(v)) v = seq(v);
-        v.__cx = [k,i];
-        return f(v,k,i);
+	return filter(iterable,function(v,k,i){
+		if(!isSeq(v) && !isVNode(v)) v = seq(v);
+		v.__cx = [k,i];
+		return f(v,k,i);
 	});
 }
 
@@ -252,33 +252,27 @@ export function element(qname){
 }
 
 function _attrGet(node,key){
-	var iter;
-	if(key !== undefined){
-		var val =  node.attrs.get(key);
-		if(!val) return [];
-		iter = [[key,val]];
+	if (key !== null) {
+		var val = node.attr(key);
+		if (!val) return [];
+		return [[key, val]];
 	} else {
-		iter = node.attrs;
+		return node.attrEntries();
 	}
-	return new VNodeIterator(iter[Symbol.iterator](), node, (v, parent, index) => node.vnode(node.ivalue(2, v[0], v[1], node.depth + 1), parent, index));
 }
 
 // TODO make axis default, process node here, return seq(VNodeIterator)
 // TODO maybe have Axis receive post-process func/seq
-export function attribute(qname,node){
-	if(arguments.length < 2) return Axis(attribute.bind(null,qname),2);
+export function attribute(qname, node) {
+	if (arguments.length < 2) return Axis(attribute.bind(null, qname), 2);
 	var hasWildcard = /\*/.test(qname);
+	var f = forEach(v => node.vnode(node.ivalue(2, v[0], v[1]), node.parent, node.depth + 1, node.indexInParent));
 	if (hasWildcard) {
 		var regex = new RegExp(qname.replace(/\*/, "(\\w[\\w0-9-_]*)"));
-		return into(_attrGet(node), filter(n => regex.test(n.name)), seq());
+//		console.log(node)
+		f = compose(filter(n => regex.test(n[0])),f);
 	}
-	return seq(_attrGet(node,qname));
-}
-
-// FIXME should this be in document order?
-function _getTextNodes(n) {
-    //if (isSeq(n)) return into(n, compose(filter(_ => _isElement(_)), forEach(_ => _getTextNodes(_), cat)), seq());
-    return ;
+	return into(_attrGet(node, hasWildcard ? null : qname), f, seq());
 }
 
 export function text() {
@@ -306,7 +300,7 @@ function Axis(f,type){
 	};
 }
 export function child(){
-	return Axis(x => seq(x));
+	return Axis(x => x);
 }
 
 const _isSiblingIterator = n => !!n && n.__is_SiblingIterator;
@@ -331,41 +325,41 @@ SiblingIterator.prototype.next = function(){
 };
 
 SiblingIterator.prototype[Symbol.iterator] = function () {
-    return this;
+	return this;
 };
 
 export function followingSibling(node) {
 	if (arguments.length === 0) return Axis(followingSibling);
 	node = ensureDoc.bind(this)(node);
-	return seq(new SiblingIterator(node.inode, node.parent, node.depth, node.indexInParent, next));
+	return seq(new SiblingIterator(node.inode, node.parent, node.depth, node.indexInParent));
 }
 
 // make sure all paths are transducer-funcs
 export function select(node, ...paths) {
-    // usually we have a sequence
-    var cur = node, path;
-    while (paths.length > 0) {
-        path = paths.shift();
-        cur = _selectImpl(cur, path);
-    }
-    return cur;
+	// usually we have a sequence
+	var cur = node, path;
+	while (paths.length > 0) {
+		path = paths.shift();
+		cur = _selectImpl(cur, path);
+	}
+	return cur;
 }
 
 export function selectAttribute(node, ...paths) {
-    // usually we have a sequence
-    var cur = node, path;
-    while (paths.length > 0) {
-        path = paths.shift();
-        cur = _selectImpl(cur, path,true);
-    }
-    return cur;
+	// usually we have a sequence
+	var cur = node, path;
+	while (paths.length > 0) {
+		path = paths.shift();
+		cur = _selectImpl(cur, path,true);
+	}
+	return cur;
 }
 
 function _comparer() {
 	// dirty preserve state on function
-	var f = function (seq, node) {
-		var has = f._checked.has(node.inode);
-		if (!has) f._checked.set(node.inode,true);
+	var f = function (node) {
+		var has = f._checked.has(node);
+		if (!has) f._checked.set(node,true);
 		return !has;
 	};
 	f._checked = new WeakMap();
@@ -385,60 +379,67 @@ export function* select2(node,...paths) {
 		while(next){
 			for(var i=0,l=paths.length,path=paths[i]; i<l; i++){
 				if(!isSeq(path)) path = seq(path);
-			    // process strings (can this be combined?)
-			    path = transform(path,compose(forEach(function(path){
-				    if(typeof path == "string") {
-					    var at = /^@/.test(path);
-					    if(at) path = path.substring(1);
-					    return at ? attribute(path) : element(path);
-				    }
-				    return [path];
-			    }),cat));
-			    var composed = compose.apply(null,path.toArray());
+				// process strings (can this be combined?)
+				path = transform(path,compose(forEach(function(path){
+					if(typeof path == "string") {
+						var at = /^@/.test(path);
+						if(at) path = path.substring(1);
+						return at ? attribute(path) : element(path);
+					}
+					return [path];
+				}),cat));
+				var composed = compose.apply(null,path.toArray());
 				let ret = composed.call(cx,next);
 				if(node) {
 					yield ret;
 				} else {
 					break;
 				}
-		   });
+			}
 		}
 	}
 }
 
 // TODO use direct functions as much as passible, e.g. isVNode instead of node
-function _selectImpl(node, path) {
-	if(!isSeq(path)) path = seq(path);
-	var axis = self(), directAccess;
+function _selectImpl(node, paths) {
+	if (!isSeq(paths)) paths = seq(paths);
+	var axis = self(),directAccess;
 	// process strings (can this be combined?)
-	path = transform(path,compose(forEach(function(path){
-		if(typeof path == "string") {
+	paths = forEach(paths, function (path) {
+		if (typeof path == "string") {
 			var at = /^@/.test(path);
-			if(at) path = path.substring(1);
+			if (at) path = path.substring(1);
 			return at ? attribute(path) : element(path);
 		}
-		return [path];
-	}),cat));
-	var filtered = transform(path,compose(forEach(function(path){
-		if(path.__is_Axis) {
+		return path;
+	});
+	var filtered = transform(paths, compose(forEach(function (path) {
+		if (path.__is_Axis) {
 			axis = path;
-		} else if(path.__is_Accessor){
+		} else if (path.__is_Accessor) {
 			directAccess = path.__index;
 			return path.f;
 		} else {
 			return path;
 		}
-	}),filter(_ => !!_)));
+	}), filter(_ => !!_))).toArray();
 	var bed = ensureDoc.bind(this);
 	var attr = axis.__type == 2;
-	var composed = compose.apply(null,filtered.toArray());
-	const process = n => into(directAccess && !isVNodeIterator(n) && !_isSiblingIterator(n) ? n.get(directAccess) : n, composed, seq());
-	//var nodeFilter = n => _isElement(n) || isVNodeIterator(n) || _isSiblingIterator(n) || _isMap(n) || _isList(n);
-	// if seq, apply axis to seq first
-	// if no axis, expect context function call, so don't process + cat
-	var list = isSeq(node) ? node = transform(node, compose(forEach(n => axis.f(bed(n))), cat)) : axis.f(bed(node));
-	return transform(list,compose(forEach(process), (n,k,i,z) =>
-		!isVNode(n) || attr ? cat(isSeq(n) ? n : [n],k,i,z) : distinctCat(_comparer())(n,k,i,z)));
+	const handleDirectAccess = n => {
+		return directAccess && !isVNodeIterator(n) && !_isSiblingIterator(n) ? n.get(directAccess) : n;
+	};
+	if(!attr) filtered.push(filter(_comparer()));
+	var composed = compose.apply(this, filtered);
+	const process = n => {
+		let list = axis.f(bed(n));
+		list = into(list,forEach(handleDirectAccess),seq());
+		return transform(list,composed);
+	};
+	if(isSeq(node)) {
+		return forEach(node,process);
+	} else {
+		return process(node);
+	}
 }
 
 
