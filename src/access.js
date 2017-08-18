@@ -272,7 +272,7 @@ export function attribute(qname) {
 	} else {
 		f = n => qname === n.name && _isAttribute(n);
 	}
-	return Axis(attrGet,f,2);
+	return Axis(attrGet,filter(f),2);
 }
 
 export function text() {
@@ -353,17 +353,7 @@ export function select(node, ...paths) {
 	while (paths.length > 0) {
 		let path = paths.shift();
 		let f = _selectImpl(path);
-		cur = isSeq(node) ? f(node) : forEach(node,f);
-	}
-	return cur;
-}
-
-export function selectAttribute(node, ...paths) {
-	// usually we have a sequence
-	var cur = node, path;
-	while (paths.length > 0) {
-		path = paths.shift();
-		cur = _selectImpl(cur, path,true);
+		cur = isSeq(cur) ? forEach(cur,f) : f(cur);
 	}
 	return cur;
 }
