@@ -109,8 +109,9 @@ VNode.prototype[Symbol.iterator] = function(){
 };
 
 VNode.prototype.get = function(idx){
-	var val = this.cx.get(this.inode,idx,this.type,this.cache);
-	if(!val) return [];
-	val = val.constructor == Array ? val : [val];
-	return new VNodeIterator(val[Symbol.iterator](), this, this.cx.vnode);
+	var val = this.cx.get(this.inode, idx, this.type, this.cache);
+	if (!val) return [];
+	//val = val.next || val.constructor == Array ? val : [val];
+	//console.log(val[Symbol.iterator]());
+	return new VNodeIterator(val.next ? val : val[Symbol.iterator](), this, this.cx.vnode);
 };
