@@ -5,8 +5,8 @@ const a = require("../lib/access");
 function assertEq(a,b){
 	assert.equal(JSON.stringify(a),JSON.stringify(b));
 }
-var x = n.analyzeString("1 + 1","(\\)[\\+\\*\\-\\?]?)|(=#\\p{N}+#?\\p{N}*=|,)?([\\+\\*\\-\\?\\p{L}\\p{N}\\-_\\.@\\$%/#@\\^:]*)(\\(?)");
-var ret = n.select(x,"*","fn:group",n.string);
+var x = n.analyzeString("1 + 2","(\\)[\\+\\*\\-\\?]?)|(=#\\p{N}+#?\\p{N}*=|,)?([\\+\\*\\-\\?\\p{L}\\p{N}\\-_\\.@\\$%/#@\\^:]*)(\\(?)");
+var ret = n.select(x,"fn:match","fn:group",n.string);
 console.log(ret);
 //var h = n.head(ret);
 //var t = n.tail(ret);

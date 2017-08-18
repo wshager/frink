@@ -12,7 +12,7 @@ handle(n.parse(`<persoon id="243" test="test">
 </persoon>`));
 function handle(out){
 	var s = microtime.now();
-	var ret = n.select(out,"@*",n.string);
+	var ret = n.select(out,"@test");
 	console.log((microtime.now() - s)/1000);
 	console.log("ret",ret);
 }
