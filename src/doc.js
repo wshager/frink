@@ -15,8 +15,7 @@ export function ensureDoc(node){
 		}
 	}
 	if(typeof node.inode === "function") {
-		node.inode(d.bind(cx)());
-		return node;
+		node = node.inode(d.bind(cx)());
 	}
 	return node;
 }
