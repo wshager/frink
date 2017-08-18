@@ -50,10 +50,12 @@ function _inferType(inode){
 	return 3;
 }
 
-function _get(children,idx){
+function* _get(children, idx) {
 	let len = children.length;
-	for(let i = 0; i<len; i++){
-		if((children[i].$name || i + 1) == idx) return children[i];
+	for (let i = 0; i < len; i++) {
+		if ((children[i].$name || i + 1) == idx) {
+			yield children[i];
+		}
 	}
 }
 
