@@ -1151,13 +1151,10 @@ Object.defineProperty(exports, "__esModule", {
 exports.last = exports.position = exports.isVNode = undefined;
 exports.VNodeIterator = VNodeIterator;
 exports.Step = Step;
-exports.docIter = docIter;
 exports.nextNode = nextNode;
-exports.prevNode = prevNode;
 exports.stringify = stringify;
 exports.firstChild = firstChild;
 exports.nextSibling = nextSibling;
-exports.children = children;
 exports.getDoc = getDoc;
 exports.lastChild = lastChild;
 exports.parent = parent;
@@ -1171,7 +1168,6 @@ exports.node = node;
 exports.child = child;
 exports.followingSibling = followingSibling;
 exports.select = select;
-exports.selectAttribute = selectAttribute;
 exports.isEmptyNode = isEmptyNode;
 exports.name = name;
 
@@ -1182,8 +1178,6 @@ var _transducers = require("./transducers");
 var _seq = require("./seq");
 
 var _pretty = require("./pretty");
-
-var _marked = [docIter, prevNode, children].map(regeneratorRuntime.mark);
 
 function VNodeIterator(iter, parent, f) {
 	this.iter = iter;
@@ -1218,44 +1212,16 @@ Step.prototype.toString = function () {
 	return "Step {depth:" + this.depth + ", closes:" + this.parent.name + "}";
 };
 
-function docIter(node) {
-	var reverse = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : false;
-	return regeneratorRuntime.wrap(function docIter$(_context) {
-		while (1) {
-			switch (_context.prev = _context.next) {
-				case 0:
-					node = _doc.ensureDoc.bind(this)(node);
-					_context.next = 3;
-					return node;
-
-				case 3:
-					if (!node) {
-						_context.next = 10;
-						break;
-					}
-
-					node = nextNode(node);
-
-					if (!node) {
-						_context.next = 8;
-						break;
-					}
-
-					_context.next = 8;
-					return node;
-
-				case 8:
-					_context.next = 3;
-					break;
-
-				case 10:
-				case "end":
-					return _context.stop();
-			}
-		}
-	}, _marked[0], this);
+/*
+export function* docIter(node) {
+	node = ensureDoc.bind(this)(node);
+	yield node;
+	while (node) {
+		node = nextNode(node);
+		if(node) yield node;
+	}
 }
-
+*/
 function nextNode(node /* VNode */) {
 	var type = node.type,
 	    inode = node.inode,
@@ -1288,7 +1254,7 @@ function nextNode(node /* VNode */) {
 		} else {
 			// return the next child
 			inode = parent.next(node);
-			if (inode) {
+			if (inode !== undefined) {
 				node = parent.vnode(inode, parent, depth, indexInParent);
 				//console.log("found next", node.name, depth, indexInParent);
 				return node;
@@ -1297,68 +1263,30 @@ function nextNode(node /* VNode */) {
 		}
 	}
 }
-
-function prevNode(node) {
-	var depth;
-	return regeneratorRuntime.wrap(function prevNode$(_context2) {
-		while (1) {
-			switch (_context2.prev = _context2.next) {
-				case 0:
-					depth = node.depth;
-
-				case 1:
-					if (!node) {
-						_context2.next = 16;
-						break;
-					}
-
-					if (node.size) {
-						_context2.next = 11;
-						break;
-					}
-
-					depth--;
-					node = node.parent;
-
-					if (node) {
-						_context2.next = 7;
-						break;
-					}
-
-					return _context2.abrupt("break", 16);
-
-				case 7:
-					_context2.next = 9;
-					return node;
-
-				case 9:
-					_context2.next = 14;
-					break;
-
-				case 11:
-					if (!("indexInParent" in node)) node.indexInParent = node.parent.size;
-					node.indexInParent--;
-					node = node.getByIndex(node.indexInParent);
-
-				case 14:
-					_context2.next = 1;
-					break;
-
-				case 16:
-				case "end":
-					return _context2.stop();
-			}
+/*
+export function* prevNode(node){
+	//var depth = node.depth;
+	while(node){
+		if(!node.size) {
+			//depth--;
+			node = node.parent;
+			if(!node) break;
+			yield node;
+		} else{
+			if(!("indexInParent" in node)) node.indexInParent = node.parent.size;
+			node.indexInParent--;
+			node = node.getByIndex(node.indexInParent);
 		}
-	}, _marked[1], this);
+	}
 }
-
+*/
 function stringify(input) {
 	var str = "";
-	var attrFunc = function attrFunc(z, v, k) {
-		return z += " " + k + "=\"" + v + "\"";
+	var attrFunc = function attrFunc(z, kv) {
+		return z += " " + kv[0] + "=\"" + kv[1] + "\"";
 	};
-	var docAttrFunc = function docAttrFunc(z, v, k) {
-		return z += k == "DOCTYPE" ? "<!" + k + " " + v + ">" : "<?" + k + " " + v + "?>";
+	var docAttrFunc = function docAttrFunc(z, kv) {
+		return z += kv[0] == "DOCTYPE" ? "<!" + kv[0] + " " + kv[1] + ">" : "<?" + kv[0] + " " + kv[1] + "?>";
 	};
 	var _iteratorNormalCompletion = true;
 	var _didIteratorError = false;
@@ -1371,15 +1299,15 @@ function stringify(input) {
 			var type = _node.type;
 			if (type == 1) {
 				str += "<" + _node.name;
-				str = _node.attrs.reduce(attrFunc, str);
+				str = (0, _transducers.foldLeft)(_node.attrEntries(), str, attrFunc);
 				if (!_node.count()) str += "/";
 				str += ">";
 			} else if (type == 3) {
 				str += _node.toString();
 			} else if (type == 9) {
-				str += _node.attrs.reduce(docAttrFunc, str);
+				str += (0, _transducers.foldLeft)(_node.attrEntries(), str, docAttrFunc);
 			} else if (type == 17) {
-				if (type == 1) str += "</" + _node.name + ">";
+				str += "</" + _node.name + ">";
 			}
 		}
 	} catch (err) {
@@ -1401,8 +1329,6 @@ function stringify(input) {
 }
 
 function firstChild(node) {
-	var fltr = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
-
 	// FIXME return root if doc (or something else?)
 	var next = _doc.ensureDoc.bind(this)(node);
 	if (node !== next) return next;
@@ -1420,84 +1346,15 @@ function nextSibling(node) {
 	if (next) return parent.vnode(next, parent, node.depth, node.indexInParent + 1);
 }
 
-function children(node) {
-	var i, _iteratorNormalCompletion2, _didIteratorError2, _iteratorError2, _iterator2, _step2, c;
-
-	return regeneratorRuntime.wrap(function children$(_context3) {
-		while (1) {
-			switch (_context3.prev = _context3.next) {
-				case 0:
-					node = _doc.ensureDoc.bind(this)(node);
-					i = 0;
-					_iteratorNormalCompletion2 = true;
-					_didIteratorError2 = false;
-					_iteratorError2 = undefined;
-					_context3.prev = 5;
-					_iterator2 = node.values()[Symbol.iterator]();
-
-				case 7:
-					if (_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done) {
-						_context3.next = 15;
-						break;
-					}
-
-					c = _step2.value;
-
-					if (!c) {
-						_context3.next = 12;
-						break;
-					}
-
-					_context3.next = 12;
-					return node.vnode(c, node, node.depth + 1, i++);
-
-				case 12:
-					_iteratorNormalCompletion2 = true;
-					_context3.next = 7;
-					break;
-
-				case 15:
-					_context3.next = 21;
-					break;
-
-				case 17:
-					_context3.prev = 17;
-					_context3.t0 = _context3["catch"](5);
-					_didIteratorError2 = true;
-					_iteratorError2 = _context3.t0;
-
-				case 21:
-					_context3.prev = 21;
-					_context3.prev = 22;
-
-					if (!_iteratorNormalCompletion2 && _iterator2.return) {
-						_iterator2.return();
-					}
-
-				case 24:
-					_context3.prev = 24;
-
-					if (!_didIteratorError2) {
-						_context3.next = 27;
-						break;
-					}
-
-					throw _iteratorError2;
-
-				case 27:
-					return _context3.finish(24);
-
-				case 28:
-					return _context3.finish(21);
-
-				case 29:
-				case "end":
-					return _context3.stop();
-			}
-		}
-	}, _marked[2], this, [[5, 17, 21, 29], [22,, 24, 28]]);
+/*
+export function* children(node){
+	node = ensureDoc.bind(this)(node);
+	var i = 0;
+	for(var c of node.values()){
+		if(c) yield node.vnode(c, node, node.depth + 1, i++);
+	}
 }
-
+*/
 function getDoc(node) {
 	node = _doc.ensureDoc.bind(this)(node);
 	do {
@@ -1514,12 +1371,27 @@ function lastChild(node) {
 
 function parent(node) {
 	if (!arguments.length) return Axis(parent);
-	return node.parent ? (0, _seq.seq)(new VNodeIterator([node.parent.inode][Symbol.iterator](), node.parent.parent, vnode)) : (0, _seq.seq)();
+	return node.parent ? (0, _seq.seq)(new VNodeIterator([node.parent.inode][Symbol.iterator](), node.parent.parent, node)) : (0, _seq.seq)();
 }
 
-function self(node) {
-	if (!arguments.length) return Axis(self);
-	return node ? (0, _seq.seq)(new VNodeIterator([node.inode][Symbol.iterator](), node.parent, vnode)) : (0, _seq.seq)();
+function Singleton(val) {
+	this.val = val;
+}
+
+Singleton.prototype.next = function () {
+	if (this.val !== undefined) {
+		var val = this.val;
+		this.val = undefined;
+		return { value: val };
+	}
+	return { done: true };
+};
+
+function self(f) {
+	if (f.name !== "transForEach") f = (0, _transducers.forEach)(f);
+	return Axis(function (node) {
+		return new Singleton(node);
+	}, f, 3);
 }
 
 function iter(node, f) {
@@ -1556,28 +1428,13 @@ var _isText = function _isText(n) {
 	return isVNode(n) && n.type == 3;
 };
 
-var _isList = function _isList(n) {
-	return isVNode(n) && n.type == 5;
-};
+//const _isList = n => isVNode(n) && n.type == 5;
 
-var _isMap = function _isMap(n) {
-	return isVNode(n) && n.type == 6;
-};
+//const _isMap = n => isVNode(n) && n.type == 6;
 
 var _isLiteral = function _isLiteral(n) {
 	return isVNode(n) && n.type == 12;
 };
-
-function _get(idx, type) {
-	return {
-		__is_Accessor: true,
-		f: (0, _transducers.filter)(function (n) {
-			return n.name === idx;
-		}),
-		__type: type,
-		__index: idx
-	};
-}
 
 function cxFilter(iterable, f) {
 	return (0, _transducers.filter)(iterable, function (v, k, i) {
@@ -1596,70 +1453,86 @@ var last = exports.last = function last(n) {
 };
 
 // TODO convert qname to integer when parent is array
-function _nodeTest(qname) {
+function _nodeTest(type, qname) {
+	var f;
 	if (qname === undefined) {
-		return (0, _transducers.filter)(_isElement);
+		f = type;
 	} else {
 		var hasWildcard = /\*/.test(qname);
 		if (hasWildcard) {
 			var regex = new RegExp(qname.replace(/\*/, "(\\w[\\w0-9-_]*)"));
-			return (0, _seq.seq)((0, _transducers.filter)(_isElement), (0, _transducers.filter)(function (n) {
-				return regex.test(n.name);
-			}));
+			f = function f(n) {
+				return type(n) && regex.test(n.name);
+			};
 		} else {
-			return (0, _seq.seq)(_get(qname, 1), (0, _transducers.filter)(_isElement));
+			//return _seq.seq(_get(qname, 1), _transducers.filter(_isElement));
+			f = function f(n) {
+				return n.name === qname && type(n);
+			};
+			f.__Accessor = qname;
 		}
 	}
+	f.__is_NodeTypeTest = true;
+	return f;
 }
 
 function element(qname) {
-	return (0, _seq.seq)(child(), _nodeTest(qname));
+	return _nodeTest(_isElement, qname);
 }
 
-function _attrGet(node, key) {
-	var iter;
-	if (key !== undefined) {
-		var val = node.attrs.get(key);
+function _attrGet(key, node) {
+	var entries;
+	if (key !== null) {
+		var val = node.attr(key);
 		if (!val) return [];
-		iter = [[key, val]];
+		entries = [[key, val]];
 	} else {
-		iter = node.attrs;
+		entries = node.attrEntries();
 	}
-	return new VNodeIterator(iter[Symbol.iterator](), node, function (v, parent, index) {
-		return node.vnode(node.ivalue(2, v[0], v[1], node.depth + 1), parent, index);
+	return (0, _transducers.forEach)(entries, function (kv) {
+		return node.vnode(node.ivalue(2, kv[0], kv[1]), node.parent, node.depth + 1, node.indexInParent);
 	});
 }
 
 // TODO make axis default, process node here, return seq(VNodeIterator)
 // TODO maybe have Axis receive post-process func/seq
-function attribute(qname, node) {
-	if (arguments.length < 2) return Axis(attribute.bind(null, qname), 2);
+function attribute(qname) {
 	var hasWildcard = /\*/.test(qname);
+	// getter of attributes / pre-processor of attributes
+	// TODO iterator!
+	// filter of attributes
+	var f;
 	if (hasWildcard) {
 		var regex = new RegExp(qname.replace(/\*/, "(\\w[\\w0-9-_]*)"));
-		return (0, _transducers.into)(_attrGet(node), (0, _transducers.filter)(function (n) {
-			return regex.test(n.name);
-		}), (0, _seq.seq)());
+		//	attrEntries returns tuples
+		f = function f(n) {
+			return _isAttribute(n) && regex.test(n.name);
+		};
+		// no direct access
+		qname = null;
+	} else {
+		// name check provided by directAccess
+		f = function f(n) {
+			return _isAttribute(n);
+		};
 	}
-	return (0, _seq.seq)(_attrGet(node, qname));
-}
-
-// FIXME should this be in document order?
-function _getTextNodes(n) {
-	//if (isSeq(n)) return into(n, compose(filter(_ => _isElement(_)), forEach(_ => _getTextNodes(_), cat)), seq());
-	return;
+	return Axis(_attrGet.bind(null, qname), (0, _transducers.filter)(f), 2);
 }
 
 function text() {
-	return function (n) {
+	var f = function f(n) {
 		return _isText(n) && !!n.value;
 	};
+	f.__is_NodeTypeTest = true;
+	return f;
 }
 
 function node() {
-	return (0, _transducers.filter)(function (n) {
-		return _isElement(n) || _isText(n);
-	});
+	var f = function f(n) {
+		return _isElement(n) || _isText(n) && !!n.value;
+	};
+	f.__is_NodeTypeTest = true;
+	return f;
 }
 
 // TODO create axis functions that return a function
@@ -1671,17 +1544,25 @@ function node() {
 // if it is a seq, apply the function iteratively:
 // we don't want to filter all elements from a seq, we want to retrieve all elements from elements in a seq
 // final edge case: when node is of type array, and name is not an integer: filter
-function Axis(f, type) {
+function Axis(g, f, type) {
 	return {
 		__is_Axis: true,
 		__type: type || 1,
-		f: f
+		f: f,
+		g: g
 	};
 }
-function child() {
-	return Axis(function (x) {
-		return (0, _seq.seq)(x);
-	});
+function child(f) {
+	if (f.__is_NodeTypeTest) {
+		// this means it's a predicate, and the actual function should become a filter
+		if (f.__Accessor) {
+			// TODO this means we can try direct access on a node
+		}
+		f = (0, _transducers.filter)(f);
+	}
+	return Axis(function (node) {
+		return node[Symbol.iterator]();
+	}, f);
 }
 
 var _isSiblingIterator = function _isSiblingIterator(n) {
@@ -1716,94 +1597,146 @@ SiblingIterator.prototype[Symbol.iterator] = function () {
 function followingSibling(node) {
 	if (arguments.length === 0) return Axis(followingSibling);
 	node = _doc.ensureDoc.bind(this)(node);
-	return (0, _seq.seq)(new SiblingIterator(node.inode, node.parent, node.depth, node.indexInParent, next));
+	return (0, _seq.seq)(new SiblingIterator(node.inode, node.parent, node.depth, node.indexInParent));
+}
+
+/*function* _combinedIter(iters, f) {
+	for(var x of iters) {
+		var next;
+		// expect everything to be a faux iterator
+		while(next = f(x).next(), !next.done) {
+			yield next.value;
+		}
+	}
+}*/
+
+function CombinedIterator(iters, f) {
+	this.iter = f(iters.shift());
+	this.iters = iters;
+	this.f = f;
+	this.index = 0;
+}
+
+CombinedIterator.prototype.next = function () {
+	if (!this.iter) return DONE;
+	var v = this.iter.next();
+	if (!v || v.done) {
+		if (this.iters.length) {
+			this.iter = this.f(this.iters.shift());
+			return this.next();
+		}
+		return DONE;
+	}
+	return v;
+};
+
+function _combinedIter(iters, f) {
+	return new CombinedIterator(iters, f);
 }
 
 // make sure all paths are transducer-funcs
 function select(node) {
 	// usually we have a sequence
-	var cur = node,
-	    path;
+	// TODO make lazy:
+	// - combine iterators for each node seq to one iterator
+	// - bind the composed function to the combined iterator
+	// - combine the combined iterator
+	var cur = node;
+	var bed = _doc.ensureDoc.bind(this);
 
 	for (var _len = arguments.length, paths = Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++) {
 		paths[_key - 1] = arguments[_key];
 	}
 
+	var _loop = function _loop() {
+		var path = paths.shift();
+		path = _axify(path);
+		// TODO skip self
+		skipCompare = path.__type == 2 || path.__type == 3;
+		f = path.f;
+		// rebind step function to the context
+
+		bound = function bound(n) {
+			return path.g(bed(n));
+		};
+
+		if (!skipCompare) f = (0, _transducers.compose)(f, (0, _transducers.filter)(_comparer()));
+		x = (0, _seq.isSeq)(cur) ? _combinedIter(cur.toArray(), bound) : bound(cur);
+
+		cur = (0, _transducers.into)(x, f, (0, _seq.seq)());
+	};
+
 	while (paths.length > 0) {
-		path = paths.shift();
-		cur = _selectImpl(cur, path);
-	}
-	return cur;
-}
+		var skipCompare;
+		var f;
+		var bound;
+		var x;
 
-function selectAttribute(node) {
-	// usually we have a sequence
-	var cur = node,
-	    path;
-
-	for (var _len2 = arguments.length, paths = Array(_len2 > 1 ? _len2 - 1 : 0), _key2 = 1; _key2 < _len2; _key2++) {
-		paths[_key2 - 1] = arguments[_key2];
-	}
-
-	while (paths.length > 0) {
-		path = paths.shift();
-		cur = _selectImpl(cur, path, true);
+		_loop();
 	}
 	return cur;
 }
 
 function _comparer() {
 	// dirty preserve state on function
-	var f = function f(seq, node) {
-		var has = f._checked.has(node.inode);
-		if (!has) f._checked.set(node.inode, true);
+	var f = function f(node) {
+		var has = f._checked.has(node);
+		if (!has) f._checked.set(node, true);
 		return !has;
 	};
 	f._checked = new WeakMap();
 	return f;
 }
 
-// TODO use direct functions as much as passible, e.g. isVNode instead of node
-function _selectImpl(node, path) {
-	if (!(0, _seq.isSeq)(path)) path = (0, _seq.seq)(path);
-	var axis = self(),
-	    directAccess;
-	// process strings (can this be combined?)
-	path = (0, _transducers.transform)(path, (0, _transducers.compose)((0, _transducers.forEach)(function (path) {
+/*
+export function* select2(node,...paths) {
+	// TODO
+	// 1: node (or seq) is iterable, so get first as current context
+	// 2: each function is a filter (either a node is returned or the process stops)
+	// 3: pass each single result to a filter function, yielding a result for each
+	var bed = ensureDoc.bind(this);
+	var next = bed(node);
+	var cx = next;
+	if(next) {
+		next = nextNode(next);
+		while(next){
+			for(var i=0,l=paths.length,path=paths[i]; i<l; i++){
+				if(!isSeq(path)) path = seq(path);
+				// process strings (can this be combined?)
+				path = transform(path,compose(forEach(function(path){
+					if(typeof path == "string") {
+						var at = /^@/.test(path);
+						if(at) path = path.substring(1);
+						return at ? attribute(path) : element(path);
+					}
+					return [path];
+				}),cat));
+				var composed = compose.apply(null,path.toArray());
+				let ret = composed.call(cx,next);
+				if(node) {
+					yield ret;
+				} else {
+					break;
+				}
+			}
+		}
+	}
+}
+*/
+function _axify(path) {
+	if (!path.__is_Axis) {
+		// process strings (can this be combined?)
 		if (typeof path == "string") {
 			var at = /^@/.test(path);
 			if (at) path = path.substring(1);
-			return at ? attribute(path) : element(path);
-		}
-		return [path];
-	}), _transducers.cat));
-	var filtered = (0, _transducers.transform)(path, (0, _transducers.compose)((0, _transducers.forEach)(function (path) {
-		if (path.__is_Axis) {
-			axis = path;
-		} else if (path.__is_Accessor) {
-			directAccess = path.__index;
-			return path.f;
+			return at ? attribute(path) : child(element(path));
+		} else if (typeof path == "function") {
+			return self(path);
 		} else {
-			return path;
+			// TODO throw error
 		}
-	}), (0, _transducers.filter)(function (_) {
-		return !!_;
-	})));
-	var bed = _doc.ensureDoc.bind(this);
-	var attr = axis.__type == 2;
-	var composed = _transducers.compose.apply(null, filtered.toArray());
-	var process = function process(n) {
-		return (0, _transducers.into)(directAccess && !isVNodeIterator(n) && !_isSiblingIterator(n) ? n.get(directAccess) : n, composed, (0, _seq.seq)());
-	};
-	//var nodeFilter = n => _isElement(n) || isVNodeIterator(n) || _isSiblingIterator(n) || _isMap(n) || _isList(n);
-	// if seq, apply axis to seq first
-	// if no axis, expect context function call, so don't process + cat
-	var list = (0, _seq.isSeq)(node) ? node = (0, _transducers.transform)(node, (0, _transducers.compose)((0, _transducers.forEach)(function (n) {
-		return axis.f(bed(n));
-	}), _transducers.cat)) : axis.f(bed(node));
-	return (0, _transducers.transform)(list, (0, _transducers.compose)((0, _transducers.forEach)(process), function (n, k, i, z) {
-		return !isVNode(n) || attr ? (0, _transducers.cat)((0, _seq.isSeq)(n) ? n : [n], k, i, z) : (0, _transducers.distinctCat)(_comparer())(n, k, i, z);
-	}));
+	}
+	return path;
 }
 
 function isEmptyNode(node) {
@@ -1819,7 +1752,7 @@ function name($a) {
 	return $a.name;
 }
 
-},{"./doc":3,"./pretty":11,"./seq":13,"./transducers":14}],3:[function(require,module,exports){
+},{"./doc":3,"./pretty":10,"./seq":12,"./transducers":13}],3:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1836,14 +1769,20 @@ function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj;
 
 function ensureDoc(node) {
 	if (!node) return;
-	var cx = this.vnode ? this : inode;
+	var cx = this && this.vnode ? this : inode;
 	if (!node.inode) {
-		var root = cx.first(node);
-		return cx.vnode(root, cx.vnode(node), 1, 0);
+		if (cx.getType(node) == 9) {
+			var root = cx.first(node);
+			return cx.vnode(root, cx.vnode(node), 1, 0);
+		} else {
+			var doc = d.bind(cx)();
+			var _root = cx.vnode(node, doc, 1, 0);
+			doc = doc.push(_root);
+			return _root;
+		}
 	}
 	if (typeof node.inode === "function") {
-		node.inode(d.bind(cx)());
-		return node;
+		node = node.inode(d.bind(cx)());
 	}
 	return node;
 }
@@ -1861,10 +1800,10 @@ function d() {
 	if (doctype) {
 		attrs.DOCTYPE = doctype;
 	}
-	return cx.vnode(cx.emptyINode(9, "#document", 0, cx.emptyAttrMap(attrs)), 9, "#document");
+	return cx.vnode(cx.emptyINode(9, "#document", 0, cx.emptyAttrMap(attrs)));
 }
 
-},{"./inode":8}],4:[function(require,module,exports){
+},{"./inode":7}],4:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2118,51 +2057,15 @@ function matchAncestorOrSelf(elem, selector) {
     }
 }
 
-},{"./access":2,"./seq":13,"./transducers":14}],5:[function(require,module,exports){
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-    value: true
-});
-var entries = exports.entries = regeneratorRuntime.mark(function entries(obj) {
-    var keys, i, key;
-    return regeneratorRuntime.wrap(function entries$(_context) {
-        while (1) {
-            switch (_context.prev = _context.next) {
-                case 0:
-                    keys = Object.keys(obj);
-                    i = 0;
-
-                case 2:
-                    if (!(i < keys.length)) {
-                        _context.next = 9;
-                        break;
-                    }
-
-                    key = keys[i];
-                    _context.next = 6;
-                    return [key, obj[key]];
-
-                case 6:
-                    i++;
-                    _context.next = 2;
-                    break;
-
-                case 9:
-                case "end":
-                    return _context.stop();
-            }
-        }
-    }, entries, this);
-});
-
-},{}],6:[function(require,module,exports){
+},{"./access":2,"./seq":12,"./transducers":13}],5:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
 });
 exports.process = process;
+
+var _doc = require("./doc");
 
 var _access = require("./access");
 
@@ -2177,9 +2080,10 @@ function process(node) {
 			}
 		}
 	});
+	return _doc.ensureDoc.bind(this)(node);
 }
 
-},{"./access":2}],7:[function(require,module,exports){
+},{"./access":2,"./doc":3}],6:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2193,6 +2097,11 @@ exports.keys = keys;
 exports.cached = cached;
 exports.first = first;
 exports.get = get;
+exports.getType = getType;
+exports.emptyINode = emptyINode;
+exports.emptyAttrMap = emptyAttrMap;
+exports.push = push;
+exports.getAttribute = getAttribute;
 
 var _vnode = require("./vnode");
 
@@ -2272,17 +2181,34 @@ function get(inode, idx, type) {
 	return inode[idx];
 }
 
-},{"./iform":7,"./transducers":14,"./vnode":16}],8:[function(require,module,exports){
+function getType(inode) {
+	// probably only used for empty root
+	return 9;
+}
+
+function emptyINode(type, name, depth, attrs) {}
+
+function emptyAttrMap() {
+	// probably only used for empty root
+}
+
+function push() {}
+
+function getAttribute(inode) {
+	return inode.attributes[inode];
+}
+
+},{"./iform":6,"./transducers":13,"./vnode":15}],7:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
 });
+exports.getType = undefined;
 exports.ivalue = ivalue;
 exports.vnode = vnode;
 exports.emptyINode = emptyINode;
 exports.emptyAttrMap = emptyAttrMap;
-exports.get = get;
 exports.next = next;
 exports.push = push;
 exports.set = set;
@@ -2292,6 +2218,7 @@ exports.keys = keys;
 exports.values = values;
 exports.finalize = finalize;
 exports.setAttribute = setAttribute;
+exports.getAttribute = getAttribute;
 exports.count = count;
 exports.first = first;
 exports.last = last;
@@ -2311,10 +2238,6 @@ var _multimap = require("./multimap");
 
 var multimap = _interopRequireWildcard(_multimap);
 
-var _entries = require("./entries");
-
-var entries = _interopRequireWildcard(_entries);
-
 var _inode = require("./inode");
 
 var cx = _interopRequireWildcard(_inode);
@@ -2322,14 +2245,42 @@ var cx = _interopRequireWildcard(_inode);
 function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
 
 // helpers ---------------
+if (!Object.values) {
+	var objUtil = function objUtil(obj, f) {
+		var keys = Object.keys(obj);
+		var entries = [];
+		for (var i = 0; i < keys.length; i++) {
+			var key = keys[i];
+			entries.push(f(key));
+		}
+		return entries;
+	};
+	Object.values = function (o) {
+		return objUtil(o, function (key) {
+			return o[key];
+		});
+	};
+	Object.entries = function (o) {
+		return objUtil(o, function (key) {
+			return [key, o[key]];
+		});
+	};
+}
+
+// import self!
 
 function _inferType(inode) {
+	if (inode === null) return 12;
 	var cc = inode.constructor;
 	if (cc == Array) {
 		return 6;
 	} else if (cc == Object) {
 		if (inode.$children) {
 			return inode.$name == "#document" ? 9 : 1;
+		} else if (inode.$value) {
+			return 2;
+		} else if (inode.$comment) {
+			return 8;
 		} else {
 			return 6;
 		}
@@ -2339,18 +2290,18 @@ function _inferType(inode) {
 	return 3;
 }
 
-// import self!
-
-
-function _get(children, idx) {
-	var len = children.length;
-	for (var i = 0; i < len; i++) {
-		if ((children[i].$name || i + 1) == idx) return children[i];
+/*
+function* _get(children, idx) {
+	let len = children.length;
+	for (let i = 0; i < len; i++) {
+		if ((children[i].$name || i + 1) == idx) {
+			yield children[i];
+		}
 	}
 }
-
+*/
 function _last(a) {
-	return a[a.length - 1];
+	return (0, _transducers.drop)(a, a.length - 1);
 }
 
 function _elemToString(e) {
@@ -2360,7 +2311,7 @@ function _elemToString(e) {
 	var str = "<" + e.$name;
 	var ns = e.$ns;
 	if (ns) str += " xmlns" + (ns.prefix ? ":" + ns.prefix : "") + "=\"" + ns.uri + "\"";
-	str = (0, _transducers.foldLeft)(entries.default(e.$attrs), str, attrFunc);
+	str = (0, _transducers.foldLeft)(Object.entries(e.$attrs), str, attrFunc);
 	if (e.$children.length > 0) {
 		str += ">";
 		var _iteratorNormalCompletion = true;
@@ -2371,7 +2322,7 @@ function _elemToString(e) {
 			for (var _iterator = e.$children[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
 				var c = _step.value;
 
-				str += stringify(c, false);
+				str += stringify(c);
 			}
 		} catch (err) {
 			_didIteratorError = true;
@@ -2398,34 +2349,45 @@ function _elemToString(e) {
 // -----------------------
 
 function ivalue(type, name, value) {
+	if (type == 2) {
+		return { $name: name, $value: value };
+	} else if (type == 8) {
+		return { $comment: value };
+	}
 	return value;
 }
 
 function vnode(inode, parent, depth, indexInParent) {
 	var type = _inferType(inode),
 	    name,
-	    value,
-	    cc = inode.constructor;
+	    value;
 	if (type == 1 || type == 9) {
 		name = inode.$name;
+	} else if (type == 2) {
+		name = inode.$name;
+		value = inode.$value;
 	} else if (type == 5) {
 		name = parent.keys()[indexInParent];
 	} else if (type == 6) {
 		name = parent.keys()[indexInParent];
+	} else if (type == 8) {
+		value = inode.$comment;
 	} else if (type == 3 || type == 12) {
 		value = inode;
 		name = parent.keys()[indexInParent];
 	}
 	// return vnode
-	return new _vnode.VNode(cx, inode, type, inode.$ns ? (0, _qname.q)(inode.$ns.uri, name) : name, value, parent, depth, indexInParent);
+	return new _vnode.VNode(cx, inode, type, inode && inode.$ns ? (0, _qname.q)(inode.$ns.uri, name) : name, value, parent, depth, indexInParent);
 }
 
 function emptyINode(type, name, attrs, ns) {
 	var inode = type == 5 ? [] : {};
-	if (type == 1 || type == 9) inode.$name = name;
-	inode.$attrs = attrs;
-	inode.$ns = ns;
-	inode.$children = [];
+	if (type == 1 || type == 9) {
+		inode.$name = name;
+		inode.$attrs = attrs;
+		inode.$ns = ns;
+		inode.$children = [];
+	}
 	return inode;
 }
 
@@ -2433,15 +2395,16 @@ function emptyAttrMap(init) {
 	return init || {};
 }
 
-function get(inode, idx, type, cache) {
+/*
+export function get(inode,idx,type,cache){
 	type = type || _inferType(inode);
-	if (type == 1 || type == 9) {
-		if (cache) return cache[idx];
-		return _get(inode.$children, idx);
+	if(type == 1 || type == 9){
+		if(cache) return cache[idx];
+		return _get(inode.$children,idx);
 	}
 	return inode[idx];
 }
-
+*/
 function next(inode, node, type) {
 	type = type || _inferType(inode);
 	var idx = node.indexInParent;
@@ -2450,8 +2413,8 @@ function next(inode, node, type) {
 	}
 	if (type == 5) return inode[idx + 1];
 	if (type == 6) {
-		var values = Object.values(inode);
-		return values[idx + 1];
+		var vals = Object.values(inode);
+		return vals[idx + 1];
 	}
 }
 
@@ -2467,7 +2430,7 @@ function push(inode, val, type) {
 	return inode;
 }
 
-function set(inode, key, val, type) {
+function set(inode /*,key,val,type*/) {
 	// used to restore immutable parents, never modifies mutable
 	return inode;
 }
@@ -2530,7 +2493,9 @@ function keys(inode, type) {
 function values(inode, type) {
 	type = type || _inferType(inode);
 	if (type == 1 || type == 9) return inode.$children;
+	if (type == 2) return [[inode.$name, inode.$value]];
 	if (type == 6) return Object.values(inode);
+	if (type == 8) return [inode.$comment];
 	return inode;
 }
 
@@ -2541,6 +2506,10 @@ function finalize(inode) {
 function setAttribute(inode, key, val) {
 	if (inode.$attrs) inode.$attrs[key] = val;
 	return inode;
+}
+
+function getAttribute(inode, key) {
+	if (inode.$attrs) return inode.$attrs[key];
 }
 
 function count(inode, type) {
@@ -2576,7 +2545,7 @@ function last(inode, type) {
 }
 
 function attrEntries(inode) {
-	if (inode.$attrs) return entries.default(inode.$attrs);
+	if (inode.$attrs) return Object.entries(inode.$attrs);
 	return [];
 }
 
@@ -2602,30 +2571,44 @@ function modify(inode, node, ref, type) {
 
 function stringify(inode, type) {
 	var root = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : true;
+	var key = arguments[3];
 
 	var str = "";
 	type = type || _inferType(inode);
 	if (type == 1 || type == 9) {
 		str += _elemToString(inode);
 	} else if (type == 5) {
-		str += "<json:array>";
-		str += (0, _transducers.forEach)(inode, function (c) {
-			return stringify(c, false, json);
+		var val = (0, _transducers.forEach)(inode, function (c) {
+			return stringify(c);
 		}).join("");
-		str += "</json:array>";
+		if (key) {
+			str += "<" + key + " json:type=\"array\"" + (val ? ">" + val + "</" + key + ">" : "/>");
+		} else {
+			str += "<json:array" + (val ? ">" + val + "</json:array>" : "/>");
+		}
 	} else if (type == 6) {
-		str += "<json:map>";
-		str += (0, _transducers.forEach)(entries.default(inode), function (c) {
-			return '"' + c[0] + '":' + stringify(c[1], false, json);
+		var _val = (0, _transducers.forEach)(Object.entries(inode), function (c) {
+			return stringify(c[1], null, false, c[0]);
 		}).join("");
-		str += "</json:map>";
+		if (key) {
+			str += "<" + key + " json:type=\"map\"" + (_val ? ">" + _val + "</" + key + ">" : "/>");
+		} else {
+			str += "<json:map" + (_val ? ">" + _val + "</json:map>" : "/>");
+		}
 	} else {
-		str = inode.toString();
+		var _val2 = inode === null ? "null" : inode.toString();
+		if (key) {
+			str += "<" + key + (type == 12 ? " json:type=\"literal\"" : "") + (_val2 ? ">" + _val2 + "</" + key + ">" : "/>");
+		} else {
+			str += type == 12 ? "<json:literal>" + _val2 + "</json:literal>" : _val2;
+		}
 	}
 	return root ? (0, _pretty.prettyXML)(str) : str;
 }
 
-},{"./entries":5,"./inode":8,"./multimap":10,"./pretty":11,"./qname":12,"./transducers":14,"./vnode":16}],9:[function(require,module,exports){
+var getType = exports.getType = _inferType;
+
+},{"./inode":7,"./multimap":9,"./pretty":10,"./qname":11,"./transducers":13,"./vnode":15}],8:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2693,7 +2676,7 @@ var validate = exports.validate = va.validate.bind(inode);
 
 var process = exports.process = fu.process.bind(inode);
 
-},{"../access":2,"../doc":3,"../dom-util":4,"../form-util":6,"../iform":7,"../transducers":14,"../validate":15}],10:[function(require,module,exports){
+},{"../access":2,"../doc":3,"../dom-util":4,"../form-util":5,"../iform":6,"../transducers":13,"../validate":14}],9:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2734,7 +2717,12 @@ MultiMap.prototype.get = function (key) {
 };
 
 MultiMap.prototype.keys = function () {
-	return Object.keys(this._buckets);
+	// retain key types
+	var keys = [];
+	for (var i = 0, l = this._buckets.length; i < l; i++) {
+		keys[i] = this._buckets[i][0];
+	}
+	return keys;
 };
 
 function Bucket(val) {
@@ -2751,7 +2739,7 @@ function multimap() {
 	return new MultiMap();
 }
 
-},{}],11:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -2825,7 +2813,7 @@ function prettyXML(text) {
 	return str[0] == '\n' ? str.slice(1) : str;
 }
 
-},{}],12:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -2849,7 +2837,7 @@ function QName(uri, name) {
 
 var q = exports.q = QName;
 
-},{}],13:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -3042,7 +3030,7 @@ function exactlyOne($arg) {
 	return $arg;
 }
 
-},{}],14:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -3084,7 +3072,7 @@ Singleton.prototype.next = function () {
 };
 
 function _getIter(iterable) {
-    return iterable === undefined ? new Singleton() : isIterable(iterable) ? iterable[Symbol.iterator]() : typeof iterable.next === "function" ? iterable : new Singleton(iterable);
+    return iterable === undefined ? new Singleton() : isIterable(iterable) ? iterable[Symbol.iterator]() : iterable.constructor == Object ? Object.entries(iterable)[Symbol.iterator]() : typeof iterable.next === "function" ? iterable : new Singleton(iterable);
 }
 
 function compose() {
@@ -3097,7 +3085,7 @@ function compose() {
         var reset = false,
             c = _append;
         for (var j = 0; j < l; j++) {
-            var ret = funcs[j].call(null, v, i, iterable, z);
+            var ret = reset ? z : funcs[j].call(null, v, i, iterable, z);
             if (ret === undefined) {
                 reset = true;
                 continue;
@@ -3303,7 +3291,7 @@ function range(n) {
 // TODO:
 // rewindable/fastforwardable iterators
 
-},{"./seq":13}],15:[function(require,module,exports){
+},{"./seq":12}],14:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -3320,9 +3308,9 @@ var _transducers = require("./transducers");
 
 var _big = require("big.js");
 
-var Big = _interopRequireWildcard(_big);
+var _big2 = _interopRequireDefault(_big);
 
-function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function get(obj, prop) {
 	if (obj.hasOwnProperty(prop)) return obj[prop];
@@ -3340,6 +3328,7 @@ function _formAttrNameToKey(k) {
 function _formNodeToSchema(node) {
 	var inode = node.inode;
 	var attrs = inode.attributes;
+	if (attrs.hidden || attrs.disabled) return;
 	var s = {};
 	var _iteratorNormalCompletion = true;
 	var _didIteratorError = false;
@@ -3379,9 +3368,9 @@ function _formNodeToSchema(node) {
 
 /**
  * Validate a doc against a schema
- * @param  {INode|VNode} doc    The doc or VNode to validate
- * @param  {any} schema A JSON schema with XML extension
- * @return {VNode}        A document containing errors
+ * @param {INode|VNode} doc The doc or VNode to validate
+ * @param {any} schema A JSON schema with XML extension
+ * @return {VNode} A document containing errors
  */
 function validate(node, schema) {
 	var params = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
@@ -3395,7 +3384,7 @@ function validate(node, schema) {
 	if (params.form) {
 		index = node.name;
 		path = node.parent.name;
-		schema = _formNodeToSchema(node);
+		schema = node.schema = _formNodeToSchema(node);
 	}
 	var entry = validation(schema, params, index, path, err);
 	entry[0].call(null, node);
@@ -3405,7 +3394,9 @@ function validate(node, schema) {
 		if (!node) return err;
 		if (params.form) {
 			if (node.type == 17) continue;
-			entry = validation(_formNodeToSchema(node), params, node.name, path, err);
+			// prevent child schema if no parent schema
+			node.schema = node.parent.schema && _formNodeToSchema(node);
+			entry = validation(node.schema, params, node.name, path, err);
 			if (entry) entry[0].call(null, node);
 		} else {
 			if (node.type == 17) {
@@ -3451,6 +3442,7 @@ function compose(funcs) {
 }
 
 function validation(schema, params, index, path, err) {
+	if (!schema) return;
 	var sc = schema.constructor;
 	var entry;
 	if (sc === Object) {
@@ -3513,34 +3505,48 @@ function validation(schema, params, index, path, err) {
 	return entry;
 }
 
-function X(schema, key, path, validationMessage) {
+function X(schema, key, path, validationMessage, faults) {
 	this.schema = schema;
 	this.key = key;
 	this.path = path;
 	this.validationMessage = validationMessage;
+	this.faults = faults;
 }
 
-function x(schema, key, path, node) {
-	return new X(schema, key, path, node.get("validationMessage"));
+function x(schema, key, params, path, node, faults) {
+	var validationMessage = params.form ? node.attr("validationMessage") : "";
+	return new X(schema, key, path, validationMessage, faults);
 }
 
 // TODO types are functions, so allow adding custom functions
 // TODO use XVType, coersion
 var types = {
+	null: function _null(node) {
+		return node.type == 12 && node.value === null;
+	},
 	string: function string(node) {
 		return node.type == 3;
 	},
 	number: function number(node) {
-		return node.type == 12 && node.value.constructor == Number && !isNaN(node.value);
+		return node.type == 12 && typeof node.value == "number" && !isNaN(node.value);
 	},
 	double: function double(node) {
-		return node.type == 12 && node.value.constructor == Number && !isNaN(node.value);
+		return node.type == 12 && typeof node.value == "number" && !isNaN(node.value);
 	},
 	boolean: function boolean(node) {
-		return node.type == 12 && node.value.constructor == Boolean;
+		return node.type == 12 && typeof node.value == "boolean";
 	},
 	integer: function integer(node) {
-		return node.type == 3 && node.value.constructor == Big && node.value.e === 0;
+		var val = node.value;
+		if (val === null || val === undefined) return false;
+		var ret = false;
+		try {
+			if (val.constructor != _big2.default) val = new _big2.default(val);
+			ret = (node.type == 3 || node.type == 12) && val.c.length - val.e === 1;
+		} catch (err) {
+			console.log(val, err);
+		}
+		return ret;
 	},
 	element: function element(node) {
 		return node.type == 1;
@@ -3556,16 +3562,9 @@ var types = {
 	}
 };
 
-var patternMatcher = function patternMatcher(patterns, key) {
-	for (var k in patterns) {
-		if (patterns[k].test(key)) return true;
-	}
-	return false;
-};
-
 var HOSTNAME = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[-0-9a-z]{0,61}[0-9a-z])?)*$/i;
-var URI = /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[a-f0-9]{2})*@)?(?:\[(?:(?:(?:(?:[a-f0-9]{1,4}:){6}|::(?:[a-f0-9]{1,4}:){5}|(?:[a-f0-9]{1,4})?::(?:[a-f0-9]{1,4}:){4}|(?:(?:[a-f0-9]{1,4}:){0,1}[a-f0-9]{1,4})?::(?:[a-f0-9]{1,4}:){3}|(?:(?:[a-f0-9]{1,4}:){0,2}[a-f0-9]{1,4})?::(?:[a-f0-9]{1,4}:){2}|(?:(?:[a-f0-9]{1,4}:){0,3}[a-f0-9]{1,4})?::[a-f0-9]{1,4}:|(?:(?:[a-f0-9]{1,4}:){0,4}[a-f0-9]{1,4})?::)(?:[a-f0-9]{1,4}:[a-f0-9]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[a-f0-9]{1,4}:){0,5}[a-f0-9]{1,4})?::[a-f0-9]{1,4}|(?:(?:[a-f0-9]{1,4}:){0,6}[a-f0-9]{1,4})?::)|[Vv][a-f0-9]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'()*+,;=]|%[a-f0-9]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[a-f0-9]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[a-f0-9]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[a-f0-9]{2})*)*)?|(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[a-f0-9]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[a-f0-9]{2})*)*)(?:\?(?:[a-z0-9\-._~!$&'()*+,;=:@\/?]|%[a-f0-9]{2})*)?(?:\#(?:[a-z0-9\-._~!$&'()*+,;=:@\/?]|%[a-f0-9]{2})*)?$/i;
-var URIREF = /^(?:[a-z][a-z0-9+\-.]*:)?(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[a-f0-9]{2})*@)?(?:\[(?:(?:(?:(?:[a-f0-9]{1,4}:){6}|::(?:[a-f0-9]{1,4}:){5}|(?:[a-f0-9]{1,4})?::(?:[a-f0-9]{1,4}:){4}|(?:(?:[a-f0-9]{1,4}:){0,1}[a-f0-9]{1,4})?::(?:[a-f0-9]{1,4}:){3}|(?:(?:[a-f0-9]{1,4}:){0,2}[a-f0-9]{1,4})?::(?:[a-f0-9]{1,4}:){2}|(?:(?:[a-f0-9]{1,4}:){0,3}[a-f0-9]{1,4})?::[a-f0-9]{1,4}:|(?:(?:[a-f0-9]{1,4}:){0,4}[a-f0-9]{1,4})?::)(?:[a-f0-9]{1,4}:[a-f0-9]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[a-f0-9]{1,4}:){0,5}[a-f0-9]{1,4})?::[a-f0-9]{1,4}|(?:(?:[a-f0-9]{1,4}:){0,6}[a-f0-9]{1,4})?::)|[Vv][a-f0-9]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'"()*+,;=]|%[a-f0-9]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[a-f0-9]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[a-f0-9]{2})+(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[a-f0-9]{2})*)*)?|(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[a-f0-9]{2})+(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[a-f0-9]{2})*)*)?(?:\?(?:[a-z0-9\-._~!$&'"()*+,;=:@\/?]|%[a-f0-9]{2})*)?(?:\#(?:[a-z0-9\-._~!$&'"()*+,;=:@\/?]|%[a-f0-9]{2})*)?$/i;
+//var URI = /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[a-f0-9]{2})*@)?(?:\[(?:(?:(?:(?:[a-f0-9]{1,4}:){6}|::(?:[a-f0-9]{1,4}:){5}|(?:[a-f0-9]{1,4})?::(?:[a-f0-9]{1,4}:){4}|(?:(?:[a-f0-9]{1,4}:){0,1}[a-f0-9]{1,4})?::(?:[a-f0-9]{1,4}:){3}|(?:(?:[a-f0-9]{1,4}:){0,2}[a-f0-9]{1,4})?::(?:[a-f0-9]{1,4}:){2}|(?:(?:[a-f0-9]{1,4}:){0,3}[a-f0-9]{1,4})?::[a-f0-9]{1,4}:|(?:(?:[a-f0-9]{1,4}:){0,4}[a-f0-9]{1,4})?::)(?:[a-f0-9]{1,4}:[a-f0-9]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[a-f0-9]{1,4}:){0,5}[a-f0-9]{1,4})?::[a-f0-9]{1,4}|(?:(?:[a-f0-9]{1,4}:){0,6}[a-f0-9]{1,4})?::)|[Vv][a-f0-9]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'()*+,;=]|%[a-f0-9]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[a-f0-9]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[a-f0-9]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[a-f0-9]{2})*)*)?|(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[a-f0-9]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[a-f0-9]{2})*)*)(?:\?(?:[a-z0-9\-._~!$&'()*+,;=:@\/?]|%[a-f0-9]{2})*)?(?:\#(?:[a-z0-9\-._~!$&'()*+,;=:@\/?]|%[a-f0-9]{2})*)?$/i;
+//var URIREF = /^(?:[a-z][a-z0-9+\-.]*:)?(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[a-f0-9]{2})*@)?(?:\[(?:(?:(?:(?:[a-f0-9]{1,4}:){6}|::(?:[a-f0-9]{1,4}:){5}|(?:[a-f0-9]{1,4})?::(?:[a-f0-9]{1,4}:){4}|(?:(?:[a-f0-9]{1,4}:){0,1}[a-f0-9]{1,4})?::(?:[a-f0-9]{1,4}:){3}|(?:(?:[a-f0-9]{1,4}:){0,2}[a-f0-9]{1,4})?::(?:[a-f0-9]{1,4}:){2}|(?:(?:[a-f0-9]{1,4}:){0,3}[a-f0-9]{1,4})?::[a-f0-9]{1,4}:|(?:(?:[a-f0-9]{1,4}:){0,4}[a-f0-9]{1,4})?::)(?:[a-f0-9]{1,4}:[a-f0-9]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[a-f0-9]{1,4}:){0,5}[a-f0-9]{1,4})?::[a-f0-9]{1,4}|(?:(?:[a-f0-9]{1,4}:){0,6}[a-f0-9]{1,4})?::)|[Vv][a-f0-9]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'"()*+,;=]|%[a-f0-9]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[a-f0-9]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[a-f0-9]{2})+(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[a-f0-9]{2})*)*)?|(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[a-f0-9]{2})+(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[a-f0-9]{2})*)*)?(?:\?(?:[a-z0-9\-._~!$&'"()*+,;=:@\/?]|%[a-f0-9]{2})*)?(?:\#(?:[a-z0-9\-._~!$&'"()*+,;=:@\/?]|%[a-f0-9]{2})*)?$/i;
 // uri-template: https://tools.ietf.org/html/rfc6570
 var URITEMPLATE = /^(?:(?:[^\x00-\x20"'<>%\\^`{|}]|%[a-f0-9]{2})|\{[+#.\/;?&=,!@|]?(?:[a-z0-9_]|%[a-f0-9]{2})+(?:\:[1-9][0-9]{0,3}|\*)?(?:,(?:[a-z0-9_]|%[a-f0-9]{2})+(?:\:[1-9][0-9]{0,3}|\*)?)*\})*$/i;
 // For the source: https://gist.github.com/dperini/729294
@@ -3582,11 +3581,11 @@ var formats = {
 	date: /^\d\d\d\d-[0-1]\d-[0-3]\d$/,
 	// date-time: http://tools.ietf.org/html/rfc3339#section-5.6
 	time: /^[0-2]\d:[0-5]\d:[0-5]\d(?:\.\d+)?(?:z|[+-]\d\d:\d\d)?$/i,
-	'date-time': /^\d\d\d\d-[0-1]\d-[0-3]\d[t\s][0-2]\d:[0-5]\d:[0-5]\d(?:\.\d+)?(?:z|[+-]\d\d:\d\d)$/i,
+	"date-time": /^\d\d\d\d-[0-1]\d-[0-3]\d[t\s][0-2]\d:[0-5]\d:[0-5]\d(?:\.\d+)?(?:z|[+-]\d\d:\d\d)$/i,
 	// uri: https://github.com/mafintosh/is-my-json-valid/blob/master/formats.js
 	uri: /^(?:[a-z][a-z0-9+-.]*)(?:\:|\/)\/?[^\s]*$/i,
-	'uri-reference': /^(?:(?:[a-z][a-z0-9+-.]*:)?\/\/)?[^\s]*$/i,
-	'uri-template': URITEMPLATE,
+	"uri-reference": /^(?:(?:[a-z][a-z0-9+-.]*:)?\/\/)?[^\s]*$/i,
+	"uri-template": URITEMPLATE,
 	url: URL,
 	// email (sources from jsen validator):
 	// http://stackoverflow.com/questions/201323/using-a-regular-expression-to-validate-an-email-address#answer-8829363
@@ -3602,9 +3601,9 @@ var formats = {
 	uuid: UUID,
 	// JSON-pointer: https://tools.ietf.org/html/rfc6901
 	// uri fragment: https://tools.ietf.org/html/rfc3986#appendix-A
-	'json-pointer': JSON_POINTER,
+	"json-pointer": JSON_POINTER,
 	// relative JSON-pointer: http://tools.ietf.org/html/draft-luff-relative-json-pointer-00
-	'relative-json-pointer': RELATIVE_JSON_POINTER
+	"relative-json-pointer": RELATIVE_JSON_POINTER
 };
 
 var Z_ANCHOR = /[^\\]\\Z/;
@@ -3622,13 +3621,23 @@ var validator = {
 	value: function value(schema, key, params, index, path, err, node) {
 		if (params.form) {
 			if (!node.inode.checkValidity()) {
-				err.push(x(schema, key, path + "/" + index, node));
+				err.push(x(schema, key, params, path + "/" + index, node));
 			}
 		}
 	},
 	type: function type(schema, key, params, index, path, err, node) {
 		var type = schema[key];
-		if (!types[type](node)) err.push(x(schema, key, path + "/" + index, node));
+		var ret;
+		if (type instanceof Array) {
+			ret = (0, _transducers.foldLeft)((0, _transducers.forEach)(type, function (t) {
+				return types[t](node);
+			}), false, function (r, z) {
+				return r || z;
+			});
+		} else {
+			ret = types[type](node);
+		}
+		if (!ret) err.push(x(schema, key, params, path + "/" + index, node));
 	},
 	format: function format(schema, key, params, index, path, err, node) {
 		var name = schema[key];
@@ -3639,13 +3648,13 @@ var validator = {
 			var fn = typeof format == "function" ? format : function (v) {
 				return !!v.match(format);
 			};
-			if (!fn(node.value)) err.push(x(schema, key, path + "/" + index, node));
+			if (!fn(node.value)) err.push(x(schema, key, params, path + "/" + index, node));
 		}
 	},
 	required: function required(schema, key, params, index, path, err, node) {
 		// for forms:
 		if (params.form) {
-			if (!node.value) err.push(x(schema, key, path + "/" + index, node));
+			if (!node.value) err.push(x(schema, key, params, path + "/" + index, node));
 		}
 	},
 	properties: function properties(schema, key, params, index, path, err, node) {
@@ -3658,7 +3667,6 @@ var validator = {
 	},
 	patternProperties: function patternProperties(schema, key, params, index, path, err, node) {
 		var pattProps = get(schema, key);
-		var pattern;
 		var patterns;
 		if (pattProps) {
 			patterns = get(schema, "patternPropertiesREGEXP");
@@ -3697,12 +3705,13 @@ var validator = {
 					schema.patternPropertiesREGEXP = patterns;
 				}
 			}
-			var _patternMatcher = function _patternMatcher(key) {
+			var patternMatcher = function patternMatcher(key) {
 				for (var k in patterns) {
 					if (patterns[k].test(key)) return true;
 				}
 				return false;
 			};
+			var faults = [];
 			var newpath = path + "/" + index;
 			var keys = node.keys();
 			var len = node.count();
@@ -3714,7 +3723,11 @@ var validator = {
 				for (var _iterator3 = keys[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
 					var _k2 = _step3.value;
 
-					if (props[_k2] || _patternMatcher(_k2)) len--;
+					if (props[_k2] || patternMatcher(_k2)) {
+						len--;
+					} else {
+						faults.push(_k2);
+					}
 				}
 			} catch (err) {
 				_didIteratorError3 = true;
@@ -3731,7 +3744,7 @@ var validator = {
 				}
 			}
 
-			if (len > 0) err.push(x(schema, key, newpath, node));
+			if (len > 0) err.push(x(schema, key, params, newpath, node, faults));
 		}
 	},
 	items: function items(schema, key, params, index, path, err, node) {
@@ -3741,33 +3754,38 @@ var validator = {
 		if (schema) return validation(schema, params, node.name, newpath, err);
 	},
 	additionalItems: function additionalItems(schema, key, params, index, path, err, node) {
-		var additionalItems = schema[key];
+		//var additionalItems = schema[key];
 		var items = schema.items;
-		if (items.length !== node.count()) err.push(x(schema, key, path + "/" + index, node));
+		if (items.length !== node.count()) err.push(x(schema, key, params, path + "/" + index, node));
 	},
 	minimum: function minimum(schema, key, params, index, path, err, node) {
 		var test = schema[key];
 		var ret = false;
-		if (node.value && node.value.constructor == Big) {
+		if (node.value && node.value.constructor == _big2.default) {
 			ret = node.value.gte(test);
 		} else {
 			ret = node.value >= test;
 		}
-		if (!ret) err.push(x(schema, key, path + "/" + index, node));
+		if (!ret) err.push(x(schema, key, params, path + "/" + index, node));
 	},
 	maximum: function maximum(schema, key, params, index, path, err, node) {
 		var test = schema[key];
 		var ret = false;
-		if (node.value && node.value.constructor == Big) {
+		if (node.value && node.value.constructor == _big2.default) {
 			ret = node.value.lte(test);
 		} else {
 			ret = node.value <= test;
 		}
-		if (!ret) err.push(x(schema, key, path + "/" + index, node));
+		if (!ret) err.push(x(schema, key, params, path + "/" + index, node));
+	},
+	maxLength: function maxLength(schema, key, params, index, path, err, node) {
+		var test = schema[key];
+		if (!node.value) return;
+		if (node.value.length >= test) err.push(x(schema, key, params, path + "/" + index, node));
 	}
 };
 
-},{"./access":2,"./doc":3,"./transducers":14,"big.js":1}],16:[function(require,module,exports){
+},{"./access":2,"./doc":3,"./transducers":13,"big.js":1}],15:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -3846,6 +3864,16 @@ VNode.prototype.attrEntries = function () {
 	return this.cx.attrEntries(this.inode);
 };
 
+VNode.prototype.attr = function (k, v) {
+	if (arguments.length == 1) return this.cx.getAttribute(this.inode, k);
+	if (arguments.length === 0) {
+		this.inode = this.cx.clearAttributes(this.inode);
+	} else {
+		this.inode = this.cx.setAttribute(this.inode, k, v);
+	}
+	return this;
+};
+
 VNode.prototype.modify = function (node, ref) {
 	this.inode = this.cx.modify(this.inode, node, ref, this.type);
 	return this;
@@ -3871,15 +3899,16 @@ VNode.prototype.emptyAttrMap = function (init) {
 // TODO create iterator that yields a node seq
 // position() should overwrite get(), but the check should be name or indexInParent
 VNode.prototype[Symbol.iterator] = function () {
-	return new _access.VNodeIterator(this.values(), this, this.cx.vnode);
+	return new _access.VNodeIterator(this.values()[Symbol.iterator](), this, this.cx.vnode);
 };
 
 VNode.prototype.get = function (idx) {
 	var val = this.cx.get(this.inode, idx, this.type, this.cache);
 	if (!val) return [];
-	val = val.constructor == Array ? val : [val];
-	return new _access.VNodeIterator(val[Symbol.iterator](), this, this.cx.vnode);
+	//val = val.next || val.constructor == Array ? val : [val];
+	//console.log(val[Symbol.iterator]());
+	return new _access.VNodeIterator(val.next ? val : val[Symbol.iterator](), this, this.cx.vnode);
 };
 
-},{"./access":2}]},{},[9])(9)
+},{"./access":2}]},{},[8])(8)
 });
