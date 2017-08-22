@@ -39,6 +39,7 @@ Step.prototype.toString = function(){
 	return "Step {depth:"+this.depth+", closes:"+this.parent.name+"}";
 };
 
+/*
 export function* docIter(node) {
 	node = ensureDoc.bind(this)(node);
 	yield node;
@@ -47,7 +48,7 @@ export function* docIter(node) {
 		if(node) yield node;
 	}
 }
-
+*/
 export function nextNode(node /* VNode */) {
 	var type = node.type,
 		inode = node.inode,
@@ -89,7 +90,7 @@ export function nextNode(node /* VNode */) {
 		}
 	}
 }
-
+/*
 export function* prevNode(node){
 	//var depth = node.depth;
 	while(node){
@@ -105,7 +106,7 @@ export function* prevNode(node){
 		}
 	}
 }
-
+*/
 export function stringify(input){
 	var str = "";
 	const attrFunc = (z, kv) => {
@@ -150,6 +151,7 @@ export function nextSibling(node){
 	if(next) return parent.vnode(next, parent, node.depth, node.indexInParent+1);
 }
 
+/*
 export function* children(node){
 	node = ensureDoc.bind(this)(node);
 	var i = 0;
@@ -157,7 +159,7 @@ export function* children(node){
 		if(c) yield node.vnode(c, node, node.depth + 1, i++);
 	}
 }
-
+*/
 export function getDoc(node) {
 	node = ensureDoc.bind(this)(node);
 	do {
@@ -177,8 +179,22 @@ export function parent(node) {
 	return node.parent ? seq(new VNodeIterator([node.parent.inode][Symbol.iterator](),node.parent.parent, node)) : seq();
 }
 
+function Singleton(val) {
+	this.val = val;
+}
+
+Singleton.prototype.next = function () {
+	if (this.val !== undefined) {
+		var val = this.val;
+		this.val = undefined;
+		return { value: val };
+	}
+	return { done: true };
+};
+
 export function self(f) {
-	return Axis(node => node ? seq([node]) : seq(), f);
+	if(f.name !== "transForEach") f = forEach(f);
+	return Axis(node => new Singleton(node), f, 3);
 }
 
 export function iter(node, f) {
@@ -246,14 +262,16 @@ export function element(qname) {
 	return _nodeTest(_isElement,qname);
 }
 
-function _attrGet(node,key){
+function _attrGet(key,node){
+	var entries;
 	if (key !== null) {
 		var val = node.attr(key);
 		if (!val) return [];
-		return [[key, val]];
+		entries = [[key, val]];
 	} else {
-		return node.attrEntries();
+		entries = node.attrEntries();
 	}
+	return forEach(entries, kv => node.vnode(node.ivalue(2, kv[0], kv[1]), node.parent, node.depth + 1, node.indexInParent));
 }
 
 // TODO make axis default, process node here, return seq(VNodeIterator)
@@ -262,17 +280,19 @@ export function attribute(qname) {
 	var hasWildcard = /\*/.test(qname);
 	// getter of attributes / pre-processor of attributes
 	// TODO iterator!
-	var attrGet = node => forEach(node.attrEntries(), v => node.vnode(node.ivalue(2, v[0], v[1]), node.parent, node.depth + 1, node.indexInParent));
 	// filter of attributes
 	var f;
 	if (hasWildcard) {
 		var regex = new RegExp(qname.replace(/\*/, "(\\w[\\w0-9-_]*)"));
 		//	attrEntries returns tuples
 		f = n => _isAttribute(n) && regex.test(n.name);
+		// no direct access
+		qname = null;
 	} else {
-		f = n => qname === n.name && _isAttribute(n);
+		// name check provided by directAccess
+		f = n => _isAttribute(n);
 	}
-	return Axis(attrGet,filter(f),2);
+	return Axis(_attrGet.bind(null,qname),filter(f),2);
 }
 
 export function text() {
@@ -308,7 +328,7 @@ export function child(f) {
 	if(f.__is_NodeTypeTest){
 		// this means it's a predicate, and the actual function should become a filter
 		if(f.__Accessor) {
-			// this means we can try direct access on a node
+			// TODO this means we can try direct access on a node
 		}
 		f = filter(f);
 	}
@@ -346,14 +366,60 @@ export function followingSibling(node) {
 	return seq(new SiblingIterator(node.inode, node.parent, node.depth, node.indexInParent));
 }
 
+/*function* _combinedIter(iters, f) {
+	for(var x of iters) {
+		var next;
+		// expect everything to be a faux iterator
+		while(next = f(x).next(), !next.done) {
+			yield next.value;
+		}
+	}
+}*/
+
+function CombinedIterator(iters,f){
+	this.iter = f(iters.shift());
+	this.iters = iters;
+	this.f = f;
+	this.index = 0;
+}
+
+CombinedIterator.prototype.next = function() {
+	if (!this.iter) return DONE;
+	var v = this.iter.next();
+	if (!v || v.done) {
+		if(this.iters.length) {
+			this.iter = this.f(this.iters.shift());
+			return this.next();
+		}
+		return DONE;
+	}
+	return v;
+};
+
+function _combinedIter(iters, f) {
+	return new CombinedIterator(iters,f);
+}
+
 // make sure all paths are transducer-funcs
 export function select(node, ...paths) {
 	// usually we have a sequence
+	// TODO make lazy:
+	// - combine iterators for each node seq to one iterator
+	// - bind the composed function to the combined iterator
+	// - combine the combined iterator
 	var cur = node;
+	var bed = ensureDoc.bind(this);
 	while (paths.length > 0) {
 		let path = paths.shift();
-		let f = _selectImpl(path);
-		cur = isSeq(cur) ? forEach(cur,f) : f(cur);
+		path = _axify(path);
+		// TODO skip self
+		var skipCompare = path.__type == 2 || path.__type == 3;
+		var f = path.f;
+		// rebind step function to the context
+		var bound = n => path.g(bed(n));
+		if (!skipCompare) f = compose(f, filter(_comparer()));
+		var x = isSeq(cur) ? _combinedIter(cur.toArray(), bound) : bound(cur);
+		cur = into(x, f,seq());
 	}
 	return cur;
 }
@@ -369,6 +435,7 @@ function _comparer() {
 	return f;
 }
 
+/*
 export function* select2(node,...paths) {
 	// TODO
 	// 1: node (or seq) is iterable, so get first as current context
@@ -402,30 +469,22 @@ export function* select2(node,...paths) {
 		}
 	}
 }
-
-// TODO use direct functions as much as passible, e.g. isVNode instead of node
-function _selectImpl(path) {
-	// process strings (can this be combined?)
+*/
+function _axify(path){
 	if(!path.__is_Axis){
+		// process strings (can this be combined?)
 		if (typeof path == "string") {
 			var at = /^@/.test(path);
 			if (at) path = path.substring(1);
-			path = at ? attribute(path) : child(element(path));
+			return at ? attribute(path) : child(element(path));
 		} else if(typeof path == "function"){
-			path = self(path);
+			return self(path);
 		} else {
-			// throw error
+			// TODO throw error
 		}
 	}
-	var bed = ensureDoc.bind(this);
-	var attr = path.__type == 2;
-	var f = path.f, g = path.g;
-	if (!attr) f = compose(f,filter(_comparer()));
-	// TODO make lazy!
-	// retrieve the iterator from the curent node and apply filter
-	return n => into(g(bed(n)), f, seq());
+	return path;
 }
-
 
 export function isEmptyNode(node){
 	node = ensureDoc.bind(this)(node);
