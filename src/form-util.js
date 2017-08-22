@@ -1,3 +1,4 @@
+import { ensureDoc } from "./doc";
 import { iter } from "./access";
 
 // iter form and replace fieldset types
@@ -11,4 +12,5 @@ export function process(node){
 			}
 		}
 	});
+	return ensureDoc.bind(this)(node);
 }
