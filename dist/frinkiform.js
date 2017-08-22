@@ -1236,7 +1236,7 @@ function nextNode(node /* VNode */) {
 		inode = node.first();
 		// TODO handle arrays
 		node = parent.vnode(inode, parent, depth, indexInParent);
-		//console.log("found first", node.name, depth,indexInParent);
+		console.log("found first", node.name, depth,indexInParent);
 		return node;
 	} else {
 		indexInParent++;
@@ -1249,14 +1249,14 @@ function nextNode(node /* VNode */) {
 			if (depth === 0 || !node) return;
 			inode = node.inode;
 			node = new Step(inode, node.name, node.parent, depth, node.indexInParent);
-			//console.log("found step", node.name, depth, indexInParent);
+			console.log("found step", node.name, depth, indexInParent);
 			return node;
 		} else {
 			// return the next child
 			inode = parent.next(node);
 			if (inode !== undefined) {
 				node = parent.vnode(inode, parent, depth, indexInParent);
-				//console.log("found next", node.name, depth, indexInParent);
+				console.log("found next", node.name, depth, indexInParent);
 				return node;
 			}
 			throw new Error("Node " + parent.name + " hasn't been completely traversed. Found " + indexInParent + ", contains " + parent.count());
@@ -2072,6 +2072,7 @@ var _access = require("./access");
 // iter form and replace fieldset types
 function process(node) {
 	_access.iter.bind(this)(node, function (node) {
+        console.log(node)
 		if (node.type == 6) {
 			// this is mutative
 			if (node.inode.dataset.appearance == "hidden") {
@@ -2091,11 +2092,11 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.ivalue = ivalue;
 exports.vnode = vnode;
-exports.next = next;
 exports.count = count;
 exports.keys = keys;
 exports.cached = cached;
 exports.first = first;
+exports.next = next;
 exports.get = get;
 exports.getType = getType;
 exports.emptyINode = emptyINode;
@@ -2151,33 +2152,72 @@ function vnode(inode, parent, depth, indexInParent) {
 	return new _vnode.VNode(cx, inode, type, inode.name, val, parent, depth, indexInParent);
 }
 
-function next(inode, node, type) {
-	//type = type || _inferType(type);
-	var idx = node.indexInParent;
-	// FIXME detect fieldset elements
+function _inFieldset(node, parent) {
+	while (node = node.parentNode, !!node && node != parent) {
+		if (node.type == "fieldset") {
+			return true;
+		}
+	}
+}
+
+function count(inode,type,cache) {
+	// filter out elements that are in form, but also in fieldset...
 	var elems = inode.elements;
-	if (elems) return elems[idx + 1];
+	if (!elems) return 0;
+    if(type == 6){
+        if(!cache) cache = cached(inode,type);
+        elems = cache.values();
+    }
+	return elems.length;
 }
 
-function count(inode, type) {
-	return inode.elements ? inode.elements.length : 0;
-}
-
-function keys(inode, type) {
+function keys(inode,type,cache) {
 	// TODO cached
 	return inode.elements ? (0, _transducers.forEach)(inode.elements, function (_) {
 		return _.name;
 	}) : [];
 }
 
-function cached() {}
-
-function first(inode, type) {
-	// FIXME detect / filter fieldset elements
-	if (inode.elements) return inode.elements[0];
+function Cache(elems) {
+    this.elements = elems;
 }
 
-function get(inode, idx, type) {
+Cache.prototype.values = function(){
+    return this.elements;
+};
+
+function cached(inode,type) {
+    if(type == 6){
+        return new Cache(Array.prototype.filter.call(inode.elements,e => !_inFieldset(e, inode)));
+    }
+}
+
+function first(inode,type,cache) {
+	// detect / filter fieldset elements
+	var elems = inode.elements;
+	if (elems) {
+        if(type == 6) {
+            if(!cache) cache = cached(inode,type);
+            elems = cache.values();
+        }
+		return elems[0];
+	}
+}
+function next(inode, node, type, cache) {
+	//type = type || _inferType(type);
+	var idx = node.indexInParent;
+	// detect fieldset elements
+	var elems = inode.elements;
+	if (elems) {
+        if(type == 6){
+            if(!cache) cache = cached(inode,type);
+            elems = cache.values();
+        }
+        return elems[idx + 1];
+	}
+}
+
+function get(inode, idx) {
 	return inode[idx];
 }
 
@@ -3383,7 +3423,7 @@ function validate(node, schema) {
 	    path = "";
 	if (params.form) {
 		index = node.name;
-		path = node.parent.name;
+		path = node.parent ? node.parent.name : path;
 		schema = node.schema = _formNodeToSchema(node);
 	}
 	var entry = validation(schema, params, index, path, err);
@@ -3814,30 +3854,34 @@ VNode.prototype.toString = function () {
 };
 
 VNode.prototype.count = function () {
+    if(!this.cache) this.cache = this.cx.cached(this.inode, this.type);
 	if (typeof this.inode == "function") return 0;
-	return this.cx.count(this.inode);
+	return this.cx.count(this.inode,this.type,this.cache);
 };
 
 VNode.prototype.keys = function () {
-	var cache = this.cache || this.cx.cached(this.inode, this.type);
-	if (cache) return cache.keys();
-	return this.cx.keys(this.inode, this.type);
+	if(!this.cache) this.cache = this.cx.cached(this.inode, this.type);
+	return this.cx.keys(this.inode, this.type, this.cache);
 };
 
 VNode.prototype.values = function () {
-	return this.cx.values(this.inode, this.type);
+    if(!this.cache) this.cache = this.cx.cached(this.inode, this.type);
+	return this.cx.values(this.inode, this.type, this.cache);
 };
 
 VNode.prototype.first = function () {
-	return this.cx.first(this.inode, this.type);
+    if(!this.cache) this.cache = this.cx.cached(this.inode, this.type);
+	return this.cx.first(this.inode, this.type, this.cache);
 };
 
 VNode.prototype.last = function () {
+    if(!this.cache) this.cache = this.cx.cached(this.inode, this.type);
 	return this.cx.last(this.inode, this.type);
 };
 
 VNode.prototype.next = function (node) {
-	return this.cx.next(this.inode, node, this.type);
+    if(!this.cache) this.cache = this.cx.cached(this.inode, this.type);
+	return this.cx.next(this.inode, node, this.type, this.cache);
 };
 
 VNode.prototype.push = function (child) {
