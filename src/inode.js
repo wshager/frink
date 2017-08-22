@@ -50,6 +50,7 @@ function _inferType(inode){
 	return 3;
 }
 
+/*
 function* _get(children, idx) {
 	let len = children.length;
 	for (let i = 0; i < len; i++) {
@@ -58,7 +59,7 @@ function* _get(children, idx) {
 		}
 	}
 }
-
+*/
 function _last(a){
 	return drop(a,a.length-1);
 }
@@ -141,6 +142,7 @@ export function emptyAttrMap(init){
 	return init || {};
 }
 
+/*
 export function get(inode,idx,type,cache){
 	type = type || _inferType(inode);
 	if(type == 1 || type == 9){
@@ -149,7 +151,7 @@ export function get(inode,idx,type,cache){
 	}
 	return inode[idx];
 }
-
+*/
 export function next(inode, node, type){
 	type = type || _inferType(inode);
 	var idx = node.indexInParent;
