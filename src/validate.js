@@ -22,6 +22,7 @@ function _formAttrNameToKey(k){
 function _formNodeToSchema(node){
 	var inode = node.inode;
 	var attrs = inode.attributes;
+	if(attrs.hidden || attrs.disabled) return;
 	var s = {};
 	for(let a of attrs){
 		let k = _formAttrNameToKey(a.name);
@@ -50,8 +51,8 @@ export function validate(node, schema, params = {}) {
 		path = "";
 	if(params.form){
 		index = node.name;
-		path = node.parent.name;
-		schema = _formNodeToSchema(node);
+		path = node.parent ? node.parent.name : path;
+		schema = node.schema = _formNodeToSchema(node);
 	}
 	var entry = validation(schema, params, index, path, err);
 	entry[0].call(null, node);
@@ -61,7 +62,9 @@ export function validate(node, schema, params = {}) {
 		if (!node) return err;
 		if (params.form) {
 			if (node.type == 17) continue;
-			entry = validation(_formNodeToSchema(node), params, node.name, path, err);
+			// prevent child schema if no parent schema
+			node.schema = node.parent.schema && _formNodeToSchema(node);
+			entry = validation(node.schema, params, node.name, path, err);
 			if (entry) entry[0].call(null, node);
 		} else {
 			if (node.type == 17) {
@@ -108,6 +111,7 @@ function compose(funcs) {
 }
 
 export function validation(schema, params, index, path, err) {
+	if(!schema) return;
 	var sc = schema.constructor;
 	var entry;
 	if (sc === Object) {
