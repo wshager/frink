@@ -9,7 +9,7 @@
     "json",
     "immutable"
   ],
-  "version": "0.1.1",
+  "version": "0.2.0",
   "author": "Wouter Hager <wshager@gmail.com> (https://lagua.nl)",
   "contributors": [],
   "main": "./lib/index",
@@ -21,10 +21,10 @@
   },
   "scripts": {
     "build": "babel src --out-dir lib --ignore layers",
-    "client-build":"browserify src/layers/frink.js -s amd -o dist/frink.js -t [ babelify --presets [ es2015 ] ]",
-    "client-min":"uglifyjs --compress --mangle --verbose dist/frink.js -o dist/frink.min.js",
+    "client-build": "browserify src/layers/frink.js -s amd -o dist/frink.js -t [ babelify --presets [ es2015 ] ]",
+    "client-min": "uglifyjs --compress --mangle --verbose dist/frink.js -o dist/frink.min.js",
     "form-build": "browserify src/layers/frinkiform.js -s amd -o dist/frinkiform.js -t [ babelify --presets [ es2015 ] ]",
-    "form-min":"uglifyjs --compress --mangle --verbose dist/frinkiform.js -o dist/frinkiform.min.js",
+    "form-min": "uglifyjs --compress --mangle --verbose dist/frinkiform.js -o dist/frinkiform.min.js",
     "test": ""
   },
   "repository": {
@@ -48,8 +48,9 @@
   "devDependencies": {
     "babel-cli": "^6.18.0",
     "babel-plugin-transform-es2015-modules-commonjs": "^6.18.0",
-    "babili": "^0.0.12",
+    "babel-preset-es2015": "^6.18.0",
+    "babelify": "^7.3.0",
     "browserify": "^14.1.0",
-    "uglify-js":"^2.8.22"
+    "uglify-js": "^2.8.22"
   }
 }
