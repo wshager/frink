@@ -42,64 +42,67 @@ export function vnode(inode, parent, depth, indexInParent){
 	return new VNode(cx, inode, type, inode.name, val, parent, depth, indexInParent);
 }
 
-function _inFieldset(node,parent){
-	while(node = node.parentNode, !!node && node != parent){
-		if(node.type == "fieldset") {
+function _inFieldset(node, parent) {
+	while (node = node.parentNode, !!node && node != parent) {
+		if (node.type == "fieldset") {
 			return true;
 		}
 	}
 }
 
-export function count(inode){
+export function count(inode,type,cache) {
 	// filter out elements that are in form, but also in fieldset...
-	if(!inode.elements) return 0;
-	var len = inode.elements.length;
-	if(inode.nodeName.toUpperCase() == "FORM"){
-		var c = 0;
-		for(var i = 0; i < len; i++){
-			if(!_inFieldset(inode.elements[i],inode)) c++;
-		}
-		return c;
-	}
-	return len;
+	var elems = inode.elements;
+	if (!elems) return 0;
+    if(type == 6){
+        if(!cache) cache = cached(inode,type);
+        elems = cache.values();
+    }
+	return elems.length;
 }
 
-export function keys(inode){
+export function keys(inode,type,cache) {
 	// TODO cached
-	return inode.elements ? forEach(inode.elements, _ => _.name) : [];
+	return inode.elements ? forEach(inode.elements, n => n.name) : [];
 }
 
-export function cached(){
-
+function Cache(elems) {
+    this.elements = elems;
 }
 
-export function first(inode){
+Cache.prototype.values = function(){
+    return this.elements;
+};
+
+export function cached(inode,type) {
+    if(type == 6){
+        return new Cache(Array.prototype.filter.call(inode.elements,e => !_inFieldset(e, inode)));
+    }
+}
+
+export function first(inode,type,cache) {
 	// detect / filter fieldset elements
-	if (inode.elements) {
-		var idx = 0;
-		var first = inode.elements[idx];
-		if(inode.nodeName.toUpperCase() == "FORM") {
-			while(first && _inFieldset(first,inode)) {
-				first = inode.elements[++idx];
-			}
-		}
-		return first;
+	var elems = inode.elements;
+	if (elems) {
+        if(type == 6) {
+            if(!cache) cache = cached(inode,type);
+            elems = cache.values();
+        }
+		return elems[0];
 	}
 }
 
-export function next(inode, node){
+export function next(inode, node, type, cache) {
 	//type = type || _inferType(type);
 	var idx = node.indexInParent;
 	// detect fieldset elements
 	var elems = inode.elements;
 	if (elems) {
-		var next = elems[idx + 1];
-		if(node.parent.inode.nodeName.toUpperCase() == "FORM") {
-			while(next && _inFieldset(next,node.parent.inode)) {
-				next = elems[++idx];
-			}
-		}
-		return next;
+        if(type == 6){
+            if(!cache) cache = cached(inode,type);
+            elems = cache.values();
+        }
+        return elems[idx + 1];
 	}
 }
 
