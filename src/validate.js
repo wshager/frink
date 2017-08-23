@@ -395,9 +395,14 @@ const validator = {
 		}
 		if(!ret) err.push(x(schema, key, params, path + "/" + index, node));
 	},
+	minLength:function(schema, key, params, index, path, err, node){
+		var test = schema[key];
+		if(!node.value) return;
+		if (node.value.length < test) err.push(x(schema, key, params, path + "/" + index, node));
+	},
 	maxLength:function(schema, key, params, index, path, err, node){
 		var test = schema[key];
 		if(!node.value) return;
-		if (node.value.length >= test) err.push(x(schema, key, params, path + "/" + index, node));
+		if (node.value.length > test) err.push(x(schema, key, params, path + "/" + index, node));
 	}
 };
