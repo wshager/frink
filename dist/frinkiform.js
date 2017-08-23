@@ -1236,7 +1236,7 @@ function nextNode(node /* VNode */) {
 		inode = node.first();
 		// TODO handle arrays
 		node = parent.vnode(inode, parent, depth, indexInParent);
-		console.log("found first", node.name, depth,indexInParent);
+		//console.log("found first", node.name, depth,indexInParent);
 		return node;
 	} else {
 		indexInParent++;
@@ -1249,14 +1249,14 @@ function nextNode(node /* VNode */) {
 			if (depth === 0 || !node) return;
 			inode = node.inode;
 			node = new Step(inode, node.name, node.parent, depth, node.indexInParent);
-			console.log("found step", node.name, depth, indexInParent);
+			//console.log("found step", node.name, depth, indexInParent);
 			return node;
 		} else {
 			// return the next child
 			inode = parent.next(node);
 			if (inode !== undefined) {
 				node = parent.vnode(inode, parent, depth, indexInParent);
-				console.log("found next", node.name, depth, indexInParent);
+				//console.log("found next", node.name, depth, indexInParent);
 				return node;
 			}
 			throw new Error("Node " + parent.name + " hasn't been completely traversed. Found " + indexInParent + ", contains " + parent.count());
@@ -2072,7 +2072,6 @@ var _access = require("./access");
 // iter form and replace fieldset types
 function process(node) {
 	_access.iter.bind(this)(node, function (node) {
-        console.log(node)
 		if (node.type == 6) {
 			// this is mutative
 			if (node.inode.dataset.appearance == "hidden") {
@@ -2160,60 +2159,63 @@ function _inFieldset(node, parent) {
 	}
 }
 
-function count(inode,type,cache) {
+function count(inode, type, cache) {
 	// filter out elements that are in form, but also in fieldset...
 	var elems = inode.elements;
 	if (!elems) return 0;
-    if(type == 6){
-        if(!cache) cache = cached(inode,type);
-        elems = cache.values();
-    }
+	if (type == 6) {
+		if (!cache) cache = cached(inode, type);
+		elems = cache.values();
+	}
 	return elems.length;
 }
 
-function keys(inode,type,cache) {
+function keys(inode, type, cache) {
 	// TODO cached
-	return inode.elements ? (0, _transducers.forEach)(inode.elements, function (_) {
-		return _.name;
+	return inode.elements ? (0, _transducers.forEach)(inode.elements, function (n) {
+		return n.name;
 	}) : [];
 }
 
 function Cache(elems) {
-    this.elements = elems;
+	this.elements = elems;
 }
 
-Cache.prototype.values = function(){
-    return this.elements;
+Cache.prototype.values = function () {
+	return this.elements;
 };
 
-function cached(inode,type) {
-    if(type == 6){
-        return new Cache(Array.prototype.filter.call(inode.elements,e => !_inFieldset(e, inode)));
-    }
+function cached(inode, type) {
+	if (type == 6) {
+		return new Cache(Array.prototype.filter.call(inode.elements, function (e) {
+			return !_inFieldset(e, inode);
+		}));
+	}
 }
 
-function first(inode,type,cache) {
+function first(inode, type, cache) {
 	// detect / filter fieldset elements
 	var elems = inode.elements;
 	if (elems) {
-        if(type == 6) {
-            if(!cache) cache = cached(inode,type);
-            elems = cache.values();
-        }
+		if (type == 6) {
+			if (!cache) cache = cached(inode, type);
+			elems = cache.values();
+		}
 		return elems[0];
 	}
 }
+
 function next(inode, node, type, cache) {
 	//type = type || _inferType(type);
 	var idx = node.indexInParent;
 	// detect fieldset elements
 	var elems = inode.elements;
 	if (elems) {
-        if(type == 6){
-            if(!cache) cache = cached(inode,type);
-            elems = cache.values();
-        }
-        return elems[idx + 1];
+		if (type == 6) {
+			if (!cache) cache = cached(inode, type);
+			elems = cache.values();
+		}
+		return elems[idx + 1];
 	}
 }
 
@@ -3818,10 +3820,15 @@ var validator = {
 		}
 		if (!ret) err.push(x(schema, key, params, path + "/" + index, node));
 	},
+	minLength: function minLength(schema, key, params, index, path, err, node) {
+		var test = schema[key];
+		if (!node.value) return;
+		if (node.value.length < test) err.push(x(schema, key, params, path + "/" + index, node));
+	},
 	maxLength: function maxLength(schema, key, params, index, path, err, node) {
 		var test = schema[key];
 		if (!node.value) return;
-		if (node.value.length >= test) err.push(x(schema, key, params, path + "/" + index, node));
+		if (node.value.length > test) err.push(x(schema, key, params, path + "/" + index, node));
 	}
 };
 
@@ -3854,36 +3861,37 @@ VNode.prototype.toString = function () {
 };
 
 VNode.prototype.count = function () {
-    if(!this.cache) this.cache = this.cx.cached(this.inode, this.type);
 	if (typeof this.inode == "function") return 0;
-	return this.cx.count(this.inode,this.type,this.cache);
+	if (!this.cache) this.cache = this.cx.cached(this.inode, this.type);
+	return this.cx.count(this.inode, this.type, this.cache);
 };
 
 VNode.prototype.keys = function () {
-	if(!this.cache) this.cache = this.cx.cached(this.inode, this.type);
+	if (!this.cache) this.cache = this.cx.cached(this.inode, this.type);
 	return this.cx.keys(this.inode, this.type, this.cache);
 };
 
 VNode.prototype.values = function () {
-    if(!this.cache) this.cache = this.cx.cached(this.inode, this.type);
+	if (!this.cache) this.cache = this.cx.cached(this.inode, this.type);
 	return this.cx.values(this.inode, this.type, this.cache);
 };
 
 VNode.prototype.first = function () {
-    if(!this.cache) this.cache = this.cx.cached(this.inode, this.type);
+	if (!this.cache) this.cache = this.cx.cached(this.inode, this.type);
 	return this.cx.first(this.inode, this.type, this.cache);
 };
 
 VNode.prototype.last = function () {
-    if(!this.cache) this.cache = this.cx.cached(this.inode, this.type);
-	return this.cx.last(this.inode, this.type);
+	if (!this.cache) this.cache = this.cx.cached(this.inode, this.type);
+	return this.cx.last(this.inode, this.type, this.cache);
 };
 
 VNode.prototype.next = function (node) {
-    if(!this.cache) this.cache = this.cx.cached(this.inode, this.type);
+	if (!this.cache) this.cache = this.cx.cached(this.inode, this.type);
 	return this.cx.next(this.inode, node, this.type, this.cache);
 };
 
+// TODO cache invalidation
 VNode.prototype.push = function (child) {
 	this.inode = this.cx.push(this.inode, [child.name, child.inode], this.type);
 	return this;
