@@ -101,18 +101,26 @@ Note that once a document node is actualized, all constructor function reference
 
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| name  | <code>string</code> | Optional. The name of the node |
-| children | <code>array, Sequence</code> | The children of the element |
+| uri  | <code>string</code> | Optional. The namespace URI of the document |
+| prefix | <code>string</code> | Optional. The namespace prefix of the document |
+| doctype | <code>string</code> | Optional. The doctype of the document |
 
 #### p(name,value) ⇒ <code>VNode</code>
 Creates a processing instruction node, which can contain a string.
 
-This is a top level node, and may only be contained in a document node.
 
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
 | name  | <code>string</code> | Optional. The name of the node |
 | value | <code>string</code> | The value of the node |
+
+#### c(value) ⇒ <code>VNode</code>
+Creates a comment node, which can contain a string.
+
+| Param  | Type                | Description  |
+| ------ | ------------------- | ------------ |
+| value | <code>string</code> | The value of the node |
+
 
 ___
 
