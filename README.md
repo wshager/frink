@@ -93,7 +93,7 @@ Note that this constructor is *lazy*: the temporary VNode holds a reference to a
 | children | <code>array, Sequence</code> | The children of the map |
 
 #### d(uri,prefix,doctype) ⇒ <code>VNode</code>
-Creates a document node, which can contain a single node of any other type. Additionally, it can contain a doctype and multiple processing instruction nodes.
+Creates a document node, which can contain a single node of any other type.
 
 This is a top level node, and may not be contained in *children* of other node constructors.
 
