@@ -42,10 +42,10 @@ Note that this constructor is *lazy*: the temporary VNode holds a reference to a
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
 | qname  | <code>string, QName</code> | The name of the element |
-| children | <code>array, Sequence</code> | The children of the element |
+| children | <code>VNode*</code> | The children of the element (array or Sequence) |
 
 #### a(name,value) ⇒ <code>VNode</code>
-Creates an attribute node, which can contain a javascript primitive (string, number or boolean).
+Creates an attribute node, which can contain a javascript primitive (string, number, boolean or null).
 
 May be contained in an element, list or map constructor's *children*.
 
@@ -54,10 +54,10 @@ Note that this constructor is *lazy*: the temporary VNode holds a reference to a
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
 | name  | <code>string</code> | The name of the attribute |
-| value | <code>string, number, boolean</code> | The value of the attribute |
+| value | <code>string, number, boolean, null</code> | The value of the attribute |
 
 #### x(name,value) ⇒ <code>VNode</code>
-Creates a primitive value node, which can contain a javascript primitive (string, number or boolean).
+Creates a primitive value node, which can contain a javascript primitive (string, number, boolean or null).
 
 May be contained in an element, list or map constructor's *children*.
 
@@ -66,7 +66,7 @@ Note that this constructor is *lazy*: the temporary VNode holds a reference to a
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
 | name  | <code>string</code> | Optional. The name of the node |
-| value | <code>string, number, boolean</code> | The value of the node |
+| value | <code>string, number, boolean, null</code> | The value of the node |
 
 #### l(name,children) ⇒ <code>VNode</code>
 Creates a list (AKA array) node, which can contain multiple nodes of any type.
@@ -77,8 +77,8 @@ Note that this constructor is *lazy*: the temporary VNode holds a reference to a
  
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| name  | <code>string</code> | Optional. The name of the map |
-| children | <code>array, Sequence</code> | The children of the map |
+| name  | <code>string</code> | Optional. The name of the list |
+| children | <code>VNode*</code> | The children of the list (array or Sequence) |
 
 #### m(name,children) ⇒ <code>VNode</code>
 Creates a map (AKA plain object) node, which can contain multiple nodes of any type.
@@ -90,10 +90,10 @@ Note that this constructor is *lazy*: the temporary VNode holds a reference to a
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
 | name  | <code>string</code> | Optional. The name of the map |
-| children | <code>array, Sequence</code> | The children of the map |
+| children | <code>VNode*</code> | The children of the map (array or Sequence) |
 
-#### d(uri,prefix,doctype) ⇒ <code>VNode</code>
-Creates a document node, which can contain a single node of any other type. Additionally, it can contain a doctype and multiple processing instruction nodes.
+#### d(children) ⇒ <code>VNode</code>
+Creates a document node, which can contain a single node of any other type. In general, documents aren't constructed directly, but created by the parser or for top-level elements.
 
 This is a top level node, and may not be contained in *children* of other node constructors.
 
@@ -101,18 +101,24 @@ Note that once a document node is actualized, all constructor function reference
 
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| name  | <code>string</code> | Optional. The name of the node |
-| children | <code>array, Sequence</code> | The children of the element |
+| children | <code>VNode*</code> | The children of the document (array or Sequence) |
 
 #### p(name,value) ⇒ <code>VNode</code>
 Creates a processing instruction node, which can contain a string.
 
-This is a top level node, and may only be contained in a document node.
 
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| name  | <code>string</code> | Optional. The name of the node |
+| name  | <code>string</code> | The name of the node |
 | value | <code>string</code> | The value of the node |
+
+#### c(value) ⇒ <code>VNode</code>
+Creates a comment node, which can contain a string.
+
+| Param  | Type                | Description  |
+| ------ | ------------------- | ------------ |
+| value | <code>string</code> | The value of the node |
+
 
 ___
 
