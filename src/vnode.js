@@ -110,7 +110,8 @@ VNode.prototype.emptyAttrMap = function(init) {
 // TODO create iterator that yields a node seq
 // position() should overwrite get(), but the check should be name or indexInParent
 VNode.prototype[Symbol.iterator] = function(){
-	return new VNodeIterator(this.values()[Symbol.iterator](),this, this.cx.vnode);
+	var values = this.type == 2 ? [this.inode][Symbol.iterator]() : this.values()[Symbol.iterator]();
+	return new VNodeIterator(values, this, this.cx.vnode);
 };
 
 VNode.prototype.get = function(idx){
