@@ -193,7 +193,7 @@ Singleton.prototype.next = function () {
 };
 
 export function self(f) {
-	if(f.name !== "transForEach") f = forEach(f);
+	if(f.name !== "transForEach" && f.name !== "transFilter") f = forEach(f);
 	return Axis(node => new Singleton(node), f, 3);
 }
 
@@ -271,7 +271,7 @@ function _attrGet(key,node){
 	} else {
 		entries = node.attrEntries();
 	}
-	return forEach(entries, kv => node.vnode(node.ivalue(2, kv[0], kv[1]), node.parent, node.depth + 1, node.indexInParent));
+	return into(entries, kv => node.vnode(node.ivalue(2, kv[0], kv[1]), node.parent, node.depth + 1, node.indexInParent),seq())[Symbol.iterator]();
 }
 
 // TODO make axis default, process node here, return seq(VNodeIterator)
