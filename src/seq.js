@@ -29,7 +29,7 @@ LazySeq.prototype.concat = function (...a) {
 };
 
 LazySeq.prototype.toString = function(){
-	return "["+this.iterable+"]";
+	return "Seq [" + this.iterable + "]";
 };
 
 LazySeq.prototype.count = function(){
@@ -39,6 +39,19 @@ LazySeq.prototype.count = function(){
 LazySeq.prototype.toArray = function() {
 	return Array.from(this.iterable);
 };
+
+// just resolve a seq of promises, like Promise.all
+export function when(s,rs,rj){
+	var a = _isArray(s.iterable) ? s.iterable : Array.from(s.iterable);
+	//console.log(ret)
+	return Promise.all(a).then(res => {
+		var ret = seq();
+		for(var x of res){
+			ret = ret.concat(x);
+		}
+		return rs(ret);
+	},rj);
+}
 
 Object.defineProperty(LazySeq.prototype,"size",{
 	get:function(){
