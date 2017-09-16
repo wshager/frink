@@ -33,7 +33,13 @@ function _n(type, name, children){
 			}
 		}
 		// convert to real VNode instance
-		var node = parent.vnode(parent.emptyINode(type, name, type == 1 ? parent.emptyAttrMap() : undefined, ns), parent);
+		var node = parent.vnode(
+			parent.emptyINode(type, name, type == 1 ? parent.emptyAttrMap() : undefined, ns),
+			parent,
+			parent.depth + 1,
+			-1,
+			type
+		);
 		for (let i = 0; i < children.length; i++) {
 			let child = children[i];
 			child = child.inode(node);
@@ -58,7 +64,10 @@ function _a(type, name, val) {
 function _v(type,val,name) {
 	return vnode(function (parent, ref) {
 		// reuse insertIndex here to create a named map entry
-		var node = parent.vnode(parent.ivalue(type, name ? name : parent.count() + 1, val), parent);
+		if(!name) name = parent.count() + 1;
+		let node = parent.vnode(parent.ivalue(type, name, val), parent);
+		// reset name, because not all inodes have names
+		node.name = name;
 		// we don't want to do checks here
 		// we just need to call a function that will insert the node into the parent
 		node.parent = parent.modify(node,ref);
