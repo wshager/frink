@@ -132,7 +132,7 @@ ___
 
 Notes:
 
-* All nodes may be contained in the "children" of element, list, map or function nodes. When the parent is a map, the `name` parameter is used as the name of a "tuple". When the parent is a document, an element, a list or a function call, the `name` parameter is not used.
+* All nodes may be contained in the "children" of element, list, map or function-call nodes. When the parent is a map, the `name` parameter is used as the name of a "tuple". When the parent is a document, an element, a list or a function call, the `name` parameter is not used.
 * Constructors are *lazy*: the temporary VNode holds a reference to a function. The node will be actualized when its parent VNode calls this function.
 * Once a root node is actualized, all constructor function references will be called recursively to create the actual document structure.
 * In some cases the `name` param is optional. A name must be provided to a constructor function when the parent node is of type *map*.
