@@ -100,11 +100,12 @@ This is a top level node, and may not be contained in *children* of other node c
 | doctype  | <code>string</code> | Optional. The XML doctype. | 
 | children | <code>VNode*</code> | The children of the document (array or Sequence) |
 
-#### p(target,content) ⇒ <code>VNode</code>
+#### p(name,target,content) ⇒ <code>VNode</code>
 Creates a processing instruction node.
 
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
+| name  | <code>string</code> |  Optional. The name of the node as child of a map. |
 | target  | <code>string</code> |  The target part of the PI |
 | content | <code>string</code> | The content part of the PI |
 
@@ -118,12 +119,13 @@ Creates a comment node, which can contain a string.
 | value | <code>string</code> | The value of the node |
 
 
-#### f(name,arguments) ⇒ <code>VNode</code>
+#### f(name,fname,arguments) ⇒ <code>VNode</code>
 Creates a "function call" node, which can contain a any other node.
 
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| name | <code>string</code> | The name of the function |
+| name | <code>string</code> | Optional. The name of the node as child of a map. |
+| fname | <code>string</code> | The name of the function |
 | arguments | <code>VNode*</code> | The arguments to the function |
 
 ___
