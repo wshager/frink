@@ -72,7 +72,7 @@ Creates a "reference" (or link) node, which can contain a (partial) URI-formatte
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
 | name  | <code>string</code> | Optional. The name of the node as child of a map. |
-| value | <code>string, number, boolean, null</code> | The value of the node |
+| value | <code>string</code> | The value of the node |
 
 #### l(name,children) ⇒ <code>VNode</code>
 Creates a list (AKA array) node, which can contain multiple nodes of any type.
@@ -126,7 +126,7 @@ Creates a "function call" node, which can contain a any other node.
 | ------ | ------------------- | ------------ |
 | name | <code>string</code> | Optional. The name of the node as child of a map. |
 | fname | <code>string</code> | The name of the function |
-| arguments | <code>Array</code> | The arguments to the function |
+| arguments | <code>Array</code> | The arguments to the function as an array |
 
 ___
 
