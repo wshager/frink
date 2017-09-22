@@ -126,7 +126,7 @@ Creates a "function call" node, which can contain a any other node.
 | ------ | ------------------- | ------------ |
 | name | <code>string</code> | Optional. The name of the node as child of a map. |
 | fname | <code>string</code> | The name of the function |
-| arguments | <code>VNode*</code> | The arguments to the function |
+| arguments | <code>Array</code> | The arguments to the function |
 
 ___
 
