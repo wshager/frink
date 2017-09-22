@@ -100,7 +100,7 @@ This is a top level node, and may not be contained in *children* of other node c
 | doctype  | <code>string</code> | Optional. The XML doctype. | 
 | children | <code>VNode*</code> | The children of the document (array or Sequence) |
 
-#### p(name,target,content) ⇒ <code>VNode</code>
+#### p(target,content) ⇒ <code>VNode</code>
 Creates a processing instruction node.
 
 | Param  | Type                | Description  |
