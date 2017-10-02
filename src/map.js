@@ -14,14 +14,17 @@ OrderedMap.prototype.__is_Map = true;
 
 OrderedMap.prototype._type = 6;
 
-OrderedMap.prototype["@@empty"] = function(){
+OrderedMap.prototype["@@transducers/init"] = function(){
 	return ohamt.empty;
 };
 
-OrderedMap.prototype["@@append"] = function(kv) {
-	return this.append(kv[0],kv[1]);
+OrderedMap.prototype["@@transducers/step"] = function(m,kv) {
+	return m.append(kv[0],kv[1]);
 };
 
+OrderedMap.prototype["@@transducers/result"] = function(m) {
+	return m;
+};
 
 export function isMap($maybe){
 	let maybe = first($maybe);
