@@ -86,7 +86,7 @@ export function nextNode(node /* VNode */) {
 				//console.log("found next", node.name, depth, indexInParent);
 				return node;
 			}
-			throw new Error("Node "+parent.name+" hasn't been completely traversed. Found "+ indexInParent + ", contains "+ parent.count());
+			//throw new Error("Node "+parent.name+" hasn't been completely traversed. Found "+ indexInParent + ", contains "+ parent.count());
 		}
 	}
 }
@@ -197,7 +197,7 @@ export function self(f) {
 	return Axis(node => new Singleton(node), f, 3);
 }
 
-export function iter(node, f) {
+export function iter(node, f, cb) {
 	// FIXME pass doc?
 	var i=0,prev;
 	if(!f) f = (node) => {prev = node;};
@@ -209,7 +209,8 @@ export function iter(node, f) {
 			f(node,i++);
 		}
 	}
-	return prev;
+	if(cb) cb();
+	//return prev;
 }
 
 export const isVNode = n => !!n && n.__is_VNode;
