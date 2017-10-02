@@ -1,18 +1,91 @@
-export function LazySeq(iterable){
-	this.iterable = isSeq(iterable) ? iterable.toArray() : iterable || [];
+import { Observable } from "rxjs/Observable";
+import { seq as transform } from "transducers.js";
+import { error } from "./error";
+import "rxjs/add/observable/from";
+import "rxjs/add/operator/reduce";
+import "rxjs/add/operator/map";
+import "rxjs/add/operator/filter";
+
+
+function TransduceObserver(o, xform) {
+	this._o = o;
+	this._xform = xform;
 }
 
-LazySeq.prototype.push = function (v) {
-	return this.concat(v);
+TransduceObserver.prototype.next = function (x) {
+	this._xform["@@transducer/step"].call(this._xform, this._o, x);
 };
+
+TransduceObserver.prototype.error = function (e) { this._o.error(e); };
+
+TransduceObserver.prototype.completed = function () {
+	this._xform["@@transducer/result"](this._o);
+};
+
+function transformForObserver(o) {
+	return {
+		"@@transducer/init": function() {
+			return o;
+		},
+		"@@transducer/step": function(obs, input) {
+			return obs.next(input);
+		},
+		"@@transducer/result": function(obs) {
+			return obs.completed();
+		}
+	};
+}
+
+/**
+ * Executes a transducer to transform the observable sequence
+ * @param {Transducer} transducer A transducer to execute
+ * @returns {Observable} An Observable sequence containing the results from the transducer.
+ */
+function transduceObservable(source, xf) {
+	return new Observable(function(o) {
+		return source.subscribe(new TransduceObserver(o, xf(transformForObserver(o))));
+	}, source);
+}
+
+export function LazySeq(iterable){
+	this.iterable = isSeq(iterable) ? iterable.iterable : iterable || [];
+}
+
+/*function _asyncIteratorToObservable(asyncIter) {
+	const forEach = (ai, fn, cb) => {
+		return ai.next().then(function (r) {
+			if (!r.done) {
+				try {
+					fn(r.value);
+				} catch(err) {
+					cb(err);
+				}
+				return forEach(ai, fn, cb);
+			} else {
+				cb();
+			}
+		}, cb);
+	};
+	return new Observable(sink => {
+		forEach(asyncIter,x => sink.next(x), err => {
+			if(err) return sink.error(err);
+			sink.complete();
+		});
+	});
+}*/
 
 // TODO create seq containing iterator, partially iterated
 // we need this for transducers, because LazySeq is immutable
-LazySeq.prototype["@@append"] = LazySeq.prototype.push;
+LazySeq.prototype["@@transducer/step"] = function(s,v) {
+	return s.concat(v);
+};
+
+LazySeq.prototype["@@transducer/result"] = function(s) { return s; };
 
 LazySeq.prototype.__is_Seq = true;
 
 LazySeq.prototype.concat = function (...a) {
+	// TODO lazy concat
 	var ret = _isArray(this.iterable) ? this.iterable : Array.from(this.iterable);
 	for(var i = 0, l = a.length; i < l; i++){
 		var x = a[i];
@@ -32,8 +105,15 @@ LazySeq.prototype.toString = function(){
 	return "Seq [" + this.iterable + "]";
 };
 
+LazySeq.prototype.transform = function(xf){
+	var iterable = this.iterable;
+	if(_isObservable(iterable)) return new LazySeq(transduceObservable(this.iterable,xf));
+	return new LazySeq(transform(this.iterable,xf));
+};
+
 LazySeq.prototype.count = function(){
-	return this.iterable.length;
+	const iter = this.iterable;
+	return _isArray(iter) ? iter.length : Infinity;
 };
 
 LazySeq.prototype.toArray = function() {
@@ -60,46 +140,52 @@ Object.defineProperty(LazySeq.prototype,"size",{
 });
 
 function SeqIterator(iterable) {
-    this.iter = _isIter(iterable) ? iterable : iterable[Symbol.iterator]();
+	this.iter = _isIter(iterable) ? iterable : iterable[Symbol.iterator]();
 }
 
-SeqIterator.prototype["@@append"] = LazySeq.prototype.push;
-
-SeqIterator.prototype["@@empty"] = function(){
-	return new LazySeq();
-};
-
 const DONE = {
-    done: true
+	done: true
 };
 
 SeqIterator.prototype.next = function () {
-    var v = this.iter.next();
-    if (v.done) return DONE;
-    return v;
-};
-
-SeqIterator.prototype[Symbol.iterator] = function () {
-    return this;
+	var v = this.iter.next();
+	if (v.done) return DONE;
+	return v;
 };
 
 LazySeq.prototype[Symbol.iterator] = function () {
-    return new SeqIterator(this.iterable);
+	return new SeqIterator(this.iterable);
+};
+
+LazySeq.prototype.subscribe = function(o) {
+	return Observable.from(this.iterable).subscribe(o);
+};
+
+LazySeq.prototype.reduce = function(f,z){
+	return Observable.from(this.iterable).reduce(f,z);
+};
+
+LazySeq.prototype.map = function(f,z){
+	return Observable.from(this.iterable).map(f,z);
 };
 
 function _isArray(a){
-	return !!(a && a.constructor == Array);
+	return a && a.constructor == Array;
 }
 
 function _isIter(a) {
-	return !!(a && typeof a.next == "function");
+	return a && typeof a.next == "function";
+}
+
+function _isObservable(a) {
+	return a && a instanceof Observable;
 }
 
 export function seq(...a){
 	if (a.length == 1){
 		var x = a[0];
 		if(isSeq(x)) return x;
-		if(_isArray(x) || _isIter(x)) return new LazySeq(x);
+		if(_isArray(x) || _isIter(x) || _isObservable(x)) return new LazySeq(x);
 	}
 	var s = new LazySeq();
 	if(a.length === 0) return s;
@@ -112,16 +198,25 @@ export function isSeq(a){
 
 export const Seq = LazySeq;
 
-export const first = s => isSeq(s) ? _isArray(s.iterable) ? s.iterable[0] : _first(s.iterable) : s;
+function _first(iter){
+	const next = iter.next();
+	if(!next.done) return next.value;
+}
+
+export const first = s => {
+	if(!isSeq(s)) return s;
+	const i = s.iterable;
+	return _isArray(i) ? i[0] : _isIter(i) ? _first(i) : i;
+};
 
 const undef = s => s === undefined || s === null;
 
 export function empty(s){
-    return isSeq(s) ? !s.count() : undef(s);
+	return isSeq(s) ? !s.count() : undef(s);
 }
 
 export function exists(s){
-    return isSeq(s) ? !!s.count() : !undef(s);
+	return isSeq(s) ? !!s.count() : !undef(s);
 }
 
 export function count(s){
@@ -129,8 +224,8 @@ export function count(s){
 }
 
 export function insertBefore(s,pos,ins) {
-    pos = first(pos);
-    pos = pos === 0 ? 1 : pos - 1;
+	pos = first(pos);
+	pos = pos === 0 ? 1 : pos - 1;
 	var a = s.toArray();
 	var n = a.slice(0,pos);
 	if(isSeq(ins)) {
@@ -138,7 +233,7 @@ export function insertBefore(s,pos,ins) {
 	} else {
 		n.push(ins);
 	}
-    return seq(n.concat(a.slice(pos)));
+	return seq(n.concat(a.slice(pos)));
 }
 
 /**
@@ -147,10 +242,10 @@ export function insertBefore(s,pos,ins) {
  * @return {Seq|Error}     [Process Error in implementation]
  */
 export function zeroOrOne($arg) {
-    if($arg === undefined) return seq();
-    if(!isSeq($arg)) return $arg;
-    if($arg.size > 1) return error("FORG0003");
-    return $arg;
+	if($arg === undefined) return seq();
+	if(!isSeq($arg)) return $arg;
+	if($arg.size > 1) return error("FORG0003");
+	return $arg;
 }
 /**
  * [oneOrMore returns arg OR error if arg not one or more]
@@ -158,10 +253,10 @@ export function zeroOrOne($arg) {
  * @return {Seq|Error}      [Process Error in implementation]
  */
 export function oneOrMore($arg) {
-    if($arg === undefined) return error("FORG0004");
+	if($arg === undefined) return error("FORG0004");
 	if(!isSeq($arg)) return $arg;
 	if($arg.size === 0) return error("FORG0004");
-    return $arg;
+	return $arg;
 }
 /**
  * [exactlyOne returns arg OR error if arg not exactly one]
@@ -169,8 +264,8 @@ export function oneOrMore($arg) {
  * @return {Seq|Error}      [Process Error in implementation]
  */
 export function exactlyOne($arg) {
-    if($arg === undefined) return error("FORG0005");
-    if(!isSeq($arg)) return $arg;
-    if($arg.size != 1) return error("FORG0005");
-    return $arg;
+	if($arg === undefined) return error("FORG0005");
+	if(!isSeq($arg)) return $arg;
+	if($arg.size != 1) return error("FORG0005");
+	return $arg;
 }
