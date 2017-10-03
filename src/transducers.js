@@ -166,7 +166,7 @@ TransduceObserver.prototype.error = function (e) {
 	this._o.error(e);
 };
 
-TransduceObserver.prototype.completed = function () {
+TransduceObserver.prototype.complete = function () {
 	this._xform["@@transducer/result"](this._o);
 };
 
@@ -179,7 +179,7 @@ function transformForObserver(o) {
 			return obs.next(input);
 		},
 		"@@transducer/result": function (obs) {
-			return obs.completed();
+			return obs.complete();
 		}
 	};
 }
@@ -197,33 +197,35 @@ function transduceObservable(source, xform) {
 
 
 function reduce(coll, xform, init) {
-	if(isArray(coll)) {
-		let result = init;
-		let index = -1;
+	let uninit = arguments.length == 2;
+	if (isArray(coll)) {
+		let index = uninit ? 0 : -1;
+		let result = uninit ? coll[index] : init;
 		let len = coll.length;
-		while(++index < len) {
+		while (++index < len) {
 			result = xform["@@transducer/step"](result, coll[index]);
-			if(isReduced(result)) {
+			if (isReduced(result)) {
 				result = deref(result);
 				break;
 			}
 		}
 		return xform["@@transducer/result"](result);
-	} else if(isObject(coll) || fulfillsProtocol(coll, "iterator")) {
-		let result = init;
+	} else if (isObject(coll) || fulfillsProtocol(coll, "iterator")) {
 		let iter = iterator(coll);
 		let val = iter.next();
-		while(!val.done) {
+		let result = !val.done && uninit ? val.value : init;
+		if(!val.done && uninit) val = iter.next();
+		while (!val.done) {
 			result = xform["@@transducer/step"](result, val.value);
-			if(isReduced(result)) {
+			if (isReduced(result)) {
 				result = deref(result);
 				break;
 			}
 			val = iter.next();
 		}
 		return xform["@@transducer/result"](result);
-	} else if(isObservable(coll)){
-		let result = init;//transformForObserver(init);
+	} else if (isObservable(coll)) {
+		let result = init;
 		coll.subscribe({
 			next:cur => {
 				xform["@@transducer/step"](result,cur);
@@ -977,8 +979,10 @@ export function distinctCat(iterable, f) {
 */
 // non-composable
 export function foldLeft(iterable, z, f) {
-	if(typeof iterable.reduce == "function") return iterable.reduce(f,z);
-	return reduce(iterable,transformer(f),z);
+	if (isFunction(iterable.reduce)) {
+		return arguments.length == 2 ? iterable.reduce(z) : iterable.reduce(f, z);
+	}
+	return arguments.length == 2 ? reduce(iterable, transformer(z)) : reduce(iterable, transformer(f), z);
 }
 
 export function range(n,s=0) {
