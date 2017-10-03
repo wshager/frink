@@ -132,16 +132,18 @@ LazySeq.prototype[Symbol.iterator] = function () {
 	return new SeqIterator(this.iterable);
 };
 
+// durty stuff
 LazySeq.prototype.subscribe = function(o) {
-	return Observable.from(this.iterable).subscribe(o);
+	return new LazySeq(this.toObservable().subscribe(o));
 };
 
 LazySeq.prototype.reduce = function(f,z){
-	return Observable.from(this.iterable).reduce(f,z);
+	let o = this.toObservable();
+	return new LazySeq(arguments.length == 1 ? o.reduce(f) : o.reduce(f,z));
 };
 
-LazySeq.prototype.map = function(f,z){
-	return Observable.from(this.iterable).map(f,z);
+LazySeq.prototype.map = function(f){
+	return new LazySeq(this.toObservable().map(f));
 };
 
 function _isArray(a){
