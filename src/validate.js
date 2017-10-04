@@ -10,6 +10,20 @@ function get(obj, prop) {
 	if (obj.hasOwnProperty(prop)) return obj[prop];
 }
 
+function ucs2length(string) {
+	let counter = 0;
+	const length = string.length;
+	while (counter < length) {
+		const value = string.charCodeAt(counter++);
+		if (value >= 0xD800 && value <= 0xDBFF && counter < length) {
+			// It's a high surrogate, and there is a next character.
+			const extra = string.charCodeAt(counter);
+			if ((extra & 0xFC00) == 0xDC00) counter++; // Low surrogate.
+		}
+	}
+	return counter;
+}
+
 function _formAttrNameToKey(k){
 	if(k == "data-type") return "type";
 	if(k == "type") return "format";
@@ -398,11 +412,11 @@ const validator = {
 	minLength:function(schema, key, params, index, path, err, node){
 		var test = schema[key];
 		if(!node.value) return;
-		if (node.value.length < test) err.push(x(schema, key, params, path + "/" + index, node));
+		if (ucs2length(node.value) < test) err.push(x(schema, key, params, path + "/" + index, node));
 	},
 	maxLength:function(schema, key, params, index, path, err, node){
 		var test = schema[key];
 		if(!node.value) return;
-		if (node.value.length > test) err.push(x(schema, key, params, path + "/" + index, node));
+		if (ucs2length(node.value) > test) err.push(x(schema, key, params, path + "/" + index, node));
 	}
 };
