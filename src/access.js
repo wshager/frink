@@ -55,6 +55,10 @@ export function nextNode(node /* VNode */) {
 		parent = node.parent,
 		indexInParent = node.indexInParent || 0;
 	var depth = node.depth || 0;
+	// FIXME improve check
+	if(type != 17 && (type == 1 || type == 5  || type == 6 || type == 14) && node.count() === 0) {
+		return new Step(inode, node.name, node.parent, depth, node.indexInParent);
+	}
 	if(type != 17 && node.count() > 0) {
 		// if we can still go down, return firstChild
 		depth++;
