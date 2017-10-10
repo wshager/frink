@@ -100,12 +100,11 @@ This is a top level node, and may not be contained in *children* of other node c
 | doctype  | <code>string</code> | Optional. The XML doctype. | 
 | children | <code>VNode*</code> | The children of the document (array or Sequence) |
 
-#### p(name,target,content) ⇒ <code>VNode</code>
-Creates a processing instruction node.
+#### p(target,content) ⇒ <code>VNode</code>
+Creates a processing instruction node. Processing instructions can't be children of arrays or maps (they're ignored).
 
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| name  | <code>string</code> |  Optional. The name of the node as child of a map. |
 | target  | <code>string</code> |  The target part of the PI |
 | content | <code>string</code> | The content part of the PI |
 
