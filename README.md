@@ -119,13 +119,13 @@ Creates a comment node, which can contain a string.
 | value | <code>string</code> | The value of the node |
 
 
-#### f(name,fname,arguments) ⇒ <code>VNode</code>
+#### f(name,qname,arguments) ⇒ <code>VNode</code>
 Creates a "function call" node, which can contain a any other node.
 
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
 | name | <code>string</code> | Optional. The name of the node as child of a map. |
-| fname | <code>string</code> | The name of the function |
+| qname | <code>string, QName</code> | The name of the function |
 | arguments | <code>Array</code> | The arguments to the function as an array |
 
 ___
