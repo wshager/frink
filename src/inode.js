@@ -1,6 +1,6 @@
 import { VNode } from "./vnode";
 
-import { q } from "./qname";
+//import { q } from "./qname";
 
 import { prettyXML } from "./pretty";
 
@@ -97,28 +97,31 @@ export function ivalue(type, name, value){
 
 export function vnode(inode, parent, depth, indexInParent, type) {
 	type = type || _inferType(inode);
-	var name,value;
+	var name = "#",qname,value;
+	if(parent && parent.type == 6) name = parent.keys()[indexInParent];
 	if(type == 1 || type == 9){
-		name = inode.$name;
+		qname = inode.$name;
 	} else if(type == 2) {
+		// TODO tuple under map, attr under elem
 		name = inode.$name;
 		value = inode.$value;
-	} else if (type == 5) {
-		name = parent ? parent.keys()[indexInParent] : "#";
-	} else if (type == 6) {
-		name = parent ? parent.keys()[indexInParent] : "#";
+	//} else if (type == 5) {
+		// no-op
+	//} else if (type == 6) {
+		// no-op
 	} else if (type == 8) {
 		value = inode.$comment;
 	} else if(type == 3 || type == 12){
 		value = inode;
-		name = parent ? parent.keys()[indexInParent] : "#";
 	}
 	// return vnode
 	return new VNode(
 		cx,
 		inode,
 		type,
-		inode && inode.$ns ? q(inode.$ns.uri, name) : name,
+		//inode && inode.$ns ? q(inode.$ns.uri, name) : name,
+		name,
+		qname,
 		value,
 		parent,
 		depth,
@@ -126,10 +129,10 @@ export function vnode(inode, parent, depth, indexInParent, type) {
 	);
 }
 
-export function emptyINode(type, name, attrs, ns) {
+export function emptyINode(type, name, qname, attrs, ns) {
 	var inode = type == 5 ? [] : {};
 	if(type == 1 || type == 9){
-		inode.$name = name;
+		inode.$name = qname;
 		inode.$attrs = attrs;
 		inode.$ns = ns;
 		inode.$children = [];
