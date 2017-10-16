@@ -39,7 +39,7 @@ export function vnode(inode, parent, depth, indexInParent){
 			val = parseFloat(inode.value);
 		}
 	}
-	return new VNode(cx, inode, type, inode.name, val, parent, depth, indexInParent);
+	return new VNode(cx, inode, type, inode.name, null, val, parent, depth, indexInParent);
 }
 
 function _inFieldset(node, parent) {
@@ -54,40 +54,40 @@ export function count(inode,type,cache) {
 	// filter out elements that are in form, but also in fieldset...
 	var elems = inode.elements;
 	if (!elems) return 0;
-    if(type == 6){
-        if(!cache) cache = cached(inode,type);
-        elems = cache.values();
-    }
+	if(type == 6){
+		if(!cache) cache = cached(inode,type);
+		elems = cache.values();
+	}
 	return elems.length;
 }
 
-export function keys(inode,type,cache) {
+export function keys(inode/*,type,cache*/) {
 	// TODO cached
 	return inode.elements ? forEach(inode.elements, n => n.name) : [];
 }
 
 function Cache(elems) {
-    this.elements = elems;
+	this.elements = elems;
 }
 
 Cache.prototype.values = function(){
-    return this.elements;
+	return this.elements;
 };
 
 export function cached(inode,type) {
-    if(type == 6){
-        return new Cache(Array.prototype.filter.call(inode.elements,e => !_inFieldset(e, inode)));
-    }
+	if(type == 6){
+		return new Cache(Array.prototype.filter.call(inode.elements,e => !_inFieldset(e, inode)));
+	}
 }
 
 export function first(inode,type,cache) {
 	// detect / filter fieldset elements
 	var elems = inode.elements;
 	if (elems) {
-        if(type == 6) {
-            if(!cache) cache = cached(inode,type);
-            elems = cache.values();
-        }
+		if(type == 6) {
+			if(!cache) cache = cached(inode,type);
+			elems = cache.values();
+		}
 		return elems[0];
 	}
 }
@@ -98,11 +98,11 @@ export function next(inode, node, type, cache) {
 	// detect fieldset elements
 	var elems = inode.elements;
 	if (elems) {
-        if(type == 6){
-            if(!cache) cache = cached(inode,type);
-            elems = cache.values();
-        }
-        return elems[idx + 1];
+		if(type == 6){
+			if(!cache) cache = cached(inode,type);
+			elems = cache.values();
+		}
+		return elems[idx + 1];
 	}
 }
 
@@ -110,20 +110,22 @@ export function get(inode,idx){
 	return inode[idx];
 }
 
-export function getType(inode){
+export function getType(/*inode*/){
 	// probably only used for empty root
 	return 9;
 }
 
-export function emptyINode(type,name,depth,attrs){
+export function emptyINode(/*type,name,qname,depth,attrs*/){
+	// no-op
 }
 
 export function emptyAttrMap(){
 	// probably only used for empty root
+	// no-op
 }
 
 export function push() {
-
+	// no-op
 }
 
 export function getAttribute(inode){
