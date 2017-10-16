@@ -126,11 +126,11 @@ ____
 ## Examples
 
 ```javascript
-import * as n from "frink";
+import {e, a, seq } from "frink";
 
-n.e("div",n.seq(
-  n.a("class","greeting"),
-  n.e("p","Hello")
+e("div",seq(
+  a("class","greeting"),
+  e("p","Hello")
 ));
 ```
 
@@ -157,7 +157,7 @@ JSON:
 ```
 
 ```javascript
-import * as n from "frink";
+import { m, a } from "frink";
 
 n.m(
   n.a("greeting","Hello")
