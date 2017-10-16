@@ -36,9 +36,11 @@ function _inferType(inode){
 		return 5;
 	} else if(cc == Object){
 		if(inode.$children) {
-			return inode.$name == "#document" ? 9 : 1;
+			return inode.$name == "#document" ? 9 : inode.$name == "#document-fragment" ? 11 : 1;
 		} else if(inode.$value){
 			return 2;
+		} else if(inode.$pi){
+			return 7;
 		} else if(inode.$comment){
 			return 8;
 		} else {
@@ -86,9 +88,9 @@ function _elemToString(e){
 
 // -----------------------
 
-export function ivalue(type, name, value){
-	if(type == 2) {
-		return {$name:name,$value:value};
+export function ivalue(type, value){
+	if(type == 7) {
+		return {$pi:value};
 	} else if(type == 8) {
 		return {$comment:value};
 	}
@@ -97,10 +99,9 @@ export function ivalue(type, name, value){
 
 export function vnode(inode, parent, depth, indexInParent, type) {
 	type = type || _inferType(inode);
-	var name = "#",qname,value;
-	if(parent && parent.type == 6) name = parent.keys()[indexInParent];
-	if(type == 1 || type == 9){
-		qname = inode.$name;
+	var name,value;
+	if(type == 1 || type == 9 || type == 11){
+		name = inode.$name;
 	} else if(type == 2) {
 		// TODO tuple under map, attr under elem
 		name = inode.$name;
@@ -109,6 +110,8 @@ export function vnode(inode, parent, depth, indexInParent, type) {
 		// no-op
 	//} else if (type == 6) {
 		// no-op
+	} else if (type == 7) {
+		value = inode.$pi;
 	} else if (type == 8) {
 		value = inode.$comment;
 	} else if(type == 3 || type == 12){
@@ -121,7 +124,6 @@ export function vnode(inode, parent, depth, indexInParent, type) {
 		type,
 		//inode && inode.$ns ? q(inode.$ns.uri, name) : name,
 		name,
-		qname,
 		value,
 		parent,
 		depth,
@@ -129,10 +131,10 @@ export function vnode(inode, parent, depth, indexInParent, type) {
 	);
 }
 
-export function emptyINode(type, name, qname, attrs, ns) {
+export function emptyINode(type, name, attrs, ns) {
 	var inode = type == 5 ? [] : {};
-	if(type == 1 || type == 9){
-		inode.$name = qname;
+	if(type == 1 || type == 9 || type == 11){
+		inode.$name = name;
 		inode.$attrs = attrs;
 		inode.$ns = ns;
 		inode.$children = [];
@@ -142,6 +144,14 @@ export function emptyINode(type, name, qname, attrs, ns) {
 
 export function emptyAttrMap(init){
 	return init || {};
+}
+
+export function ituple(key,child,keyType){
+	return {
+		$name:key,
+		$type:keyType,
+		$value:child
+	};
 }
 
 /*
@@ -169,7 +179,7 @@ export function next(inode, node, type){
 
 export function push(inode,val,type){
 	type = type || _inferType(inode);
-	if(type == 1 || type == 9){
+	if(type == 1 || type == 9 || type == 11){
 		inode.$children.push(val[1]);
 	} else if(type == 5) {
 		inode.push(val);
@@ -198,7 +208,7 @@ export function removeChild(inode,child,type){
 
 export function cached(inode,type){
 	type = type || _inferType(inode);
-	if(type == 1 || type == 9) {
+	if(type == 1 || type == 9 || type == 11) {
 		let children = inode.$children, len = children.length, cache = multimap.default();
 		for(let i = 0; i<len; i++){
 			cache.push([children[i].$name || i + 1,children[i]]);
@@ -237,7 +247,7 @@ export function keys(inode,type){
 
 export function values(inode,type){
 	type = type || _inferType(inode);
-	if(type == 1 || type == 9) return inode.$children;
+	if(type == 1 || type == 9 || type == 11) return inode.$children;
 	if (type == 2) return [[inode.$name,inode.$value]];
 	if(type == 6) return Object.values(inode);
 	if (type == 8) return [inode.$comment];
@@ -259,7 +269,7 @@ export function getAttribute(inode,key){
 
 export function count(inode, type){
 	type = type || _inferType(inode);
-	if(type == 1 || type == 9){
+	if(type == 1 || type == 9 || type == 11){
 		return inode.$children.length;
 	} else if(type == 5) {
 		return inode.length;
@@ -271,7 +281,7 @@ export function count(inode, type){
 
 export function first(inode,type){
 	type = type || _inferType(inode);
-	if(type == 1 || type == 9){
+	if(type == 1 || type == 9 || type == 11){
 		return inode.$children[0];
 	} else if(type == 5) {
 		return inode[0];
@@ -282,7 +292,7 @@ export function first(inode,type){
 
 export function last(inode,type){
 	type = type || _inferType(inode);
-	if(type == 1 || type == 9) return _last(inode.$children);
+	if(type == 1 || type == 9 || type == 11) return _last(inode.$children);
 	if(type == 5) return _last(inode);
 	if(type == 6) {
 		return _last(Object.values(inode));
@@ -296,7 +306,7 @@ export function attrEntries(inode){
 
 export function modify(inode, node, ref, type){
 	type = type || _inferType(inode);
-	if(type == 1 || type == 9){
+	if(type == 1 || type == 9 || type == 11){
 		if (ref !== undefined) {
 			inode.$children.splice(ref.indexInParent,0,node.inode);
 		} else {
@@ -314,31 +324,23 @@ export function modify(inode, node, ref, type){
 	return inode;
 }
 
-export function stringify(inode, type, root = true, key) {
+export function stringify(inode, type, root = true) {
 	var str = "";
 	type = type || _inferType(inode);
-	if (type == 1 || type == 9) {
+	if (type == 1) {
 		str += _elemToString(inode);
 	} else if (type == 5) {
 		let val = forEach(inode, c => stringify(c)).join("");
-		if(key) {
-			str += "<" + key + " json:type=\"array\"" + (val ? ">" + val + "</" + key + ">" : "/>");
-		} else {
-			str += "<json:array" + (val ? ">" + val + "</json:array>" : "/>");
-		}
+		str += "<l3:l" + (val ? ">" + val + "</l3:l>" : "/>");
 	} else if (type == 6) {
 		let val = forEach(Object.entries(inode), c => stringify(c[1], null, false, c[0])).join("");
-		if(key) {
-			str += "<" + key + " json:type=\"map\"" + (val ? ">" + val + "</" + key + ">" : "/>");
-		} else {
-			str += "<json:map" + (val ? ">" + val + "</json:map>" : "/>");
-		}
+		str += "<l3:m" + (val ? ">" + val + "</l3:m>" : "/>");
 	} else {
-		let val = inode === null ? "null" : inode.toString();
-		if(key) {
-			str += "<" + key + (type == 12 ? " json:type=\"literal\"" : "") + (val ? ">" + val + "</" + key + ">" : "/>");
+		if(type == 8) {
+			str += "<!--" + inode.$comment + "-->";
 		} else {
-			str += type == 12 ? "<json:literal>" + val + "</json:literal>" : val;
+			let val = inode === null ? "null" : inode;
+			str += type == 12 ? "<l3:x>" + val + "</l3:x>" : val;
 		}
 	}
 	return root ? prettyXML(str) : str;
