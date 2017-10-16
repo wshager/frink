@@ -130,19 +130,19 @@ import * as n from "frink";
 
 n.e("div",n.seq(
   n.a("class","greeting"),
-  n.e("p",n.x("Hello"))
-);
+  n.e("p","Hello")
+));
 ```
 
-XML serialization (duh):
+HTML serialization (duh):
 
-```xml
+```html
 <div class="greeting">
  <p>Hello</p>
 </div>
 ```
 
-JSON node:
+JSON:
 
 ```json
 {
@@ -156,6 +156,29 @@ JSON node:
 }
 ```
 
+```javascript
+import * as n from "frink";
+
+n.m(
+  n.a("greeting","Hello")
+);
+```
+
+HTML serialization:
+
+```html
+<l3-m>
+ <l3-a name="greeting">Hello</l3-a>
+</l3-m>
+```
+
+JSON (duh):
+
+```json
+{
+  "greeting":"Hello"
+}
+```
 
 ____
 
