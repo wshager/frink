@@ -3,15 +3,15 @@ import { VNode } from "./vnode";
 
 //import { q } from "./qname";
 
-import { filter } from "./transducers";
+import { filter, take, compose, into } from "./transducers";
 
 // import self!
 import * as cx from "./dom";
 
 export const __inode_type = "dom";
 
-const wsre = /[^\t\n\r ]/;
-const ignoreWS = x => !wsre.test(x.textContent);
+const wsre = /^[\t\n\r ]*$/;
+const ignoreWS = x => x.nodeType != 3 || !wsre.test(x.textContent);
 const l3re = /^l3-(e?)(a?)(x?)(r?)(l?)(m?)(p?)(c?)()()(d?)()()(f?)$/;
 const getL3Type = (name) => {
 	return parseInt(name.replace(l3re,function(){
@@ -108,15 +108,16 @@ export function get(inode,idx,type){
 	return inode[idx];
 }
 */
-export function next(inode, node, type){
+export function next(pinode, node, type){
 	//var idx = node.indexInParent;
+	let inode = node.inode;
 	if(type == 1 || type == 9 || type == 11) {
 		// ignore WS-only!
 		var nxt = inode.nextSibling;
-		while(!ignoreWS(nxt)){
+		while(nxt && !ignoreWS(nxt)){
 			nxt = inode.nextSibling;
 		}
-		return nxt;
+		return nxt || undefined;
 	}
 }
 
@@ -145,7 +146,7 @@ export function cached() {
 
 export function keys(inode,type){
 	if(type == 1 || type == 9 || type == 11) {
-		let children = filter(inode.childNodes,ignoreWS), len = children.length, keys = [];
+		let children = into(inode.childNodes,filter(ignoreWS),[]), len = children.length, keys = [];
 		for(let i = 0; i<len; i++){
 			keys[i] = getQName(children[i],i);
 		}
@@ -180,7 +181,7 @@ export function getAttribute(inode,key){
 
 export function count(inode, type){
 	if(type == 1 || type == 9 || type == 11){
-		return filter(inode.childNodes,ignoreWS).length;
+		return into(inode.childNodes,filter(ignoreWS),[]).length;
 	}
 	// TODO l3
 	return 0;
@@ -188,12 +189,12 @@ export function count(inode, type){
 
 export function first(inode,type){
 	if(type == 1 || type == 9 || type == 11){
-		return filter(inode.childNodes,ignoreWS)[0];
+		return into(inode.childNodes,compose(filter(ignoreWS),take(1)),[])[0];
 	}
 }
 
 export function last(inode,type){
-	if(type == 1 || type == 9 || type == 11) return _last(filter(inode.childNodes,ignoreWS));
+	if(type == 1 || type == 9 || type == 11) return _last(Array.from(filter(inode.childNodes,ignoreWS)));
 }
 
 export function attrEntries(inode){
