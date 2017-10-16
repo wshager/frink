@@ -29,7 +29,7 @@ const getQName = (inode,indexInParent) => {
 		//let type = l3Type | nodeType;
 		var isL3 = l3Type !== 0;
 		var attrs = inode.attributes;
-		return isL3 ? nodeName : "qname" in attrs ? attrs.qname : name;
+		return isL3 ? attrs.name : nodeName;
 	} else {
 		return indexInParent + 1;
 	}
@@ -42,12 +42,7 @@ const _last = x => x[x.length - 1];
 // -----------------------
 
 
-export function ivalue(type, name, value){
-	if(type == 2) {
-		return {$name:name,$value:value};
-	} else if(type == 8) {
-		return {$comment:value};
-	}
+export function ivalue(type, value){
 	return value;
 }
 
@@ -59,11 +54,10 @@ export function vnode(inode, parent, depth, indexInParent) {
 	let type = l3Type | nodeType;
 	var isL3 = isElem && l3Type !== 0;
 	var attrs = isElem ? inode.attributes : null;
-	var name, qname, value;
-	if(parent && parent.type == 6) name = isL3 && "name" in attrs ? attrs.name : isElem ? attrs["data-l3-name"] : null;
+	var name, value;
 	if(type == 1){
 		// if l3, nodeType != type
-		qname = isL3 ? nodeName : "qname" in attrs ? attrs.qname : name;
+		name = isL3 ? attrs.name : nodeName;
 	} else if(type == 2) {
 		// no-op?
 	} else if (type == 5) {
@@ -79,7 +73,6 @@ export function vnode(inode, parent, depth, indexInParent) {
 		inode,
 		type,
 		name,
-		qname,
 		value,
 		parent,
 		depth,
@@ -87,13 +80,15 @@ export function vnode(inode, parent, depth, indexInParent) {
 	);
 }
 
-export function emptyINode(type, name, qname, attrs) {
-	// TODO dom-util elem etc.
+export function emptyINode(type, name, attrs) {
 	if(type == 9) {
-		// TODO move to 11
+		// XMLDocument doesn't make sense, right?
+		return document.createDocumentFragment();
+	} else if(type == 11) {
 		return document.createDocumentFragment();
 	} else {
-		var elem = document.createElement(qname);
+		// TODO l3, persistent attrs?
+		var elem = document.createElement(name);
 		for(var k in attrs){
 			elem.attributes[k] = attrs[k];
 		}
@@ -115,7 +110,7 @@ export function get(inode,idx,type){
 */
 export function next(inode, node, type){
 	//var idx = node.indexInParent;
-	if(type == 1 || type == 9) {
+	if(type == 1 || type == 9 || type == 11) {
 		// ignore WS-only!
 		var nxt = inode.nextSibling;
 		while(!ignoreWS(nxt)){
@@ -126,7 +121,7 @@ export function next(inode, node, type){
 }
 
 export function push(inode,val,type){
-	if(type == 1 || type == 11){
+	if(type == 1 || type == 9  || type == 11){
 		inode.appendChild(val[1]);
 	}
 	return inode;
@@ -138,8 +133,9 @@ export function set(inode /*,key,val,type*/){
 }
 
 export function removeChild(inode,child,type){
-	if(type == 1 || type == 9){
+	if(type == 1 || type == 9 || type == 11){
 		// TODO removeChild et al.
+		inode.removeChild(child);
 	}
 	return inode;
 }
@@ -148,10 +144,10 @@ export function cached() {
 }
 
 export function keys(inode,type){
-	if(type == 1 || type == 9) {
+	if(type == 1 || type == 9 || type == 11) {
 		let children = filter(inode.childNodes,ignoreWS), len = children.length, keys = [];
 		for(let i = 0; i<len; i++){
-			keys[i] = getQName(children[i].$name,i);
+			keys[i] = getQName(children[i],i);
 		}
 		return keys;
 	}
@@ -162,7 +158,7 @@ export function keys(inode,type){
 }
 
 export function values(inode,type){
-	if(type == 1 || type == 9) return filter(inode.childNodes,ignoreWS);
+	if(type == 1 || type == 9 || type == 11) return filter(inode.childNodes,ignoreWS);
 	//if (type == 2) return [[inode.$name,inode.$value]];
 	//if(type == 6) return Object.values(inode);
 	//if (type == 8) return [inode.$comment];
@@ -183,7 +179,7 @@ export function getAttribute(inode,key){
 }
 
 export function count(inode, type){
-	if(type == 1 || type == 9){
+	if(type == 1 || type == 9 || type == 11){
 		return filter(inode.childNodes,ignoreWS).length;
 	}
 	// TODO l3
@@ -191,13 +187,13 @@ export function count(inode, type){
 }
 
 export function first(inode,type){
-	if(type == 1 || type == 9){
+	if(type == 1 || type == 9 || type == 11){
 		return filter(inode.childNodes,ignoreWS)[0];
 	}
 }
 
 export function last(inode,type){
-	if(type == 1 || type == 9) return _last(filter(inode.childNodes,ignoreWS));
+	if(type == 1 || type == 9 || type == 11) return _last(filter(inode.childNodes,ignoreWS));
 }
 
 export function attrEntries(inode){
