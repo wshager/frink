@@ -1,10 +1,11 @@
-import { VNodeIterator } from './access';
+import { VNodeIterator } from "./access";
 
-export function VNode(cx,inode,type,name,value,parent,depth,indexInParent,cache){
+export function VNode(cx,inode,type,name,qname,value,parent,depth,indexInParent,cache){
 	this.cx = cx;
 	this.inode = inode;
 	this.type = type;
 	this.name = name;
+	this.qname = qname;
 	this.value = value;
 	this.parent = parent;
 	this.depth = depth | 0;
@@ -99,8 +100,8 @@ VNode.prototype.ivalue = function(type, name, value) {
 	return this.cx.ivalue(type, name, value);
 };
 
-VNode.prototype.emptyINode = function(type, name, attrs, ns){
-	return this.cx.emptyINode(type, name, attrs, ns);
+VNode.prototype.emptyINode = function(type, name, qname, attrs, ns){
+	return this.cx.emptyINode(type, name, qname, attrs, ns);
 };
 
 VNode.prototype.emptyAttrMap = function(init) {
