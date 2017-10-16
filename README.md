@@ -32,11 +32,8 @@ Frink integrates with legacy XML projects that don't rely on DTD validation.
 
 ### Constructors
 
-#### e(name, qname, children) ⇒ <code>VNode</code>
-Creates an element node, which can contain multiple nodes of any type.
-
-When the parent is a map, and no `name` is provided, the `qname` is used for `name` instead.
-
+#### e(name, children) ⇒ <code>VNode</code>
+Creates an element node, which can contain multiple nodes of any type, except `document`.
  
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
@@ -44,7 +41,7 @@ When the parent is a map, and no `name` is provided, the `qname` is used for `na
 | children | <code>VNode*</code> | The children of the element (array or Sequence) |
 
 #### a(name,value) ⇒ <code>VNode</code>
-Creates an attribute node under an element, or a tuple under a map. Can contain a single node of any other type (except `document`). Note that when serializing to XML, attribute values are converted to a string following serializer parameters.
+Creates an attribute node under an element, or a tuple under a map. Can contain a single node of any other type, except `document` and `attribute`. Note that when serializing to XML, attribute values are converted to a string following serializer parameters.
 
 When the parent is not an element or map, an error will be produced.
 
@@ -68,23 +65,23 @@ Creates a "reference" (or link) node, which can contain a (partial) URI-formatte
 | value | <code>string</code> | The value of the node |
 
 #### l(children) ⇒ <code>VNode</code>
-Creates a list (AKA array) node, which can contain multiple nodes of any type.
+Creates a list (AKA array) node, which can contain multiple nodes of any type, except `document` and `attribute`.
  
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
 | children | <code>VNode*</code> | The children of the list (array or Sequence) |
 
 #### m(children) ⇒ <code>VNode</code>
-Creates a map (AKA plain object) node, which can contain multiple nodes of any type.
+Creates a map (AKA plain object) node, which can contain multiple nodes of any type, except `document` and `attribute`.
 
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
 | children | <code>VNode*</code> | The children of the map (array or Sequence) |
 
 #### d(children) ⇒ <code>VNode</code>
-Creates a document node, which can contain a single node of any other type, with the exception of processing instruction nodes. In general, documents aren't constructed directly, but created by the parser, or when accessing or modifying a structure.
+Creates a document node, which can contain a single node of any other type, except `document` and `attribute`, in addition to multiple processing instruction nodes. In general, documents aren't constructed directly, but created by the parser.
 
-This is a top level node, and may not be contained in *children* of other node constructors.
+This is a top level node, and may not be contained in other nodes.
 
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
@@ -108,7 +105,7 @@ Creates a comment node, which can contain a string.
 
 
 #### f(qname,arguments) ⇒ <code>VNode</code>
-Creates a "function call" node, which can contain a any other node.
+Creates a "function call" node, which can contain nodes of any other type, except `attribute`.
 
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
