@@ -32,76 +32,63 @@ Frink integrates with legacy XML projects that don't rely on DTD validation.
 
 ### Constructors
 
-#### e(name, qname, children) ⇒ <code>VNode</code>
-Creates an element node, which can contain multiple nodes of any type.
-
-When the parent is a map, and no `name` is provided, the `qname` is used for `name` instead.
-
+#### e(name, children) ⇒ <code>VNode</code>
+Creates an element node, which can contain multiple nodes of any type, except `document`.
  
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| name  | <code>string</code> | Optional. The name of the node as child of a map. |
-| qname  | <code>string, QName</code> | The name of the element |
+| name  | <code>string, QName</code> | The name of the element |
 | children | <code>VNode*</code> | The children of the element (array or Sequence) |
 
 #### a(name,value) ⇒ <code>VNode</code>
-Creates an attribute node, which can contain a javascript primitive value (string, number, boolean or null). Note that the value is always converted to a string when serialized, following a small convention.
+Creates an attribute node under an element, or a tuple under a map. Can contain a single node of any other type, except `document` and `attribute`. Note that when serializing to XML, attribute values are converted to a string following serializer parameters.
 
-* a numeric value is cast to a string
-* when the value is `true`, the value is set to the `name` of the attribute
-* when the value is either `false` or `null`, the attribute is *not* serialized.
-
-When the parent is a list, map or function call, the node is interpreted as a primitive value node (i.e. like `x(name,value)` below).
+When the parent is not an element or map, an error will be produced.
 
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| name  | <code>string</code> | The name of the attribute |
-| value | <code>string, number, boolean, null</code> | The value of the attribute |
+| name  | <code>string</code> | The name of the attribute or tuple |
+| value | <code>string, VNode</code> | The value of the attribute |
 
-#### x(name,value) ⇒ <code>VNode</code>
+#### x(value) ⇒ <code>VNode</code>
 Creates a primitive value node, which can contain a javascript primitive (string, number, boolean or null).
  
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| name  | <code>string</code> | Optional. The name of the node as child of a map. |
 | value | <code>string, number, boolean, null</code> | The value of the node |
 
-#### r(name,value) ⇒ <code>VNode</code>
+#### r(value) ⇒ <code>VNode</code>
 Creates a "reference" (or link) node, which can contain a (partial) URI-formatted string.
  
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| name  | <code>string</code> | Optional. The name of the node as child of a map. |
 | value | <code>string</code> | The value of the node |
 
-#### l(name,children) ⇒ <code>VNode</code>
-Creates a list (AKA array) node, which can contain multiple nodes of any type.
+#### l(children) ⇒ <code>VNode</code>
+Creates a list (AKA array) node, which can contain multiple nodes of any type, except `document` and `attribute`.
  
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| name  | <code>string</code> | Optional. The name of the node as child of a map. |
 | children | <code>VNode*</code> | The children of the list (array or Sequence) |
 
-#### m(name,children) ⇒ <code>VNode</code>
-Creates a map (AKA plain object) node, which can contain multiple nodes of any type.
+#### m(children) ⇒ <code>VNode</code>
+Creates a map (AKA plain object) node, which can contain multiple nodes of any type, except `document` and `attribute`.
 
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| name  | <code>string</code> | Optional. The name of the node as child of a map. |
 | children | <code>VNode*</code> | The children of the map (array or Sequence) |
 
-#### d(doctype,children) ⇒ <code>VNode</code>
-Creates a document node, which can contain a single node of any other type, with the exception of processing instruction nodes. In general, documents aren't constructed directly, but created by the parser, or when accessing or modifying a structure.
+#### d(children) ⇒ <code>VNode</code>
+Creates a document node, which can contain a single node of any other type, except `document` and `attribute`, in addition to multiple processing instruction nodes. In general, documents aren't constructed directly, but created by the parser.
 
-This is a top level node, and may not be contained in *children* of other node constructors.
+This is a top level node, and may not be contained in other nodes.
 
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| doctype  | <code>string</code> | Optional. The XML doctype. | 
 | children | <code>VNode*</code> | The children of the document (array or Sequence) |
 
 #### p(target,content) ⇒ <code>VNode</code>
-Creates a processing instruction node. Processing instructions can't be children of arrays or maps (they're ignored).
+Creates a processing instruction node.
 
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
@@ -109,21 +96,19 @@ Creates a processing instruction node. Processing instructions can't be children
 | content | <code>string</code> | The content part of the PI |
 
 
-#### c(name,value) ⇒ <code>VNode</code>
+#### c(value) ⇒ <code>VNode</code>
 Creates a comment node, which can contain a string.
 
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| name  | <code>string</code> | Optional. The name of the node as child of a map. |
 | value | <code>string</code> | The value of the node |
 
 
-#### f(name,qname,arguments) ⇒ <code>VNode</code>
-Creates a "function call" node, which can contain a any other node.
+#### f(qname,arguments) ⇒ <code>VNode</code>
+Creates a "function call" node, which can contain nodes of any other type, except `attribute`.
 
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| name | <code>string</code> | Optional. The name of the node as child of a map. |
 | qname | <code>string, QName</code> | The name of the function |
 | arguments | <code>Array</code> | The arguments to the function as an array |
 
@@ -131,31 +116,100 @@ ___
 
 Notes:
 
-* All nodes may be contained in the "children" of element, list, map or function-call nodes. When the parent is a map, the `name` parameter is used as the name of a "tuple". When the parent is a document, an element, a list or a function call, the `name` parameter is not used.
 * Constructors are *lazy*: the temporary VNode holds a reference to a function. The node will be actualized when its parent VNode calls this function.
 * Once a root node is actualized, all constructor function references will be called recursively to create the actual document structure.
-* In some cases the `name` param is optional. A name must be provided to a constructor function when the parent node is of type *map*.
 * A document may also be actualized on demand, for example when accessing or modifying a temporary structure.
-* Documents can be both persistent (AKA immutable) or plain JSON under the hood. This can be decided when a document is actualized.
+* Documents can be persistent or non-persistent JSON under the hood. This can be decided when a document is actualized. The VNode interface can also be used to wrap HTML DOM nodes.
 
 ____
+
+## Faq
+
+Q: Why such short function names?
+
+A: The shorthand is inspired by HyperScript, which is in turn inspired by put-selector, which was inspired by JSON-query, which was inspired by XPath, which is based on XML DOM. Besides, I didn't want names like `createElement` etc. You may wish to alias the functions in your code, but beware that `element`, `attribute`, `text`, et al. are reserved elsewhere for node type tests.
+
+
+Q: What the hell is a "function call node" for?
+
+A: It can turn your HTML or JSON into a computer program. A small group of people still like to go to XSLT conferences, and I guess this would totally be their thing. Other people like to go to code generation conferences. Same thing.
+
+____
+
+## Examples
+
+```javascript
+import {e, a, seq } from "frink";
+
+e("div",seq(
+  a("class","greeting"),
+  e("p","Hello")
+));
+```
+
+HTML serialization (duh):
+
+```html
+<div class="greeting">
+ <p>Hello</p>
+</div>
+```
+
+JSON:
+
+```json
+{
+  "$name":"div",
+  "$attrs": {"class":"greeting"},
+  "$children":[{
+    "$name":"p",
+    "$attrs": {},
+    "$children":["Hello"]
+  }]
+}
+```
+
+```javascript
+import { m, a } from "frink";
+
+n.m(
+  n.a("greeting","Hello")
+);
+```
+
+HTML serialization:
+
+```html
+<l3-m>
+ <l3-a name="greeting">Hello</l3-a>
+</l3-m>
+```
+
+JSON (duh):
+
+```json
+{
+  "greeting":"Hello"
+}
+```
+
+____
+
+## Serialization rules
 
 L3N serialization rules for JSON:
 
 | Constant | VNode Type                | Appearance  |
 | -------- | ------------------------- | ----------- |
 | 1 | Element | `{"$name":"qname","$attrs":{"some-attr":"some-value"},"$children":[]}` |
-| 2 | Attribute | See Element |
 | 3 | teXt | `"some-text"` |
 | 4 | Reference | `{"$ref":"/some/path"}` |
 | 5 | List | `[]` |
 | 6 | Map | `{}` |
-| 7 | Processing instruction | `{"$name"":"xml-stylesheet","$instruction":"\"type\"=\"text/xsl\" \"href\"=\"some.xsl\""}` |
+| 7 | Processing instruction | `{"$pi"":"xml-stylesheet "\"type\"=\"text/xsl\" \"href\"=\"some.xsl\""}` |
 | 8 | Comment | `{"$comment":"some-comment"}`|
-| 11 | docType | N/A |
 | 12 | teXt | `123`, `true` or `null` |
 | 14 | Function call | `{"$name":"some-function","$args":[]}` |
-
 
 ____
 
@@ -164,14 +218,12 @@ L3N serialization rules for XML:
 | Constant | VNode Type                | Appearance  |
 | -------- | ------------------------- | ----------- |
 | 1 | Element | `<some-element some-attr="some-value"></some-element>` |
-| 2 | Attribute | See Element |
 | 3 | teXt | `some-text` |
 | 4 | Reference | `<include xmlns="http://www.w3.org/2001/XInclude" href="/some/path" parse="xml"/>` |
 | 5 | List | `<l3:l xmlns:l3="http://l3n.org"></l3:l>` |
-| 6 | Map | `<l3:m xmlns:l3="http://l3n.org"><some-element l3:name="my-xml-tuple" /></l3:m>` |
+| 6 | Map | `<l3:m xmlns:l3="http://l3n.org"><l3:a name="my-xml-tuple"><some-element /></l3:a></l3:m>` |
 | 7 | Processing instruction | `<?xml-stylesheet type="text/xsl" href="some.xsl" ?>` |
 | 8 | Comment | `<!-- some-comment -->`|
-| 11 | docType | `<!DOCTYPE note SYSTEM "Note.dtd">` |
 | 12 | teXt | `<l3:x xmlns:l3="http://l3n.org">123</l3:x>` |
 | 14 | Function call | `<l3:f xmlns:l3="http://l3n.org" name="some-function"></l3:f>` |
 
@@ -182,14 +234,12 @@ L3N serialization rules for HTML:
 | Constant | VNode Type                | Appearance  |
 | -------- | ------------------------- | ----------- |
 | 1 | Element | `<some-element some-attr="some-value"></some-element>` |
-| 2 | Attribute | See Element |
 | 3 | teXt | `some-text` |
 | 4 | Reference | `<link rel="import" href="/some/path">` |
 | 5 | List | `<l3-l></l3-l>` |
 | 6 | Map | `<l3-m><some-element data-l3-name="my-html-tuple" /></l3-m>` |
 | 7 | Processing instruction | N/A |
 | 8 | Comment | `<!-- some-comment -->`|
-| 11 | docType | `<!DOCTYPE html>` |
 | 12 | teXt | `<l3-x>123</l3-x>` |
 | 14 | Function call | `<l3-f name="some-function"></l3-f>` |
 
