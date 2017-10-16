@@ -225,9 +225,13 @@ const _isAttribute = n => isVNode(n) && n.type == 2;
 
 const _isText = n => isVNode(n) && n.type == 3;
 
-//const _isList = n => isVNode(n) && n.type == 5;
+const _isList = n => isVNode(n) && n.type == 5;
 
-//const _isMap = n => isVNode(n) && n.type == 6;
+const _isMap = n => isVNode(n) && n.type == 6;
+
+const _isPI = n => isVNode(n) && n.type == 7;
+
+const _isComment = n => isVNode(n) && n.type == 8;
 
 const _isLiteral = n => isVNode(n) && n.type == 12;
 
@@ -267,6 +271,22 @@ export function element(qname) {
 	return _nodeTest(_isElement,qname);
 }
 
+export function list() {
+	return _nodeTest(_isList);
+}
+
+/*export function map() {
+	return _nodeTest(_isMap);
+}*/
+
+export function processingInstruction() {
+	return _nodeTest(_isPI);
+}
+
+export function comment() {
+	return _nodeTest(_isComment);
+}
+
 function _attrGet(key,node){
 	var entries;
 	if (key !== null) {
@@ -276,7 +296,7 @@ function _attrGet(key,node){
 	} else {
 		entries = node.attrEntries();
 	}
-	return into(entries, kv => node.vnode(node.ivalue(2, kv[0], kv[1]), node.parent, node.depth + 1, node.indexInParent),seq())[Symbol.iterator]();
+	return into(entries, kv => node.vnode(node.ituple(kv[0], kv[1]), node.parent, node.depth + 1, node.indexInParent),seq())[Symbol.iterator]();
 }
 
 // TODO make axis default, process node here, return seq(VNodeIterator)
