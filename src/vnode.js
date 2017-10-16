@@ -1,11 +1,10 @@
 import { VNodeIterator } from "./access";
 
-export function VNode(cx,inode,type,name,qname,value,parent,depth,indexInParent,cache){
+export function VNode(cx,inode,type,name,value,parent,depth,indexInParent,cache){
 	this.cx = cx;
 	this.inode = inode;
 	this.type = type;
 	this.name = name;
-	this.qname = qname;
 	this.value = value;
 	this.parent = parent;
 	this.depth = depth | 0;
@@ -52,7 +51,7 @@ VNode.prototype.next = function(node){
 
 // TODO cache invalidation
 VNode.prototype.push = function(child){
-	this.inode = this.cx.push(this.inode,[child.name,child.inode],this.type);
+	this.inode = this.cx.push(this.inode,[child.name,child.value],this.type);
 	return this;
 };
 
@@ -96,16 +95,20 @@ VNode.prototype.vnode = function(inode, parent, depth, indexInParent){
 	return this.cx.vnode(inode, parent, depth, indexInParent);
 };
 
-VNode.prototype.ivalue = function(type, name, value) {
-	return this.cx.ivalue(type, name, value);
+VNode.prototype.ivalue = function(type, value) {
+	return this.cx.ivalue(type, value);
 };
 
-VNode.prototype.emptyINode = function(type, name, qname, attrs, ns){
-	return this.cx.emptyINode(type, name, qname, attrs, ns);
+VNode.prototype.emptyINode = function(type, name, attrs, ns){
+	return this.cx.emptyINode(type, name, attrs, ns);
 };
 
 VNode.prototype.emptyAttrMap = function(init) {
 	return this.cx.emptyAttrMap(init);
+};
+
+VNode.prototype.ituple = function(key,inode,keyType){
+	return this.cx.ituple(key, inode, keyType);
 };
 
 // TODO create iterator that yields a node seq
