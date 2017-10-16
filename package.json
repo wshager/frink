@@ -32,13 +32,13 @@
     "url": "git+https://github.com/wshager/frink.git"
   },
   "dependencies": {
-    "big.js": "^3.1.3",
-    "entries": "^1.0.1",
+    "big.js": "^3.2.0",
     "events": "^1.1.1",
     "ohamt": "*",
     "rrb-vector": "*",
-    "sax": "*",
-    "xregexp": "^3.1.1"
+    "sax": "^1.2.4",
+    "xregexp": "^3.2.0",
+    "rxjs": "^5.4.3"
   },
   "license": "BSD-3-Clause",
   "bugs": {
@@ -46,12 +46,11 @@
   },
   "homepage": "https://github.com/wshager/frink#readme",
   "devDependencies": {
-    "babel-cli": "^6.18.0",
-    "babel-plugin-transform-es2015-modules-commonjs": "^6.18.0",
-    "babel-preset-es2015": "^6.18.0",
+    "babel-cli": "^6.26.0",
+    "babel-preset-env": "^1.6.0",
     "babelify": "^7.3.0",
-    "browserify": "^14.1.0",
+    "browserify": "^14.4.0",
     "microtime": "^2.1.6",
-    "uglify-js": "^2.8.22"
+    "uglify-js": "^3.1.4"
   }
 }
