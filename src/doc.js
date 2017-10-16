@@ -44,9 +44,11 @@ function _d(type,children){
 }
 
 export function d(children) {
-	return _d(9,children);
+	const cx = this && this.vnode ? this : inode;
+	return _d.bind(cx)(9,children);
 }
 
 export function t(children) {
-	return _d(11,children);
+	const cx = this && this.vnode ? this : inode;
+	return _d.bind(cx)(11,children);
 }
