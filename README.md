@@ -123,6 +123,44 @@ Notes:
 
 ____
 
+## Examples
+
+```javascript
+import * as n from "frink";
+
+n.e("div",n.seq(
+  n.a("class","greeting"),
+  n.e("p",n.x("Hello"))
+);
+```
+
+XML serialization (duh):
+
+```xml
+<div class="greeting">
+ <p>Hello</p>
+</div>
+```
+
+JSON node:
+
+```json
+{
+  "$name":"div",
+  "$attrs": {"class":"greeting"},
+  "$children":[{
+    "$name":"p",
+    "$attrs": {},
+    "$children":["Hello"]
+  }]
+}
+```
+
+
+____
+
+## Serialization rules
+
 L3N serialization rules for JSON:
 
 | Constant | VNode Type                | Appearance  |
