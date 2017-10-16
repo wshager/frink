@@ -1,5 +1,9 @@
 import * as inode from "./inode";
 
+import { isSeq } from "./seq";
+
+import { x } from "./construct";
+
 export function ensureDoc(node){
 	if(!node) return;
 	var cx = this && this.vnode ? this : inode;
@@ -8,7 +12,8 @@ export function ensureDoc(node){
 			let root = cx.first(node);
 			return cx.vnode(root, cx.vnode(node), 1, 0);
 		} else {
-			let doc = d.bind(cx)();
+			// create a document-fragment by default!
+			let doc = t.bind(cx)();
 			let root = cx.vnode(node, doc, 1, 0);
 			doc = doc.push(root);
 			return root;
@@ -20,11 +25,28 @@ export function ensureDoc(node){
 	return node;
 }
 
-export function d(doctype) {
-	var attrs = {};
+function _d(type,children){
 	var cx = this.vnode ? this : inode;
-	if(doctype) {
-		attrs.DOCTYPE = doctype;
+	let node = cx.vnode(cx.emptyINode(type,"#document"),null,0);
+	if(children === undefined) {
+		children = [];
+	} else if(isSeq(children)) {
+		children = children.toArray();
+	} else if(children.constructor != Array) {
+		if(!children.__is_VNode) children = x(children);
+		children = [children];
 	}
-	return cx.vnode(cx.emptyINode(9,"#","#document",0, cx.emptyAttrMap(attrs)));
+	for (let i = 0; i < children.length; i++) {
+		let child = children[i];
+		child = child.inode(node);
+	}
+	return node.finalize();
+}
+
+export function d(children) {
+	return _d(9,children);
+}
+
+export function t(children) {
+	return _d(11,children);
 }
