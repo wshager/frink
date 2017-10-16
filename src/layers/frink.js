@@ -1,3 +1,9 @@
+import { first } from "../seq";
+
+import * as inode from "../inode";
+
+import * as dom from "../dom";
+
 export * from "../construct";
 
 export * from "../modify";
@@ -10,4 +16,27 @@ export * from "../validate";
 
 export * from "../render";
 
-export * from "../dom-util";
+export * from "../seq";
+
+export * from "../doc";
+
+export { dom };
+
+//export * from "../dom-util";
+
+import { Parser } from "../parser";
+
+export function parseString(str, cb) {
+	var parser = new Parser(inode);
+	return parser.parseString(str, cb);
+}
+
+export function parse($a){
+	var xml = first($a);
+	var result;
+	parseString(xml,function(err,ret){
+		if(err) console.log(err);
+		result = ret;
+	});
+	return result;
+}
