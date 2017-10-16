@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<script src="/dist/frink.js"></script>
+		<script>
+			var n = amd;
+			function ready() {
+				return new Promise(function(resolve,reject){
+					function completed() {
+						document.removeEventListener("DOMContentLoaded", completed, false);
+						window.removeEventListener("load", completed, false);
+						resolve();
+					}
+
+					if (document.readyState === "complete") {
+						// Handle it asynchronously to allow scripts the opportunity to delay ready
+						setTimeout(callback);
+
+					} else {
+
+						// Use the handy event callback
+						document.addEventListener("DOMContentLoaded", completed, false);
+
+						// A fallback to window.onload, that will always work
+						window.addEventListener("load", completed, false);
+					}
+				});
+			}
+			ready().then(function(){
+				n.render(n.parse("<body><div>test</div></body>"),document.body);
+				/*n.on(document.forms.test,"submit", evt => {
+					evt.preventDefault();
+					var err = n.validate(evt.target,null,{form:true});
+					console.log(err)
+					if(err.length) return false;
+				});*/
+
+			});
+
+		</script>
+	</head>
+	<body>
+	</body>
+</html>

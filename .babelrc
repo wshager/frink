@@ -1,1 +1,10 @@
-{ "plugins": ["transform-es2015-modules-commonjs"] }
+{
+	"presets": [
+		["env", {
+			"targets": {
+				"node": "current",
+				"browsers": ["last 2 versions"]
+			}
+		}]
+	]
+}
