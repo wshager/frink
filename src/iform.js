@@ -24,7 +24,7 @@ function _inferType(node){
 	if(node.type == "number" || node.type == "checkbox") return 12;
 	return 3;
 }
-export function ivalue(type,name,value){
+export function ivalue(type,value){
 	return value;
 }
 
@@ -115,7 +115,7 @@ export function getType(/*inode*/){
 	return 9;
 }
 
-export function emptyINode(/*type,name,qname,depth,attrs*/){
+export function emptyINode(/*type,name,depth,attrs*/){
 	// no-op
 }
 
