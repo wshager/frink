@@ -20,14 +20,11 @@ export function ensureDoc(node){
 	return node;
 }
 
-export function d(uri = null,prefix = null,doctype = null) {
+export function d(doctype) {
 	var attrs = {};
 	var cx = this.vnode ? this : inode;
-	if(uri) {
-		attrs["xmlns" + (prefix ? ":" + prefix : "")] = uri;
-	}
 	if(doctype) {
 		attrs.DOCTYPE = doctype;
 	}
-	return cx.vnode(cx.emptyINode(9,"#document",0, cx.emptyAttrMap(attrs)));
+	return cx.vnode(cx.emptyINode(9,"#","#document",0, cx.emptyAttrMap(attrs)));
 }
