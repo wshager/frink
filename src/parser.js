@@ -1,8 +1,8 @@
-import * as sax from 'sax';
+import * as sax from "sax";
 
-import { EventEmitter } from 'events';
+import { EventEmitter } from "events";
 
-import * as inode from './inode';
+import * as inode from "./inode";
 
 import { stripBOM } from "./bom";
 
@@ -22,7 +22,7 @@ export class Parser extends EventEmitter {
 	}
 	reset() {
 		var cx = this.cx;
-		var last = cx.emptyINode(9,"#document",cx.emptyAttrMap());
+		var last = cx.emptyINode(9,"#","#document",cx.emptyAttrMap());
 		var parents = [];
 		this.removeAllListeners();
 		saxParser.errThrown = false;
@@ -69,7 +69,7 @@ export class Parser extends EventEmitter {
 				//ret = ret.concat(attribute(attr.uri ? qname(attr.uri, attr.name) : attr.name, attr.value));
 				attrs[attr.name] = attr.value;
 			}
-			let n = cx.emptyINode(nodeType,nodeName,cx.emptyAttrMap(attrs));
+			let n = cx.emptyINode(nodeType,"#",nodeName,cx.emptyAttrMap(attrs));
 			if(last) {
 				last = cx.push(last,[nodeName,n]);
 				parents.push(last);
@@ -122,7 +122,7 @@ export class Parser extends EventEmitter {
 		}
 		try {
 			str = str.toString();
-			if (str.trim() === '') {
+			if (str.trim() === "") {
 				this.emit("end", null);
 				return true;
 			}
@@ -137,7 +137,7 @@ export class Parser extends EventEmitter {
 			}
 		} catch (err) {
 			if (!(saxParser.errThrown || saxParser.ended)) {
-				this.emit('error', err);
+				this.emit("error", err);
 				saxParser.errThrown = true;
 				return true;
 			} else if (saxParser.ended) {
