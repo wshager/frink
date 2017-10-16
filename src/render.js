@@ -11,7 +11,7 @@ function same(cur,nxt){
 		if(nxt.value !== cur.value) return false;
 	} else {
 		if(cur.value !== undefined) return false;
-		if(nxt.qname.toUpperCase() !== cur.qname.toUpperCase()) return false;
+		if(nxt.name.toUpperCase() !== cur.name.toUpperCase()) return false;
 		if(cur.count() !== nxt.count()) return false;
 		if(cur.attrs("id") && nxt.attrs("id") !== cur.attrs("id")) return false;
 		if(cur.attrs("class") && nxt.attrs("class") !== cur.attrs("class")) return false;
@@ -24,7 +24,7 @@ export function render(vnode, root) {
 	const oriParent = root.parentNode;
 	// this could be achieved by updating documentFragment, which is in root.parent
 	var parents = [];
-	const attrFunc = (domNode, v, k) => (domNode.setAttribute(k, v), domNode);
+	const attrFunc = (domNode, kv) => (domNode.setAttribute(kv[0], kv[1]), domNode);
 	// ensure paths by calling iter
 	// TODO stream / iterator
 	var domNodes = [];
@@ -89,7 +89,7 @@ export function render(vnode, root) {
 			if(!cur || append){
 				//console.log("empty",type, append)
 				if (type == 1) {
-					domNode = document.createElement(node.qname);
+					domNode = document.createElement(node.name);
 					if (parents[depth - 1]) {
 						let parent = parents[depth - 1];
 						parent.domNode.appendChild(domNode);
