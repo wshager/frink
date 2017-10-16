@@ -22,7 +22,7 @@ export class Parser extends EventEmitter {
 	}
 	reset() {
 		var cx = this.cx;
-		var last = cx.emptyINode(9,"#","#document",cx.emptyAttrMap());
+		var last = cx.emptyINode(9,"#document");
 		var parents = [];
 		this.removeAllListeners();
 		saxParser.errThrown = false;
@@ -69,7 +69,7 @@ export class Parser extends EventEmitter {
 				//ret = ret.concat(attribute(attr.uri ? qname(attr.uri, attr.name) : attr.name, attr.value));
 				attrs[attr.name] = attr.value;
 			}
-			let n = cx.emptyINode(nodeType,"#",nodeName,cx.emptyAttrMap(attrs));
+			let n = cx.emptyINode(nodeType,nodeName,cx.emptyAttrMap(attrs));
 			if(last) {
 				last = cx.push(last,[nodeName,n]);
 				parents.push(last);
@@ -90,20 +90,21 @@ export class Parser extends EventEmitter {
 		var ontext = function(val, type=3) {
 			if (/\S/.test(val)) {
 				let name = cx.count(last) + 1;
-				let n = cx.ivalue(type,name,val);
+				let n = cx.ivalue(type,val);
 				last = cx.push(last,[name,n]);
 			}
 		};
 		saxParser.ontext = ontext;
 		saxParser.oncdata = function(value) {
-			// TODO handle CDATA text
+			// TODO handle CDATA text?
 			ontext(value, 3);
 		};
-		saxParser.ondoctype = function(value){
-			last = cx.setAttribute(last,"DOCTYPE",value);
+		saxParser.ondoctype = function(/*value*/){
+			// FIXME dunno
+			//last = cx.setAttribute(last,"DOCTYPE",value);
 		};
 		saxParser.onprocessinginstruction = function(pi) {
-			last = cx.setAttribute(last,pi.name,pi.body);
+			ontext(pi.name+" "+pi.body, 7);
 		};
 		saxParser.oncomment = function(value) {
 			ontext(value, 8);

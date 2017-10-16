@@ -53,26 +53,31 @@ function _n(type, name, children){
 	}, type, name);
 }
 
-function _a(type, name, val) {
+function _a(name, child) {
 	return vnode(function (parent) {
-		var node = parent.vnode(parent.ivalue(type, name, val));
-		node.parent = parent.attr(name,val);
+		let node = parent.vnode(parent.ituple(name, child), parent);
+		child = child.inode(node);
+		node = node.finalize();
+		if(parent.type == 1){
+			// TODO conversion rules!
+			parent.attr(name,node.value+"");
+		} else if(parent.type == 6){
+			// tuple
+			parent.push(node);
+		}
 		return node;
-	}, type, name, val);
+	}, 2, name);
 }
 
-function _v(type,val,name) {
+function _v(type,val) {
 	return vnode(function (parent, ref) {
 		// reuse insertIndex here to create a named map entry
-		if(!name) name = parent.count() + 1;
-		let node = parent.vnode(parent.ivalue(type, name, val), parent);
-		// reset name, because not all inodes have names
-		node.name = name;
+		let node = parent.vnode(parent.ivalue(type, val), parent);
 		// we don't want to do checks here
 		// we just need to call a function that will insert the node into the parent
 		node.parent = parent.modify(node,ref);
 		return node;
-	}, type, name, val);
+	}, type, null, val);
 }
 
 /**
@@ -82,42 +87,30 @@ function _v(type,val,name) {
  * @param  {[type]} children [description]
  * @return {[type]}          [description]
  */
-export function e(qname, children) {
-	return _n(1,qname,children);
+export function e(name, children) {
+	return _n(1, name, children);
 }
 
-export function l(name, children) {
-	if(arguments.length == 1) {
-		children = name;
-		name = "#";
-	}
-	return _n(5,name, children);
+export function l(children) {
+	return _n(5, null, children);
 }
 
-export function m(name, children){
-	if(arguments.length == 1) {
-		children = name;
-		name = "#";
-	}
-	return _n(6, name, children);
+export function m(children){
+	return _n(6, null, children);
 }
 
 export function a(name, value){
-	return _a(2,name,value);
+	return _a(name,value);
 }
 
-export function p(name, value){
-	return _a(7,name,value);
+export function p(target, content){
+	return _v(7, target+" "+content);
 }
 
-export function x(name, value = null) {
-	if(value === null) {
-		value = name;
-		return _v(typeof value == "string" ? 3 : 12, value);
-	}
-	return _v(typeof value == "string" ? 3 : 12, value, name);
+export function x(value = null) {
+	return _v(typeof value == "string" ? 3 : 12, value);
 }
 
-export function c(value, name){
-	return _v(8, value, name);
+export function c(value){
+	return _v(8, value);
 }
