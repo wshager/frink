@@ -1,14 +1,231 @@
-function Step(node, depth) {
-	this.node = node;
-	this.nodeName = node.nodeName;
-	this.parentNode = node.parentNode;
-	this.nextSibling = node.nextSibling;
-	this.previousSibling = node.previousSibling;
-	this["@@doc-depth"] = depth;
+// DOM-backed VNode
+import { VNode } from "./vnode";
+
+//import { q } from "./qname";
+
+import { filter } from "./transducers";
+
+// import self!
+import * as cx from "./dom";
+
+export const __inode_type = "dom";
+
+const wsre = /[^\t\n\r ]/;
+const ignoreWS = x => !wsre.test(x.textContent);
+const l3re = /^l3-(e?)(a?)(x?)(r?)(l?)(m?)(p?)(c?)()()(d?)()()(f?)$/;
+const getL3Type = (name) => {
+	return parseInt(name.replace(l3re,function(){
+		for(var i=1;i<arguments.length;i++){
+			if(arguments[i]) return i;
+		}
+	})) | 0;
+};
+
+const getQName = (inode,indexInParent) => {
+	var nodeType = inode.nodeType;
+	var nodeName = inode.nodeName;
+	if(nodeType == 1) {
+		var l3Type = getL3Type(nodeName);
+		//let type = l3Type | nodeType;
+		var isL3 = l3Type !== 0;
+		var attrs = inode.attributes;
+		return isL3 ? nodeName : "qname" in attrs ? attrs.qname : name;
+	} else {
+		return indexInParent + 1;
+	}
+};
+
+const _last = x => x[x.length - 1];
+
+// -----------------------
+// Core API
+// -----------------------
+
+
+export function ivalue(type, name, value){
+	if(type == 2) {
+		return {$name:name,$value:value};
+	} else if(type == 8) {
+		return {$comment:value};
+	}
+	return value;
 }
 
-Step.prototype.nodeType = 17;
+export function vnode(inode, parent, depth, indexInParent) {
+	var nodeType = inode.nodeType;
+	var nodeName = inode.nodeName;
+	let isElem = nodeType == 1;
+	var l3Type = isElem ? getL3Type(nodeName) : 0;
+	let type = l3Type | nodeType;
+	var isL3 = isElem && l3Type !== 0;
+	var attrs = isElem ? inode.attributes : null;
+	var name, qname, value;
+	if(parent && parent.type == 6) name = isL3 && "name" in attrs ? attrs.name : isElem ? attrs["data-l3-name"] : null;
+	if(type == 1){
+		// if l3, nodeType != type
+		qname = isL3 ? nodeName : "qname" in attrs ? attrs.qname : name;
+	} else if(type == 2) {
+		// no-op?
+	} else if (type == 5) {
+		// no-op?
+	} else if (type == 6) {
+		// no-op?
+	} else if(type == 3 || type == 8 || type == 12){
+		value = isL3 ? inode.textContent : inode.data;
+	}
+	// return vnode
+	return new VNode(
+		cx,
+		inode,
+		type,
+		name,
+		qname,
+		value,
+		parent,
+		depth,
+		indexInParent
+	);
+}
 
+export function emptyINode(type, name, qname, attrs) {
+	// TODO dom-util elem etc.
+	if(type == 9) {
+		// TODO move to 11
+		return document.createDocumentFragment();
+	} else {
+		var elem = document.createElement(qname);
+		for(var k in attrs){
+			elem.attributes[k] = attrs[k];
+		}
+	}
+}
+
+export function emptyAttrMap(init){
+	return init || {};
+}
+
+/*
+export function get(inode,idx,type){
+	type = type || _inferType(inode);
+	if(type == 1 || type == 9){
+		return _get(inode.$children,idx);
+	}
+	return inode[idx];
+}
+*/
+export function next(inode, node, type){
+	//var idx = node.indexInParent;
+	if(type == 1 || type == 9) {
+		// ignore WS-only!
+		var nxt = inode.nextSibling;
+		while(!ignoreWS(nxt)){
+			nxt = inode.nextSibling;
+		}
+		return nxt;
+	}
+}
+
+export function push(inode,val,type){
+	if(type == 1 || type == 11){
+		inode.appendChild(val[1]);
+	}
+	return inode;
+}
+
+export function set(inode /*,key,val,type*/){
+	// used to restore immutable parents, never modifies mutable
+	return inode;
+}
+
+export function removeChild(inode,child,type){
+	if(type == 1 || type == 9){
+		// TODO removeChild et al.
+	}
+	return inode;
+}
+
+export function cached() {
+}
+
+export function keys(inode,type){
+	if(type == 1 || type == 9) {
+		let children = filter(inode.childNodes,ignoreWS), len = children.length, keys = [];
+		for(let i = 0; i<len; i++){
+			keys[i] = getQName(children[i].$name,i);
+		}
+		return keys;
+	}
+	// TODO l3
+	//if(type == 5) return range(inode.length).toArray();
+	//if(type == 6) return Object.keys(inode);
+	return [];
+}
+
+export function values(inode,type){
+	if(type == 1 || type == 9) return filter(inode.childNodes,ignoreWS);
+	//if (type == 2) return [[inode.$name,inode.$value]];
+	//if(type == 6) return Object.values(inode);
+	//if (type == 8) return [inode.$comment];
+	return inode;
+}
+
+export function finalize(inode){
+	return inode;
+}
+
+export function setAttribute(inode,key,val){
+	if(inode.nodeType == 1) inode.attributes[key]  = val;
+	return inode;
+}
+
+export function getAttribute(inode,key){
+	if(inode.nodeType == 1) return inode.attributes[key];
+}
+
+export function count(inode, type){
+	if(type == 1 || type == 9){
+		return filter(inode.childNodes,ignoreWS).length;
+	}
+	// TODO l3
+	return 0;
+}
+
+export function first(inode,type){
+	if(type == 1 || type == 9){
+		return filter(inode.childNodes,ignoreWS)[0];
+	}
+}
+
+export function last(inode,type){
+	if(type == 1 || type == 9) return _last(filter(inode.childNodes,ignoreWS));
+}
+
+export function attrEntries(inode){
+	if(inode.nodeType == 1) {
+		var i = [];
+		try {
+			for(var a of inode.attributes){
+				i[a.name] = a.value;
+			}
+		} catch(err) {
+			// whatever
+		}
+		return i;
+	}
+	return [];
+}
+
+export function modify(inode/*, node, ref, type*/){
+	return inode;
+}
+
+export const getType = inode => {
+	var nodeType = inode.nodeType;
+	var nodeName = inode.nodeName;
+	let isElem = nodeType == 1;
+	return isElem ? getL3Type(nodeName) | 1 : nodeType;
+};
+/*
 export function nodesList(node) {
 	var list = [];
 	var next = nextNode(node);
@@ -18,43 +235,4 @@ export function nodesList(node) {
 	} while (next);
 	return list;
 }
-
-// nextNode means:
-// descend into firstChild or nextSibling
-// if no more siblings, go back up using Step
-// if Step, firstChild will be skipped, so nextSibling will be retried
-export function nextNode(node /* Node */) {
-	var type = node.nodeType,
-	    depth = node["@@doc-depth"] || 0;
-		//index = node["@@doc-index"],
-		//indexInParent = 0;
-	//if(index === undefined) index = -1;
-	//index++;
-	if (type != 17 && node.firstChild) {
-		// if we can still go down, return firstChild
-		node = node.firstChild;
-		//indexInParent = node.indexInParent = 0;
-		node["@@doc-depth"] = ++depth;
-		//node["@@doc-index"] = index;
-		return node;
-	} else {
-		// if there are no more children, return a 'Step' to indicate a close
-		// it means we have to continue one or more steps up the path
-		// FIXME we could also directly return the parent's nextSibling
-		if (!node.nextSibling) {
-			//inode = parent;
-			depth--;
-			//console.log("found step", inode._name, indexInParent, depth, inode._depth);
-			node = node.parentNode;
-			if (!node || node["@@doc-depth"] !== depth) return;
-			node = new Step(node, depth);
-			return node;
-		} else {
-			// return the next child
-			node = node.nextSibling;
-			//console.log("found next", inode._name, index);
-			node["@@doc-depth"] = depth;
-			return node;
-		}
-	}
-}
+*/
