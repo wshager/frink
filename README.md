@@ -126,9 +126,12 @@ ____
 ## Faq
 
 Q: Why such short function names?
+
 A: The shorthand is inspired by HyperScript, which is in turn inspired by put-selector, which was inspired by JSON-query, which was inspired by XPath, which is based on XML DOM. Besides, I didn't want names like `createElement` etc. You may wish to alias the functions in your code, but beware that `element`, `attribute`, `text`, et al. are reserved elsewhere for node type tests.
 
+
 Q: What the hell is a "function call node" for?
+
 A: It can turn your HTML or JSON into a computer program. A small group of people still like to go to XSLT conferences, and I guess this would totally be their thing. Other people like to go to code generation conferences. Same thing.
 
 ____
