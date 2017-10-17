@@ -36,7 +36,7 @@ export function Step(inode,name,parent,depth,indexInParent){
 Step.prototype.type = 17;
 
 Step.prototype.toString = function(){
-	return "Step {depth:"+this.depth+", closes:"+this.parent.name+"}";
+	return "Step {depth:" + this.depth + ", closes:" + this.name + "}";
 };
 
 /*

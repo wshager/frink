@@ -63,7 +63,7 @@ function* _get(children, idx) {
 }
 */
 function _last(a){
-	return drop(a,a.length-1);
+	return a[a.length-1];
 }
 
 function _elemToString(e){
@@ -99,7 +99,8 @@ export function ivalue(type, value){
 
 export function vnode(inode, parent, depth, indexInParent, type) {
 	type = type || _inferType(inode);
-	var name,value;
+	var name,key = inode.$key,value;
+	if(parent && parent.type == 6) inode = inode.$value;
 	if(type == 1 || type == 9 || type == 11){
 		name = inode.$name;
 	} else if(type == 2) {
@@ -124,6 +125,7 @@ export function vnode(inode, parent, depth, indexInParent, type) {
 		type,
 		//inode && inode.$ns ? q(inode.$ns.uri, name) : name,
 		name,
+		key,
 		value,
 		parent,
 		depth,
@@ -146,10 +148,9 @@ export function emptyAttrMap(init){
 	return init || {};
 }
 
-export function ituple(key,child,keyType){
+export function ituple(key,child){
 	return {
 		$name:key,
-		$type:keyType,
 		$value:child
 	};
 }
@@ -172,8 +173,10 @@ export function next(inode, node, type){
 	}
 	if(type == 5) return inode[idx+1];
 	if(type == 6) {
-		var vals = Object.values(inode);
-		return vals[idx+1];
+		var entries = Object.entries(inode);
+		var kv = entries[idx+1];
+		// pass tuple-wise
+		return {$key:kv[0],$value:kv[1]};
 	}
 }
 
@@ -201,7 +204,7 @@ export function removeChild(inode,child,type){
 	} else if(type == 5) {
 		inode.splice(child.indexInParent,1);
 	} else if(type == 6){
-		delete inode[child.name];
+		delete inode[child.key];
 	}
 	return inode;
 }
@@ -286,7 +289,10 @@ export function first(inode,type){
 	} else if(type == 5) {
 		return inode[0];
 	} else if(type == 6){
-		return Object.values(inode)[0];
+		var entries = Object.entries(inode);
+		var kv = entries[0];
+		// pass tuple-wise
+		return {$key:kv[0],$value:kv[1]};
 	}
 }
 
@@ -295,7 +301,10 @@ export function last(inode,type){
 	if(type == 1 || type == 9 || type == 11) return _last(inode.$children);
 	if(type == 5) return _last(inode);
 	if(type == 6) {
-		return _last(Object.values(inode));
+		var entries = Object.entries(inode);
+		var kv = _last(entries);
+		// pass tuple-wise
+		return {$key:kv[0],$value:kv[1]};
 	}
 }
 
@@ -319,7 +328,7 @@ export function modify(inode, node, ref, type){
 			inode.push(node.inode);
 		}
 	} else if(type == 6){
-		inode[node.name] = node.inode;
+		inode[node.key] = node.inode;
 	}
 	return inode;
 }

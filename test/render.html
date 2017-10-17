@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html>
 	<head>
+		<link crossorigin="anonymous" href="https://assets-cdn.github.com/assets/frameworks-d7137690e30123bade38abb082ac79f36cc7a105ff92e602405f53b725465cab.css" integrity="sha256-1xN2kOMBI7reOKuwgqx582zHoQX/kuYCQF9TtyVGXKs=" media="all" rel="stylesheet" />
+	    <link crossorigin="anonymous" href="https://assets-cdn.github.com/assets/github-d66c0d0fc5338d94f18dcf3b239ebb67da075d8c141af48eac6226dab0c36a64.css" integrity="sha256-1mwND8UzjZTxjc87I567Z9oHXYwUGvSOrGIm2rDDamQ=" media="all" rel="stylesheet" />
 		<script src="/dist/frink.js"></script>
 		<script>
 			var n = amd;
@@ -161,12 +163,16 @@
   </div>
 </body>`;
 			ready().then(function(){
-				var out = n.parse(html);
 				var s = performance.now();
+				var out = n.parse(html);
+				var e = performance.now();
+				console.log("parse", e - s);
+				s = performance.now();
 				n.render(out,document.body);
-				console.log(performance.now() - s);
 				n.render(out,document.body);
 				n.render(out,document.body);
+				var e = performance.now();
+				console.log(e - s);
 				/*n.on(document.forms.test,"submit", evt => {
 					evt.preventDefault();
 					var err = n.validate(evt.target,null,{form:true});

@@ -1,10 +1,11 @@
 import { VNodeIterator } from "./access";
 
-export function VNode(cx,inode,type,name,value,parent,depth,indexInParent,cache){
+export function VNode(cx,inode,type,name,key,value,parent,depth,indexInParent,cache){
 	this.cx = cx;
 	this.inode = inode;
 	this.type = type;
 	this.name = name;
+	this.key = key;
 	this.value = value;
 	this.parent = parent;
 	this.depth = depth | 0;
@@ -51,7 +52,7 @@ VNode.prototype.next = function(node){
 
 // TODO cache invalidation
 VNode.prototype.push = function(child){
-	this.inode = this.cx.push(this.inode,[child.name,child.inode],this.type);
+	this.inode = this.cx.push(this.inode,child,this.type);
 	return this;
 };
 
@@ -107,8 +108,8 @@ VNode.prototype.emptyAttrMap = function(init) {
 	return this.cx.emptyAttrMap(init);
 };
 
-VNode.prototype.ituple = function(key,inode,keyType){
-	return this.cx.ituple(key, inode, keyType);
+VNode.prototype.ituple = function(key,inode){
+	return this.cx.ituple(key, inode);
 };
 
 // TODO create iterator that yields a node seq
