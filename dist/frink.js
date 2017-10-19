@@ -11125,7 +11125,7 @@ function Step(inode, name, parent, depth, indexInParent) {
 Step.prototype.type = 17;
 
 Step.prototype.toString = function () {
-	return "Step {depth:" + this.depth + ", closes:" + this.parent.name + "}";
+	return "Step {depth:" + this.depth + ", closes:" + this.name + "}";
 };
 
 /*
@@ -11156,7 +11156,7 @@ function nextNode(node /* VNode */) {
 		inode = node.first();
 		// TODO handle arrays
 		node = parent.vnode(inode, parent, depth, indexInParent);
-		//console.log("found first", node.name, depth,indexInParent);
+		//console.log("found first", node.type, depth,indexInParent);
 		return node;
 	} else {
 		indexInParent++;
@@ -11169,17 +11169,16 @@ function nextNode(node /* VNode */) {
 			if (depth === 0 || !node) return;
 			inode = node.inode;
 			node = new Step(inode, node.name, node.parent, depth, node.indexInParent);
-			//console.log("found step", node.name, depth, indexInParent);
+			//console.log("found step", node.type, depth, indexInParent);
 			return node;
 		} else {
 			// return the next child
 			inode = parent.next(node);
 			if (inode !== undefined) {
 				node = parent.vnode(inode, parent, depth, indexInParent);
-				//console.log("found next", node.name, depth, indexInParent);
+				//console.log("found next", node.type, depth, indexInParent);
 				return node;
 			}
-			//throw new Error("Node "+parent.name+" hasn't been completely traversed. Found "+ indexInParent + ", contains "+ parent.count());
 		}
 	}
 }
@@ -11765,7 +11764,7 @@ function _n(type, name, children) {
 			}
 		}
 		// convert to real VNode instance
-		var node = parent.vnode(parent.emptyINode(type, name, type == 1 ? parent.emptyAttrMap() : undefined, ns), parent, parent.depth + 1, -1, type);
+		var node = parent.vnode(parent.emptyINode(type, name, type == 1 ? parent.emptyAttrMap() : undefined, ns), parent, parent.depth + 1, 0, type);
 		for (var i = 0; i < children.length; i++) {
 			var child = children[i];
 			child = child.inode(node);
@@ -11780,16 +11779,26 @@ function _n(type, name, children) {
 }
 
 function _a(name, child) {
+	if ((0, _seq.isSeq)(child)) {
+		child = (0, _seq.first)(child);
+	} else if (Array.isArray(child)) {
+		child = child[0];
+	} else if (!child.__is_VNode) {
+		child = x(child);
+	}
 	return vnode(function (parent) {
 		var node = parent.vnode(parent.ituple(name, child), parent);
+		// node is an attr node /w child as $val
+		// push node to
 		child = child.inode(node);
+		//node.type = child.type;
 		node = node.finalize();
 		if (parent.type == 1) {
 			// TODO conversion rules!
 			parent.attr(name, node.value + "");
 		} else if (parent.type == 6) {
 			// tuple
-			parent.push(node);
+			parent.push([node.inode.$name, node.inode.$value]);
 		}
 		return node;
 	}, 2, name);
@@ -11874,7 +11883,7 @@ function ensureDoc(node) {
 			// create a document-fragment by default!
 			var doc = t.bind(cx)();
 			var _root = cx.vnode(node, doc, 1, 0);
-			doc = doc.push(_root);
+			doc = doc.push([0, _root.inode]);
 			return _root;
 		}
 	}
@@ -12005,12 +12014,13 @@ function vnode(inode, parent, depth, indexInParent) {
 	var type = l3Type | nodeType;
 	var isL3 = isElem && l3Type !== 0;
 	var attrs = isElem ? inode.attributes : null;
-	var name, value;
+	var name, key, value;
 	if (type == 1) {
 		// if l3, nodeType != type
 		name = isL3 ? attrs.name : nodeName;
 	} else if (type == 2) {
 		// no-op?
+		key = inode.name;
 	} else if (type == 5) {
 		// no-op?
 	} else if (type == 6) {
@@ -12019,7 +12029,7 @@ function vnode(inode, parent, depth, indexInParent) {
 		value = isL3 ? inode.textContent : inode.data;
 	}
 	// return vnode
-	return new _vnode.VNode(cx, inode, type, name, value, parent, depth, indexInParent);
+	return new _vnode.VNode(cx, inode, type, name, key, value, parent, depth, indexInParent);
 }
 
 function emptyINode(type, name, attrs) {
@@ -12063,9 +12073,9 @@ function next(pinode, node, type) {
 	}
 }
 
-function push(inode, val, type) {
+function push(inode, kv, type) {
 	if (type == 1 || type == 9 || type == 11) {
-		inode.appendChild(val[1]);
+		inode.appendChild(kv[1]);
 	}
 	return inode;
 }
@@ -12334,7 +12344,7 @@ function* _get(children, idx) {
 }
 */
 function _last(a) {
-	return (0, _transducers.drop)(a, a.length - 1);
+	return a[a.length - 1];
 }
 
 function _elemToString(e) {
@@ -12392,17 +12402,19 @@ function ivalue(type, value) {
 
 function vnode(inode, parent, depth, indexInParent, type) {
 	type = type || _inferType(inode);
-	var name, value;
+	var name,
+	    key = inode.$key,
+	    value;
 	if (type == 1 || type == 9 || type == 11) {
 		name = inode.$name;
 	} else if (type == 2) {
-		// TODO tuple under map, attr under elem
 		name = inode.$name;
 		value = inode.$value;
-		//} else if (type == 5) {
-		// no-op
-		//} else if (type == 6) {
-		// no-op
+		// this will ensure tuples are iterated as values (name != key)
+		if (inode.$key) {
+			inode = inode.$value;
+			type = _inferType(inode);
+		}
 	} else if (type == 7) {
 		value = inode.$pi;
 	} else if (type == 8) {
@@ -12413,7 +12425,7 @@ function vnode(inode, parent, depth, indexInParent, type) {
 	// return vnode
 	return new _vnode.VNode(cx, inode, type,
 	//inode && inode.$ns ? q(inode.$ns.uri, name) : name,
-	name, value, parent, depth, indexInParent);
+	name, key, value, parent, depth, indexInParent);
 }
 
 function emptyINode(type, name, attrs, ns) {
@@ -12431,10 +12443,9 @@ function emptyAttrMap(init) {
 	return init || {};
 }
 
-function ituple(key, child, keyType) {
+function ituple(key, child) {
 	return {
 		$name: key,
-		$type: keyType,
 		$value: child
 	};
 }
@@ -12457,19 +12468,21 @@ function next(inode, node, type) {
 	}
 	if (type == 5) return inode[idx + 1];
 	if (type == 6) {
-		var vals = Object.values(inode);
-		return vals[idx + 1];
+		var entries = Object.entries(inode);
+		var kv = entries[idx + 1];
+		// pass tuple-wise
+		return { $key: kv[0], $value: kv[1] };
 	}
 }
 
-function push(inode, val, type) {
+function push(inode, kv, type) {
 	type = type || _inferType(inode);
 	if (type == 1 || type == 9 || type == 11) {
-		inode.$children.push(val[1]);
+		inode.$children.push(kv[1]);
 	} else if (type == 5) {
-		inode.push(val);
+		inode.push(kv[1]);
 	} else if (type == 6) {
-		inode[val[0]] = val[1];
+		inode[kv[0]] = kv[1];
 	}
 	return inode;
 }
@@ -12486,7 +12499,7 @@ function removeChild(inode, child, type) {
 	} else if (type == 5) {
 		inode.splice(child.indexInParent, 1);
 	} else if (type == 6) {
-		delete inode[child.name];
+		delete inode[child.key];
 	}
 	return inode;
 }
@@ -12575,7 +12588,10 @@ function first(inode, type) {
 	} else if (type == 5) {
 		return inode[0];
 	} else if (type == 6) {
-		return Object.values(inode)[0];
+		var entries = Object.entries(inode);
+		var kv = entries[0];
+		// pass tuple-wise
+		return { $key: kv[0], $value: kv[1] };
 	}
 }
 
@@ -12584,7 +12600,10 @@ function last(inode, type) {
 	if (type == 1 || type == 9 || type == 11) return _last(inode.$children);
 	if (type == 5) return _last(inode);
 	if (type == 6) {
-		return _last(Object.values(inode));
+		var entries = Object.entries(inode);
+		var kv = _last(entries);
+		// pass tuple-wise
+		return { $key: kv[0], $value: kv[1] };
 	}
 }
 
@@ -12601,6 +12620,8 @@ function modify(inode, node, ref, type) {
 		} else {
 			inode.$children.push(node.inode);
 		}
+	} else if (type == 2) {
+		inode.$value = node.inode;
 	} else if (type == 5) {
 		if (ref !== undefined) {
 			inode.splice(ref.indexInParent, 0, node.inode);
@@ -12608,26 +12629,29 @@ function modify(inode, node, ref, type) {
 			inode.push(node.inode);
 		}
 	} else if (type == 6) {
-		inode[node.name] = node.inode;
+		inode[node.key] = node.inode;
 	}
 	return inode;
 }
 
 function stringify(inode, type) {
-	var root = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : true;
+	var json = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
+	var root = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : true;
 
 	var str = "";
 	type = type || _inferType(inode);
 	if (type == 1) {
 		str += _elemToString(inode);
+	} else if (type == 2) {
+		str += "<l3:a name=\"" + inode.$key + "\">" + inode.$value + "</l3:a>";
 	} else if (type == 5) {
 		var val = (0, _transducers.forEach)(inode, function (c) {
-			return stringify(c);
+			return stringify(c, 0, json, false);
 		}).join("");
 		str += "<l3:l" + (val ? ">" + val + "</l3:l>" : "/>");
 	} else if (type == 6) {
 		var _val = (0, _transducers.forEach)(Object.entries(inode), function (c) {
-			return stringify(c[1], null, false, c[0]);
+			return stringify({ $key: c[0], $value: stringify(c[1], 0, json, false) }, 2, json, false);
 		}).join("");
 		str += "<l3:m" + (_val ? ">" + _val + "</l3:m>" : "/>");
 	} else {
@@ -12635,7 +12659,7 @@ function stringify(inode, type) {
 			str += "<!--" + inode.$comment + "-->";
 		} else {
 			var _val2 = inode === null ? "null" : inode;
-			str += type == 12 ? "<l3:x>" + _val2 + "</l3:x>" : _val2;
+			str += type == 12 || json ? "<l3:x>" + _val2 + "</l3:x>" : _val2;
 		}
 	}
 	return root ? (0, _pretty.prettyXML)(str) : str;
@@ -15483,11 +15507,12 @@ exports.VNode = VNode;
 
 var _access = require("./access");
 
-function VNode(cx, inode, type, name, value, parent, depth, indexInParent, cache) {
+function VNode(cx, inode, type, name, key, value, parent, depth, indexInParent, cache) {
 	this.cx = cx;
 	this.inode = inode;
 	this.type = type;
 	this.name = name;
+	this.key = key;
 	this.value = value;
 	this.parent = parent;
 	this.depth = depth | 0;
@@ -15533,8 +15558,8 @@ VNode.prototype.next = function (node) {
 };
 
 // TODO cache invalidation
-VNode.prototype.push = function (child) {
-	this.inode = this.cx.push(this.inode, [child.name, child.inode], this.type);
+VNode.prototype.push = function (kv) {
+	this.inode = this.cx.push(this.inode, kv, this.type);
 	return this;
 };
 
@@ -15569,6 +15594,8 @@ VNode.prototype.attr = function (k, v) {
 
 VNode.prototype.modify = function (node, ref) {
 	this.inode = this.cx.modify(this.inode, node, ref, this.type);
+	// ensure value is still correct
+	if (this.type == 2) this.value = this.inode.$value;
 	return this;
 };
 
@@ -15589,8 +15616,8 @@ VNode.prototype.emptyAttrMap = function (init) {
 	return this.cx.emptyAttrMap(init);
 };
 
-VNode.prototype.ituple = function (key, inode, keyType) {
-	return this.cx.ituple(key, inode, keyType);
+VNode.prototype.ituple = function (key, inode) {
+	return this.cx.ituple(key, inode);
 };
 
 // TODO create iterator that yields a node seq

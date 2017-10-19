@@ -14,8 +14,7 @@ handle(n.parse(`<persoon id="243" test="test">
 
 function handle(out){
 	var s = microtime.now();
-	var ret = n.select(out,n.child(n.comment("*")));
+	var ret = n.select(out,n.element("*"));
 	console.log((microtime.now() - s)/1000);
 	Rx.Observable.from(ret.iterable).subscribe(x => console.log(x+""));
-	//lift(Rx.Observable.from(ret.iterable),new n.MergeMapOperator(l3.toL3)).subscribe(console.log);
 }
