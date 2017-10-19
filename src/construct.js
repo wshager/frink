@@ -1,6 +1,6 @@
 import { isQName } from "./qname";
 
-import { isSeq } from "./seq";
+import { first, isSeq } from "./seq";
 
 // faux VNode
 function vnode(inode,type,name,value){
@@ -37,7 +37,7 @@ function _n(type, name, children){
 			parent.emptyINode(type, name, type == 1 ? parent.emptyAttrMap() : undefined, ns),
 			parent,
 			parent.depth + 1,
-			-1,
+			0,
 			type
 		);
 		for (let i = 0; i < children.length; i++) {
@@ -54,16 +54,26 @@ function _n(type, name, children){
 }
 
 function _a(name, child) {
+	if(isSeq(child)) {
+		child = first(child);
+	} else if(Array.isArray(child)){
+		child = child[0];
+	} else if(!child.__is_VNode) {
+		child = x(child);
+	}
 	return vnode(function (parent) {
-		let node = parent.vnode(parent.ituple(name, child), parent);
+		var node = parent.vnode(parent.ituple(name, child), parent);
+		// node is an attr node /w child as $val
+		// push node to
 		child = child.inode(node);
+		//node.type = child.type;
 		node = node.finalize();
-		if(parent.type == 1){
+		if (parent.type == 1) {
 			// TODO conversion rules!
-			parent.attr(name,node.value+"");
-		} else if(parent.type == 6){
+			parent.attr(name, node.value + "");
+		} else if (parent.type == 6) {
 			// tuple
-			parent.push(node);
+			parent.push([node.inode.$name,node.inode.$value]);
 		}
 		return node;
 	}, 2, name);
