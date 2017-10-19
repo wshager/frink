@@ -51,8 +51,8 @@ VNode.prototype.next = function(node){
 };
 
 // TODO cache invalidation
-VNode.prototype.push = function(child){
-	this.inode = this.cx.push(this.inode,child,this.type);
+VNode.prototype.push = function(kv){
+	this.inode = this.cx.push(this.inode,kv,this.type);
 	return this;
 };
 
@@ -87,6 +87,8 @@ VNode.prototype.attr = function(k,v){
 
 VNode.prototype.modify = function(node,ref) {
 	this.inode = this.cx.modify(this.inode,node,ref,this.type);
+	// ensure value is still correct
+	if(this.type == 2) this.value = this.inode.$value;
 	return this;
 };
 
