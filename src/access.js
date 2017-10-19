@@ -67,7 +67,7 @@ export function nextNode(node /* VNode */) {
 		inode = node.first();
 		// TODO handle arrays
 		node = parent.vnode(inode, parent, depth, indexInParent);
-		//console.log("found first", node.name, depth,indexInParent);
+		//console.log("found first", node.type, depth,indexInParent);
 		return node;
 	} else {
 		indexInParent++;
@@ -80,17 +80,16 @@ export function nextNode(node /* VNode */) {
 			if (depth === 0 || !node) return;
 			inode = node.inode;
 			node = new Step(inode, node.name, node.parent, depth, node.indexInParent);
-			//console.log("found step", node.name, depth, indexInParent);
+			//console.log("found step", node.type, depth, indexInParent);
 			return node;
 		} else {
 			// return the next child
 			inode = parent.next(node);
 			if (inode !== undefined) {
 				node = parent.vnode(inode, parent, depth, indexInParent);
-				//console.log("found next", node.name, depth, indexInParent);
+				//console.log("found next", node.type, depth, indexInParent);
 				return node;
 			}
-			//throw new Error("Node "+parent.name+" hasn't been completely traversed. Found "+ indexInParent + ", contains "+ parent.count());
 		}
 	}
 }
@@ -247,20 +246,22 @@ export const position = n => n.__cx ? n.__cx[0] + 1 : n.indexInParent;
 
 export const last = n => n.__cx ? n.__cx[1].size : n.parent ? n.parent.size : 1;
 
+const _isEq = (a,b) => a === b;
+
 // TODO convert qname to integer when parent is array
-function _nodeTest(type,qname) {
+function _nodeTest(type,qnameOrKey) {
 	var f;
-	if (qname === undefined) {
+	if (qnameOrKey === undefined) {
 		f = type;
 	} else {
-		var hasWildcard = /\*/.test(qname);
+		var hasWildcard = /\*/.test(qnameOrKey);
 		if (hasWildcard) {
-			var regex = new RegExp(qname.replace(/\*/, "(\\w[\\w0-9-_]*)"));
-			f = n => type(n) && regex.test(n.name);
+			var regex = new RegExp(qnameOrKey.replace(/\*/, "(\\w[\\w0-9-_]*)"));
+			f = n => type(n) && regex.test(n.parent.type == 6 ? n.key : n.name);
 		} else {
 			//return _seq.seq(_get(qname, 1), _transducers.filter(_isElement));
-			f = n => n.name === qname && type(n);
-			f.__Accessor = qname;
+			f = n => _isEq(n.parent.type == 6 ? n.key : n.name,qnameOrKey) && type(n);
+			f.__Accessor = qnameOrKey;
 		}
 	}
 	f.__is_NodeTypeTest = true;
@@ -271,8 +272,8 @@ export function element(qname) {
 	return _nodeTest(_isElement,qname);
 }
 
-export function list() {
-	return _nodeTest(_isList);
+export function list(key) {
+	return _nodeTest(_isList,key);
 }
 
 /*export function map() {
@@ -503,6 +504,7 @@ function _axify(path){
 			if (at) path = path.substring(1);
 			return at ? attribute(path) : child(element(path));
 		} else if(typeof path == "function"){
+			if(path.__is_NodeTypeTest) return child(path);
 			return self(path);
 		} else {
 			// TODO throw error
