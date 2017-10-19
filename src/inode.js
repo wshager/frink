@@ -100,17 +100,16 @@ export function ivalue(type, value){
 export function vnode(inode, parent, depth, indexInParent, type) {
 	type = type || _inferType(inode);
 	var name,key = inode.$key,value;
-	if(parent && parent.type == 6) inode = inode.$value;
 	if(type == 1 || type == 9 || type == 11){
 		name = inode.$name;
 	} else if(type == 2) {
-		// TODO tuple under map, attr under elem
 		name = inode.$name;
 		value = inode.$value;
-	//} else if (type == 5) {
-		// no-op
-	//} else if (type == 6) {
-		// no-op
+		// this will ensure tuples are iterated as values (name != key)
+		if(inode.$key) {
+			inode = inode.$value;
+			type = _inferType(inode);
+		}
 	} else if (type == 7) {
 		value = inode.$pi;
 	} else if (type == 8) {
@@ -174,20 +173,20 @@ export function next(inode, node, type){
 	if(type == 5) return inode[idx+1];
 	if(type == 6) {
 		var entries = Object.entries(inode);
-		var kv = entries[idx+1];
+		var kv = entries[idx + 1];
 		// pass tuple-wise
 		return {$key:kv[0],$value:kv[1]};
 	}
 }
 
-export function push(inode,val,type){
+export function push(inode,kv,type){
 	type = type || _inferType(inode);
-	if(type == 1 || type == 9 || type == 11){
-		inode.$children.push(val[1]);
-	} else if(type == 5) {
-		inode.push(val);
-	} else if(type == 6){
-		inode[val[0]] = val[1];
+	if (type == 1 || type == 9 || type == 11) {
+		inode.$children.push(kv[1]);
+	} else if (type == 5) {
+		inode.push(kv[1]);
+	} else if (type == 6) {
+		inode[kv[0]] = kv[1];
 	}
 	return inode;
 }
@@ -252,7 +251,9 @@ export function values(inode,type){
 	type = type || _inferType(inode);
 	if(type == 1 || type == 9 || type == 11) return inode.$children;
 	if (type == 2) return [[inode.$name,inode.$value]];
-	if(type == 6) return Object.values(inode);
+	if(type == 6)
+		// tuple-wise
+		return Object.entries(inode).map(kv => {return {$key:kv[0],$value:kv[1]};});
 	if (type == 8) return [inode.$comment];
 	return inode;
 }
@@ -315,41 +316,49 @@ export function attrEntries(inode){
 
 export function modify(inode, node, ref, type){
 	type = type || _inferType(inode);
-	if(type == 1 || type == 9 || type == 11){
+	if (type == 1 || type == 9 || type == 11) {
 		if (ref !== undefined) {
-			inode.$children.splice(ref.indexInParent,0,node.inode);
+			inode.$children.splice(ref.indexInParent, 0, node.inode);
 		} else {
 			inode.$children.push(node.inode);
 		}
-	} else if(type == 5){
+	} else if(type == 2) {
+		inode.$value = node.inode;
+	} else if (type == 5) {
 		if (ref !== undefined) {
-			inode.splice(ref.indexInParent,0,node.inode);
+			inode.splice(ref.indexInParent, 0, node.inode);
 		} else {
 			inode.push(node.inode);
 		}
-	} else if(type == 6){
+	} else if (type == 6) {
 		inode[node.key] = node.inode;
 	}
 	return inode;
 }
 
-export function stringify(inode, type, root = true) {
+export function stringify(inode, type, json = false, root = true) {
 	var str = "";
 	type = type || _inferType(inode);
 	if (type == 1) {
 		str += _elemToString(inode);
+	} else if(type == 2) {
+		str += "<l3:a name=\""+inode.$key+"\">"+inode.$value+"</l3:a>";
 	} else if (type == 5) {
-		let val = forEach(inode, c => stringify(c)).join("");
+		var val = forEach(inode, function (c) {
+			return stringify(c, 0, true, false);
+		}).join("");
 		str += "<l3:l" + (val ? ">" + val + "</l3:l>" : "/>");
 	} else if (type == 6) {
-		let val = forEach(Object.entries(inode), c => stringify(c[1], null, false, c[0])).join("");
-		str += "<l3:m" + (val ? ">" + val + "</l3:m>" : "/>");
+		var _val = forEach(Object.entries(inode), function (c) {
+			return stringify({$key:c[0], $value:stringify(c[1], 0, true, false)}, 2, json, false);
+		}).join("");
+		str += "<l3:m" + (_val ? ">" + _val + "</l3:m>" : "/>");
 	} else {
-		if(type == 8) {
+		if (type == 8) {
 			str += "<!--" + inode.$comment + "-->";
 		} else {
-			let val = inode === null ? "null" : inode;
-			str += type == 12 ? "<l3:x>" + val + "</l3:x>" : val;
+			var _val2 = inode === null ? "null" : inode;
+			str += type == 12 || json ? "<l3:x>" + _val2 + "</l3:x>" : _val2;
 		}
 	}
 	return root ? prettyXML(str) : str;
