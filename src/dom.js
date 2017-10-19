@@ -54,12 +54,13 @@ export function vnode(inode, parent, depth, indexInParent) {
 	let type = l3Type | nodeType;
 	var isL3 = isElem && l3Type !== 0;
 	var attrs = isElem ? inode.attributes : null;
-	var name, value;
+	var name, key, value;
 	if(type == 1){
 		// if l3, nodeType != type
 		name = isL3 ? attrs.name : nodeName;
 	} else if(type == 2) {
 		// no-op?
+		key = inode.name;
 	} else if (type == 5) {
 		// no-op?
 	} else if (type == 6) {
@@ -73,6 +74,7 @@ export function vnode(inode, parent, depth, indexInParent) {
 		inode,
 		type,
 		name,
+		key,
 		value,
 		parent,
 		depth,
@@ -121,9 +123,9 @@ export function next(pinode, node, type){
 	}
 }
 
-export function push(inode,val,type){
+export function push(inode,kv,type){
 	if(type == 1 || type == 9  || type == 11){
-		inode.appendChild(val[1]);
+		inode.appendChild(kv[1]);
 	}
 	return inode;
 }
