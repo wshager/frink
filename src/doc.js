@@ -8,14 +8,15 @@ export function ensureDoc(node){
 	if(!node) return;
 	var cx = this && this.vnode ? this : inode;
 	if(!node.inode) {
-		if(cx.getType(node) == 9) {
+		const type = cx.getType(node);
+		if(type == 9 || type == 11) {
 			let root = cx.first(node);
 			return cx.vnode(root, cx.vnode(node), 1, 0);
 		} else {
 			// create a document-fragment by default!
 			let doc = t.bind(cx)();
 			let root = cx.vnode(node, doc, 1, 0);
-			doc = doc.push(root);
+			doc = doc.push([0,root.inode]);
 			return root;
 		}
 	}
