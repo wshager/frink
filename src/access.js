@@ -249,18 +249,30 @@ export const last = n => n.__cx ? n.__cx[1].size : n.parent ? n.parent.size : 1;
 const _isEq = (a,b) => a === b;
 
 // TODO convert qname to integer when parent is array
-function _nodeTest(type,qnameOrKey) {
+function _nodeTest(typeTest,qnameOrKey) {
 	var f;
 	if (qnameOrKey === undefined) {
-		f = type;
+		f = typeTest;
 	} else {
 		var hasWildcard = /\*/.test(qnameOrKey);
 		if (hasWildcard) {
 			var regex = new RegExp(qnameOrKey.replace(/\*/, "(\\w[\\w0-9-_]*)"));
-			f = n => type(n) && regex.test(n.parent.type == 6 ? n.key : n.name);
+			f = n => {
+				let isTuple = n.parent.type == 6;
+				if(isTuple || n.name) {
+					return typeTest(n) && regex.test(isTuple ? n.key : n.name);
+				}
+				return typeTest(n);
+			};
 		} else {
 			//return _seq.seq(_get(qname, 1), _transducers.filter(_isElement));
-			f = n => _isEq(n.parent.type == 6 ? n.key : n.name,qnameOrKey) && type(n);
+			f = n => {
+				let isTuple = n.parent.type == 6;
+				if(isTuple || n.name) {
+					return _isEq(isTuple ? n.key : n.name,qnameOrKey) && typeTest(n);
+				}
+				return typeTest(n);
+			};
 			f.__Accessor = qnameOrKey;
 		}
 	}
@@ -272,8 +284,8 @@ export function element(qname) {
 	return _nodeTest(_isElement,qname);
 }
 
-export function list(key) {
-	return _nodeTest(_isList,key);
+export function list(keyOrIndex) {
+	return _nodeTest(_isList,keyOrIndex);
 }
 
 /*export function map() {
