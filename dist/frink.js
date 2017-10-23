@@ -5397,6 +5397,43 @@ function config (name) {
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{}],29:[function(require,module,exports){
 "use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var Subscriber_1 = require('./Subscriber');
+/**
+ * We need this JSDoc comment for affecting ESDoc.
+ * @ignore
+ * @extends {Ignored}
+ */
+var InnerSubscriber = (function (_super) {
+    __extends(InnerSubscriber, _super);
+    function InnerSubscriber(parent, outerValue, outerIndex) {
+        _super.call(this);
+        this.parent = parent;
+        this.outerValue = outerValue;
+        this.outerIndex = outerIndex;
+        this.index = 0;
+    }
+    InnerSubscriber.prototype._next = function (value) {
+        this.parent.notifyNext(this.outerValue, value, this.outerIndex, this.index++, this);
+    };
+    InnerSubscriber.prototype._error = function (error) {
+        this.parent.notifyError(error, this);
+        this.unsubscribe();
+    };
+    InnerSubscriber.prototype._complete = function () {
+        this.parent.notifyComplete(this);
+        this.unsubscribe();
+    };
+    return InnerSubscriber;
+}(Subscriber_1.Subscriber));
+exports.InnerSubscriber = InnerSubscriber;
+
+},{"./Subscriber":36}],30:[function(require,module,exports){
+"use strict";
 var Observable_1 = require('./Observable');
 /**
  * Represents a push-based event or value that an {@link Observable} can emit.
@@ -5523,7 +5560,7 @@ var Notification = (function () {
 }());
 exports.Notification = Notification;
 
-},{"./Observable":30}],30:[function(require,module,exports){
+},{"./Observable":31}],31:[function(require,module,exports){
 "use strict";
 var root_1 = require('./util/root');
 var toSubscriber_1 = require('./util/toSubscriber');
@@ -5780,7 +5817,7 @@ var Observable = (function () {
 }());
 exports.Observable = Observable;
 
-},{"./symbol/observable":52,"./util/root":62,"./util/toSubscriber":63}],31:[function(require,module,exports){
+},{"./symbol/observable":63,"./util/root":75,"./util/toSubscriber":77}],32:[function(require,module,exports){
 "use strict";
 exports.empty = {
     closed: true,
@@ -5789,7 +5826,248 @@ exports.empty = {
     complete: function () { }
 };
 
-},{}],32:[function(require,module,exports){
+},{}],33:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var Subscriber_1 = require('./Subscriber');
+/**
+ * We need this JSDoc comment for affecting ESDoc.
+ * @ignore
+ * @extends {Ignored}
+ */
+var OuterSubscriber = (function (_super) {
+    __extends(OuterSubscriber, _super);
+    function OuterSubscriber() {
+        _super.apply(this, arguments);
+    }
+    OuterSubscriber.prototype.notifyNext = function (outerValue, innerValue, outerIndex, innerIndex, innerSub) {
+        this.destination.next(innerValue);
+    };
+    OuterSubscriber.prototype.notifyError = function (error, innerSub) {
+        this.destination.error(error);
+    };
+    OuterSubscriber.prototype.notifyComplete = function (innerSub) {
+        this.destination.complete();
+    };
+    return OuterSubscriber;
+}(Subscriber_1.Subscriber));
+exports.OuterSubscriber = OuterSubscriber;
+
+},{"./Subscriber":36}],34:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var Observable_1 = require('./Observable');
+var Subscriber_1 = require('./Subscriber');
+var Subscription_1 = require('./Subscription');
+var ObjectUnsubscribedError_1 = require('./util/ObjectUnsubscribedError');
+var SubjectSubscription_1 = require('./SubjectSubscription');
+var rxSubscriber_1 = require('./symbol/rxSubscriber');
+/**
+ * @class SubjectSubscriber<T>
+ */
+var SubjectSubscriber = (function (_super) {
+    __extends(SubjectSubscriber, _super);
+    function SubjectSubscriber(destination) {
+        _super.call(this, destination);
+        this.destination = destination;
+    }
+    return SubjectSubscriber;
+}(Subscriber_1.Subscriber));
+exports.SubjectSubscriber = SubjectSubscriber;
+/**
+ * @class Subject<T>
+ */
+var Subject = (function (_super) {
+    __extends(Subject, _super);
+    function Subject() {
+        _super.call(this);
+        this.observers = [];
+        this.closed = false;
+        this.isStopped = false;
+        this.hasError = false;
+        this.thrownError = null;
+    }
+    Subject.prototype[rxSubscriber_1.rxSubscriber] = function () {
+        return new SubjectSubscriber(this);
+    };
+    Subject.prototype.lift = function (operator) {
+        var subject = new AnonymousSubject(this, this);
+        subject.operator = operator;
+        return subject;
+    };
+    Subject.prototype.next = function (value) {
+        if (this.closed) {
+            throw new ObjectUnsubscribedError_1.ObjectUnsubscribedError();
+        }
+        if (!this.isStopped) {
+            var observers = this.observers;
+            var len = observers.length;
+            var copy = observers.slice();
+            for (var i = 0; i < len; i++) {
+                copy[i].next(value);
+            }
+        }
+    };
+    Subject.prototype.error = function (err) {
+        if (this.closed) {
+            throw new ObjectUnsubscribedError_1.ObjectUnsubscribedError();
+        }
+        this.hasError = true;
+        this.thrownError = err;
+        this.isStopped = true;
+        var observers = this.observers;
+        var len = observers.length;
+        var copy = observers.slice();
+        for (var i = 0; i < len; i++) {
+            copy[i].error(err);
+        }
+        this.observers.length = 0;
+    };
+    Subject.prototype.complete = function () {
+        if (this.closed) {
+            throw new ObjectUnsubscribedError_1.ObjectUnsubscribedError();
+        }
+        this.isStopped = true;
+        var observers = this.observers;
+        var len = observers.length;
+        var copy = observers.slice();
+        for (var i = 0; i < len; i++) {
+            copy[i].complete();
+        }
+        this.observers.length = 0;
+    };
+    Subject.prototype.unsubscribe = function () {
+        this.isStopped = true;
+        this.closed = true;
+        this.observers = null;
+    };
+    Subject.prototype._trySubscribe = function (subscriber) {
+        if (this.closed) {
+            throw new ObjectUnsubscribedError_1.ObjectUnsubscribedError();
+        }
+        else {
+            return _super.prototype._trySubscribe.call(this, subscriber);
+        }
+    };
+    Subject.prototype._subscribe = function (subscriber) {
+        if (this.closed) {
+            throw new ObjectUnsubscribedError_1.ObjectUnsubscribedError();
+        }
+        else if (this.hasError) {
+            subscriber.error(this.thrownError);
+            return Subscription_1.Subscription.EMPTY;
+        }
+        else if (this.isStopped) {
+            subscriber.complete();
+            return Subscription_1.Subscription.EMPTY;
+        }
+        else {
+            this.observers.push(subscriber);
+            return new SubjectSubscription_1.SubjectSubscription(this, subscriber);
+        }
+    };
+    Subject.prototype.asObservable = function () {
+        var observable = new Observable_1.Observable();
+        observable.source = this;
+        return observable;
+    };
+    Subject.create = function (destination, source) {
+        return new AnonymousSubject(destination, source);
+    };
+    return Subject;
+}(Observable_1.Observable));
+exports.Subject = Subject;
+/**
+ * @class AnonymousSubject<T>
+ */
+var AnonymousSubject = (function (_super) {
+    __extends(AnonymousSubject, _super);
+    function AnonymousSubject(destination, source) {
+        _super.call(this);
+        this.destination = destination;
+        this.source = source;
+    }
+    AnonymousSubject.prototype.next = function (value) {
+        var destination = this.destination;
+        if (destination && destination.next) {
+            destination.next(value);
+        }
+    };
+    AnonymousSubject.prototype.error = function (err) {
+        var destination = this.destination;
+        if (destination && destination.error) {
+            this.destination.error(err);
+        }
+    };
+    AnonymousSubject.prototype.complete = function () {
+        var destination = this.destination;
+        if (destination && destination.complete) {
+            this.destination.complete();
+        }
+    };
+    AnonymousSubject.prototype._subscribe = function (subscriber) {
+        var source = this.source;
+        if (source) {
+            return this.source.subscribe(subscriber);
+        }
+        else {
+            return Subscription_1.Subscription.EMPTY;
+        }
+    };
+    return AnonymousSubject;
+}(Subject));
+exports.AnonymousSubject = AnonymousSubject;
+
+},{"./Observable":31,"./SubjectSubscription":35,"./Subscriber":36,"./Subscription":37,"./symbol/rxSubscriber":64,"./util/ObjectUnsubscribedError":65}],35:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var Subscription_1 = require('./Subscription');
+/**
+ * We need this JSDoc comment for affecting ESDoc.
+ * @ignore
+ * @extends {Ignored}
+ */
+var SubjectSubscription = (function (_super) {
+    __extends(SubjectSubscription, _super);
+    function SubjectSubscription(subject, subscriber) {
+        _super.call(this);
+        this.subject = subject;
+        this.subscriber = subscriber;
+        this.closed = false;
+    }
+    SubjectSubscription.prototype.unsubscribe = function () {
+        if (this.closed) {
+            return;
+        }
+        this.closed = true;
+        var subject = this.subject;
+        var observers = subject.observers;
+        this.subject = null;
+        if (!observers || observers.length === 0 || subject.isStopped || subject.closed) {
+            return;
+        }
+        var subscriberIndex = observers.indexOf(this.subscriber);
+        if (subscriberIndex !== -1) {
+            observers.splice(subscriberIndex, 1);
+        }
+    };
+    return SubjectSubscription;
+}(Subscription_1.Subscription));
+exports.SubjectSubscription = SubjectSubscription;
+
+},{"./Subscription":37}],36:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -6054,7 +6332,7 @@ var SafeSubscriber = (function (_super) {
     return SafeSubscriber;
 }(Subscriber));
 
-},{"./Observer":31,"./Subscription":33,"./symbol/rxSubscriber":53,"./util/isFunction":58}],33:[function(require,module,exports){
+},{"./Observer":32,"./Subscription":37,"./symbol/rxSubscriber":64,"./util/isFunction":70}],37:[function(require,module,exports){
 "use strict";
 var isArray_1 = require('./util/isArray');
 var isObject_1 = require('./util/isObject');
@@ -6248,31 +6526,49 @@ function flattenUnsubscriptionErrors(errors) {
     return errors.reduce(function (errs, err) { return errs.concat((err instanceof UnsubscriptionError_1.UnsubscriptionError) ? err.errors : err); }, []);
 }
 
-},{"./util/UnsubscriptionError":54,"./util/errorObject":55,"./util/isArray":56,"./util/isFunction":58,"./util/isObject":59,"./util/tryCatch":64}],34:[function(require,module,exports){
+},{"./util/UnsubscriptionError":66,"./util/errorObject":67,"./util/isArray":68,"./util/isFunction":70,"./util/isObject":71,"./util/tryCatch":78}],38:[function(require,module,exports){
+"use strict";
+var Observable_1 = require('../../Observable');
+var empty_1 = require('../../observable/empty');
+Observable_1.Observable.empty = empty_1.empty;
+
+},{"../../Observable":31,"../../observable/empty":54}],39:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var from_1 = require('../../observable/from');
 Observable_1.Observable.from = from_1.from;
 
-},{"../../Observable":30,"../../observable/from":46}],35:[function(require,module,exports){
+},{"../../Observable":31,"../../observable/from":55}],40:[function(require,module,exports){
+"use strict";
+var Observable_1 = require('../../Observable');
+var never_1 = require('../../observable/never');
+Observable_1.Observable.never = never_1.never;
+
+},{"../../Observable":31,"../../observable/never":56}],41:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var filter_1 = require('../../operator/filter');
 Observable_1.Observable.prototype.filter = filter_1.filter;
 
-},{"../../Observable":30,"../../operator/filter":47}],36:[function(require,module,exports){
+},{"../../Observable":31,"../../operator/filter":57}],42:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var map_1 = require('../../operator/map');
 Observable_1.Observable.prototype.map = map_1.map;
 
-},{"../../Observable":30,"../../operator/map":48}],37:[function(require,module,exports){
+},{"../../Observable":31,"../../operator/map":58}],43:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var reduce_1 = require('../../operator/reduce');
 Observable_1.Observable.prototype.reduce = reduce_1.reduce;
 
-},{"../../Observable":30,"../../operator/reduce":50}],38:[function(require,module,exports){
+},{"../../Observable":31,"../../operator/reduce":60}],44:[function(require,module,exports){
+"use strict";
+var Observable_1 = require('../../Observable');
+var switchMap_1 = require('../../operator/switchMap');
+Observable_1.Observable.prototype.switchMap = switchMap_1.switchMap;
+
+},{"../../Observable":31,"../../operator/switchMap":61}],45:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -6343,7 +6639,7 @@ var ArrayLikeObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.ArrayLikeObservable = ArrayLikeObservable;
 
-},{"../Observable":30,"./EmptyObservable":40,"./ScalarObservable":45}],39:[function(require,module,exports){
+},{"../Observable":31,"./EmptyObservable":47,"./ScalarObservable":53}],46:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -6466,7 +6762,7 @@ var ArrayObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.ArrayObservable = ArrayObservable;
 
-},{"../Observable":30,"../util/isScheduler":61,"./EmptyObservable":40,"./ScalarObservable":45}],40:[function(require,module,exports){
+},{"../Observable":31,"../util/isScheduler":73,"./EmptyObservable":47,"./ScalarObservable":53}],47:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -6548,7 +6844,7 @@ var EmptyObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.EmptyObservable = EmptyObservable;
 
-},{"../Observable":30}],41:[function(require,module,exports){
+},{"../Observable":31}],48:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -6671,7 +6967,7 @@ var FromObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.FromObservable = FromObservable;
 
-},{"../Observable":30,"../operator/observeOn":49,"../symbol/iterator":51,"../symbol/observable":52,"../util/isArray":56,"../util/isArrayLike":57,"../util/isPromise":60,"./ArrayLikeObservable":38,"./ArrayObservable":39,"./IteratorObservable":42,"./PromiseObservable":43}],42:[function(require,module,exports){
+},{"../Observable":31,"../operator/observeOn":59,"../symbol/iterator":62,"../symbol/observable":63,"../util/isArray":68,"../util/isArrayLike":69,"../util/isPromise":72,"./ArrayLikeObservable":45,"./ArrayObservable":46,"./IteratorObservable":49,"./PromiseObservable":51}],49:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -6835,7 +7131,67 @@ function sign(value) {
     return valueAsNumber < 0 ? -1 : 1;
 }
 
-},{"../Observable":30,"../symbol/iterator":51,"../util/root":62}],43:[function(require,module,exports){
+},{"../Observable":31,"../symbol/iterator":62,"../util/root":75}],50:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var Observable_1 = require('../Observable');
+var noop_1 = require('../util/noop');
+/**
+ * We need this JSDoc comment for affecting ESDoc.
+ * @extends {Ignored}
+ * @hide true
+ */
+var NeverObservable = (function (_super) {
+    __extends(NeverObservable, _super);
+    function NeverObservable() {
+        _super.call(this);
+    }
+    /**
+     * Creates an Observable that emits no items to the Observer.
+     *
+     * <span class="informal">An Observable that never emits anything.</span>
+     *
+     * <img src="./img/never.png" width="100%">
+     *
+     * This static operator is useful for creating a simple Observable that emits
+     * neither values nor errors nor the completion notification. It can be used
+     * for testing purposes or for composing with other Observables. Please note
+     * that by never emitting a complete notification, this Observable keeps the
+     * subscription from being disposed automatically. Subscriptions need to be
+     * manually disposed.
+     *
+     * @example <caption>Emit the number 7, then never emit anything else (not even complete).</caption>
+     * function info() {
+     *   console.log('Will not be called');
+     * }
+     * var result = Rx.Observable.never().startWith(7);
+     * result.subscribe(x => console.log(x), info, info);
+     *
+     * @see {@link create}
+     * @see {@link empty}
+     * @see {@link of}
+     * @see {@link throw}
+     *
+     * @return {Observable} A "never" Observable: never emits anything.
+     * @static true
+     * @name never
+     * @owner Observable
+     */
+    NeverObservable.create = function () {
+        return new NeverObservable();
+    };
+    NeverObservable.prototype._subscribe = function (subscriber) {
+        noop_1.noop();
+    };
+    return NeverObservable;
+}(Observable_1.Observable));
+exports.NeverObservable = NeverObservable;
+
+},{"../Observable":31,"../util/noop":74}],51:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -6957,7 +7313,7 @@ function dispatchError(arg) {
     }
 }
 
-},{"../Observable":30,"../util/root":62}],44:[function(require,module,exports){
+},{"../Observable":31,"../util/root":75}],52:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -7054,7 +7410,7 @@ var RangeObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.RangeObservable = RangeObservable;
 
-},{"../Observable":30}],45:[function(require,module,exports){
+},{"../Observable":31}],53:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -7113,12 +7469,22 @@ var ScalarObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.ScalarObservable = ScalarObservable;
 
-},{"../Observable":30}],46:[function(require,module,exports){
+},{"../Observable":31}],54:[function(require,module,exports){
+"use strict";
+var EmptyObservable_1 = require('./EmptyObservable');
+exports.empty = EmptyObservable_1.EmptyObservable.create;
+
+},{"./EmptyObservable":47}],55:[function(require,module,exports){
 "use strict";
 var FromObservable_1 = require('./FromObservable');
 exports.from = FromObservable_1.FromObservable.create;
 
-},{"./FromObservable":41}],47:[function(require,module,exports){
+},{"./FromObservable":48}],56:[function(require,module,exports){
+"use strict";
+var NeverObservable_1 = require('./NeverObservable');
+exports.never = NeverObservable_1.NeverObservable.create;
+
+},{"./NeverObservable":50}],57:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -7211,7 +7577,7 @@ var FilterSubscriber = (function (_super) {
     return FilterSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":32}],48:[function(require,module,exports){
+},{"../Subscriber":36}],58:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -7299,7 +7665,7 @@ var MapSubscriber = (function (_super) {
     return MapSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":32}],49:[function(require,module,exports){
+},{"../Subscriber":36}],59:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -7413,7 +7779,7 @@ var ObserveOnMessage = (function () {
 }());
 exports.ObserveOnMessage = ObserveOnMessage;
 
-},{"../Notification":29,"../Subscriber":32}],50:[function(require,module,exports){
+},{"../Notification":30,"../Subscriber":36}],60:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -7540,7 +7906,148 @@ var ReduceSubscriber = (function (_super) {
 }(Subscriber_1.Subscriber));
 exports.ReduceSubscriber = ReduceSubscriber;
 
-},{"../Subscriber":32}],51:[function(require,module,exports){
+},{"../Subscriber":36}],61:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var OuterSubscriber_1 = require('../OuterSubscriber');
+var subscribeToResult_1 = require('../util/subscribeToResult');
+/* tslint:enable:max-line-length */
+/**
+ * Projects each source value to an Observable which is merged in the output
+ * Observable, emitting values only from the most recently projected Observable.
+ *
+ * <span class="informal">Maps each value to an Observable, then flattens all of
+ * these inner Observables using {@link switch}.</span>
+ *
+ * <img src="./img/switchMap.png" width="100%">
+ *
+ * Returns an Observable that emits items based on applying a function that you
+ * supply to each item emitted by the source Observable, where that function
+ * returns an (so-called "inner") Observable. Each time it observes one of these
+ * inner Observables, the output Observable begins emitting the items emitted by
+ * that inner Observable. When a new inner Observable is emitted, `switchMap`
+ * stops emitting items from the earlier-emitted inner Observable and begins
+ * emitting items from the new one. It continues to behave like this for
+ * subsequent inner Observables.
+ *
+ * @example <caption>Rerun an interval Observable on every click event</caption>
+ * var clicks = Rx.Observable.fromEvent(document, 'click');
+ * var result = clicks.switchMap((ev) => Rx.Observable.interval(1000));
+ * result.subscribe(x => console.log(x));
+ *
+ * @see {@link concatMap}
+ * @see {@link exhaustMap}
+ * @see {@link mergeMap}
+ * @see {@link switch}
+ * @see {@link switchMapTo}
+ *
+ * @param {function(value: T, ?index: number): ObservableInput} project A function
+ * that, when applied to an item emitted by the source Observable, returns an
+ * Observable.
+ * @param {function(outerValue: T, innerValue: I, outerIndex: number, innerIndex: number): any} [resultSelector]
+ * A function to produce the value on the output Observable based on the values
+ * and the indices of the source (outer) emission and the inner Observable
+ * emission. The arguments passed to this function are:
+ * - `outerValue`: the value that came from the source
+ * - `innerValue`: the value that came from the projected Observable
+ * - `outerIndex`: the "index" of the value that came from the source
+ * - `innerIndex`: the "index" of the value from the projected Observable
+ * @return {Observable} An Observable that emits the result of applying the
+ * projection function (and the optional `resultSelector`) to each item emitted
+ * by the source Observable and taking only the values from the most recently
+ * projected inner Observable.
+ * @method switchMap
+ * @owner Observable
+ */
+function switchMap(project, resultSelector) {
+    return this.lift(new SwitchMapOperator(project, resultSelector));
+}
+exports.switchMap = switchMap;
+var SwitchMapOperator = (function () {
+    function SwitchMapOperator(project, resultSelector) {
+        this.project = project;
+        this.resultSelector = resultSelector;
+    }
+    SwitchMapOperator.prototype.call = function (subscriber, source) {
+        return source.subscribe(new SwitchMapSubscriber(subscriber, this.project, this.resultSelector));
+    };
+    return SwitchMapOperator;
+}());
+/**
+ * We need this JSDoc comment for affecting ESDoc.
+ * @ignore
+ * @extends {Ignored}
+ */
+var SwitchMapSubscriber = (function (_super) {
+    __extends(SwitchMapSubscriber, _super);
+    function SwitchMapSubscriber(destination, project, resultSelector) {
+        _super.call(this, destination);
+        this.project = project;
+        this.resultSelector = resultSelector;
+        this.index = 0;
+    }
+    SwitchMapSubscriber.prototype._next = function (value) {
+        var result;
+        var index = this.index++;
+        try {
+            result = this.project(value, index);
+        }
+        catch (error) {
+            this.destination.error(error);
+            return;
+        }
+        this._innerSub(result, value, index);
+    };
+    SwitchMapSubscriber.prototype._innerSub = function (result, value, index) {
+        var innerSubscription = this.innerSubscription;
+        if (innerSubscription) {
+            innerSubscription.unsubscribe();
+        }
+        this.add(this.innerSubscription = subscribeToResult_1.subscribeToResult(this, result, value, index));
+    };
+    SwitchMapSubscriber.prototype._complete = function () {
+        var innerSubscription = this.innerSubscription;
+        if (!innerSubscription || innerSubscription.closed) {
+            _super.prototype._complete.call(this);
+        }
+    };
+    SwitchMapSubscriber.prototype._unsubscribe = function () {
+        this.innerSubscription = null;
+    };
+    SwitchMapSubscriber.prototype.notifyComplete = function (innerSub) {
+        this.remove(innerSub);
+        this.innerSubscription = null;
+        if (this.isStopped) {
+            _super.prototype._complete.call(this);
+        }
+    };
+    SwitchMapSubscriber.prototype.notifyNext = function (outerValue, innerValue, outerIndex, innerIndex, innerSub) {
+        if (this.resultSelector) {
+            this._tryNotifyNext(outerValue, innerValue, outerIndex, innerIndex);
+        }
+        else {
+            this.destination.next(innerValue);
+        }
+    };
+    SwitchMapSubscriber.prototype._tryNotifyNext = function (outerValue, innerValue, outerIndex, innerIndex) {
+        var result;
+        try {
+            result = this.resultSelector(outerValue, innerValue, outerIndex, innerIndex);
+        }
+        catch (err) {
+            this.destination.error(err);
+            return;
+        }
+        this.destination.next(result);
+    };
+    return SwitchMapSubscriber;
+}(OuterSubscriber_1.OuterSubscriber));
+
+},{"../OuterSubscriber":33,"../util/subscribeToResult":76}],62:[function(require,module,exports){
 "use strict";
 var root_1 = require('../util/root');
 function symbolIteratorPonyfill(root) {
@@ -7579,7 +8086,7 @@ exports.iterator = symbolIteratorPonyfill(root_1.root);
  */
 exports.$$iterator = exports.iterator;
 
-},{"../util/root":62}],52:[function(require,module,exports){
+},{"../util/root":75}],63:[function(require,module,exports){
 "use strict";
 var root_1 = require('../util/root');
 function getSymbolObservable(context) {
@@ -7606,7 +8113,7 @@ exports.observable = getSymbolObservable(root_1.root);
  */
 exports.$$observable = exports.observable;
 
-},{"../util/root":62}],53:[function(require,module,exports){
+},{"../util/root":75}],64:[function(require,module,exports){
 "use strict";
 var root_1 = require('../util/root');
 var Symbol = root_1.root.Symbol;
@@ -7617,7 +8124,35 @@ exports.rxSubscriber = (typeof Symbol === 'function' && typeof Symbol.for === 'f
  */
 exports.$$rxSubscriber = exports.rxSubscriber;
 
-},{"../util/root":62}],54:[function(require,module,exports){
+},{"../util/root":75}],65:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+/**
+ * An error thrown when an action is invalid because the object has been
+ * unsubscribed.
+ *
+ * @see {@link Subject}
+ * @see {@link BehaviorSubject}
+ *
+ * @class ObjectUnsubscribedError
+ */
+var ObjectUnsubscribedError = (function (_super) {
+    __extends(ObjectUnsubscribedError, _super);
+    function ObjectUnsubscribedError() {
+        var err = _super.call(this, 'object unsubscribed');
+        this.name = err.name = 'ObjectUnsubscribedError';
+        this.stack = err.stack;
+        this.message = err.message;
+    }
+    return ObjectUnsubscribedError;
+}(Error));
+exports.ObjectUnsubscribedError = ObjectUnsubscribedError;
+
+},{}],66:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -7643,48 +8178,54 @@ var UnsubscriptionError = (function (_super) {
 }(Error));
 exports.UnsubscriptionError = UnsubscriptionError;
 
-},{}],55:[function(require,module,exports){
+},{}],67:[function(require,module,exports){
 "use strict";
 // typeof any so that it we don't have to cast when comparing a result to the error object
 exports.errorObject = { e: {} };
 
-},{}],56:[function(require,module,exports){
+},{}],68:[function(require,module,exports){
 "use strict";
 exports.isArray = Array.isArray || (function (x) { return x && typeof x.length === 'number'; });
 
-},{}],57:[function(require,module,exports){
+},{}],69:[function(require,module,exports){
 "use strict";
 exports.isArrayLike = (function (x) { return x && typeof x.length === 'number'; });
 
-},{}],58:[function(require,module,exports){
+},{}],70:[function(require,module,exports){
 "use strict";
 function isFunction(x) {
     return typeof x === 'function';
 }
 exports.isFunction = isFunction;
 
-},{}],59:[function(require,module,exports){
+},{}],71:[function(require,module,exports){
 "use strict";
 function isObject(x) {
     return x != null && typeof x === 'object';
 }
 exports.isObject = isObject;
 
-},{}],60:[function(require,module,exports){
+},{}],72:[function(require,module,exports){
 "use strict";
 function isPromise(value) {
     return value && typeof value.subscribe !== 'function' && typeof value.then === 'function';
 }
 exports.isPromise = isPromise;
 
-},{}],61:[function(require,module,exports){
+},{}],73:[function(require,module,exports){
 "use strict";
 function isScheduler(value) {
     return value && typeof value.schedule === 'function';
 }
 exports.isScheduler = isScheduler;
 
-},{}],62:[function(require,module,exports){
+},{}],74:[function(require,module,exports){
+"use strict";
+/* tslint:disable:no-empty */
+function noop() { }
+exports.noop = noop;
+
+},{}],75:[function(require,module,exports){
 (function (global){
 "use strict";
 // CommonJS / Node have global context exposed as "global" variable.
@@ -7706,7 +8247,86 @@ exports.root = _root;
 })();
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],63:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
+"use strict";
+var root_1 = require('./root');
+var isArrayLike_1 = require('./isArrayLike');
+var isPromise_1 = require('./isPromise');
+var isObject_1 = require('./isObject');
+var Observable_1 = require('../Observable');
+var iterator_1 = require('../symbol/iterator');
+var InnerSubscriber_1 = require('../InnerSubscriber');
+var observable_1 = require('../symbol/observable');
+function subscribeToResult(outerSubscriber, result, outerValue, outerIndex) {
+    var destination = new InnerSubscriber_1.InnerSubscriber(outerSubscriber, outerValue, outerIndex);
+    if (destination.closed) {
+        return null;
+    }
+    if (result instanceof Observable_1.Observable) {
+        if (result._isScalar) {
+            destination.next(result.value);
+            destination.complete();
+            return null;
+        }
+        else {
+            return result.subscribe(destination);
+        }
+    }
+    else if (isArrayLike_1.isArrayLike(result)) {
+        for (var i = 0, len = result.length; i < len && !destination.closed; i++) {
+            destination.next(result[i]);
+        }
+        if (!destination.closed) {
+            destination.complete();
+        }
+    }
+    else if (isPromise_1.isPromise(result)) {
+        result.then(function (value) {
+            if (!destination.closed) {
+                destination.next(value);
+                destination.complete();
+            }
+        }, function (err) { return destination.error(err); })
+            .then(null, function (err) {
+            // Escaping the Promise trap: globally throw unhandled errors
+            root_1.root.setTimeout(function () { throw err; });
+        });
+        return destination;
+    }
+    else if (result && typeof result[iterator_1.iterator] === 'function') {
+        var iterator = result[iterator_1.iterator]();
+        do {
+            var item = iterator.next();
+            if (item.done) {
+                destination.complete();
+                break;
+            }
+            destination.next(item.value);
+            if (destination.closed) {
+                break;
+            }
+        } while (true);
+    }
+    else if (result && typeof result[observable_1.observable] === 'function') {
+        var obs = result[observable_1.observable]();
+        if (typeof obs.subscribe !== 'function') {
+            destination.error(new TypeError('Provided object does not correctly implement Symbol.observable'));
+        }
+        else {
+            return obs.subscribe(new InnerSubscriber_1.InnerSubscriber(outerSubscriber, outerValue, outerIndex));
+        }
+    }
+    else {
+        var value = isObject_1.isObject(result) ? 'an invalid object' : "'" + result + "'";
+        var msg = ("You provided " + value + " where a stream was expected.")
+            + ' You can provide an Observable, Promise, Array, or Iterable.';
+        destination.error(new TypeError(msg));
+    }
+    return null;
+}
+exports.subscribeToResult = subscribeToResult;
+
+},{"../InnerSubscriber":29,"../Observable":31,"../symbol/iterator":62,"../symbol/observable":63,"./isArrayLike":69,"./isObject":71,"./isPromise":72,"./root":75}],77:[function(require,module,exports){
 "use strict";
 var Subscriber_1 = require('../Subscriber');
 var rxSubscriber_1 = require('../symbol/rxSubscriber');
@@ -7727,7 +8347,7 @@ function toSubscriber(nextOrObserver, error, complete) {
 }
 exports.toSubscriber = toSubscriber;
 
-},{"../Observer":31,"../Subscriber":32,"../symbol/rxSubscriber":53}],64:[function(require,module,exports){
+},{"../Observer":32,"../Subscriber":36,"../symbol/rxSubscriber":64}],78:[function(require,module,exports){
 "use strict";
 var errorObject_1 = require('./errorObject');
 var tryCatchTarget;
@@ -7747,7 +8367,7 @@ function tryCatch(fn) {
 exports.tryCatch = tryCatch;
 ;
 
-},{"./errorObject":55}],65:[function(require,module,exports){
+},{"./errorObject":67}],79:[function(require,module,exports){
 module.exports={
 	"FOER0000":"Unidentified error.",
 	"FOAP0001":"",
@@ -8342,7 +8962,7 @@ module.exports={
 	"SEDE1665":""
 }
 
-},{}],66:[function(require,module,exports){
+},{}],80:[function(require,module,exports){
 /* big.js v3.1.3 https://github.com/MikeMcl/big.js/LICENCE */
 ;(function (global) {
     'use strict';
@@ -8553,25 +9173,28 @@ module.exports={
             e = n.length;
         }
 
+        nL = n.length;
+
         // Determine leading zeros.
-        for (i = 0; n.charAt(i) == '0'; i++) {
+        for (i = 0; i < nL && n.charAt(i) == '0'; i++) {
         }
 
-        if (i == (nL = n.length)) {
+        if (i == nL) {
 
             // Zero.
             x.c = [ x.e = 0 ];
         } else {
 
             // Determine trailing zeros.
-            for (; n.charAt(--nL) == '0';) {
+            for (; nL > 0 && n.charAt(--nL) == '0';) {
             }
 
             x.e = e - i - 1;
             x.c = [];
 
             // Convert string to array of digits without leading/trailing zeros.
-            for (e = 0; i <= nL; x.c[e++] = +n.charAt(i++)) {
+            //for (e = 0; i <= nL; x.c[e++] = +n.charAt(i++)) {
+            for (; i <= nL; x.c.push(+n.charAt(i++))) {
             }
         }
 
@@ -9479,6 +10102,7 @@ module.exports={
     // Node and other CommonJS-like environments that support module.exports.
     } else if (typeof module !== 'undefined' && module.exports) {
         module.exports = Big;
+        module.exports.Big = Big;
 
     //Browser.
     } else {
@@ -9486,7 +10110,7 @@ module.exports={
     }
 })(this);
 
-},{}],67:[function(require,module,exports){
+},{}],81:[function(require,module,exports){
 (function (Buffer){
 ;(function (sax) { // wrapper for non-node envs
   sax.parser = function (strict, opt) { return new SAXParser(strict, opt) }
@@ -11055,7 +11679,7 @@ module.exports={
 })(typeof exports === 'undefined' ? this.sax = {} : exports)
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":3,"stream":26,"string_decoder":27}],68:[function(require,module,exports){
+},{"buffer":3,"stream":26,"string_decoder":27}],82:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -11064,6 +11688,7 @@ Object.defineProperty(exports, "__esModule", {
 exports.last = exports.position = exports.isVNode = undefined;
 exports.VNodeIterator = VNodeIterator;
 exports.Step = Step;
+exports.VDoc = VDoc;
 exports.nextNode = nextNode;
 exports.stringify = stringify;
 exports.firstChild = firstChild;
@@ -11114,18 +11739,18 @@ VNodeIterator.prototype.next = function () {
 	return { value: this.f(v.value, this.parent, this.indexInParent) };
 };
 
-function Step(inode, name, parent, depth, indexInParent) {
-	this.inode = inode;
-	this.name = name;
-	this.parent = parent;
-	this.depth = depth;
-	this.indexInParent = indexInParent;
+function Step(node) {
+	this.node = node;
+	this.inode = node.inode;
+	this.parent = node.parent;
+	this.depth = node.depth;
+	this.indexInParent = node.indexInParent;
 }
 
 Step.prototype.type = 17;
 
 Step.prototype.toString = function () {
-	return "Step {depth:" + this.depth + ", closes:" + this.name + "}";
+	return "Step {depth:" + this.node.depth + ", closes:" + this.node.name + "}";
 };
 
 /*
@@ -11138,6 +11763,34 @@ export function* docIter(node) {
 	}
 }
 */
+
+function VDocIterator(node) {
+	this.node = (0, _doc.ensureDoc)(node);
+	this._init = false;
+	this.__is_VDocIterator = true;
+}
+
+VDocIterator.prototype.next = function () {
+	var node = this.node;
+	if (!this._init) {
+		this._init = true;
+		if (!node) return DONE;
+		return { value: node };
+	}
+	node = nextNode(node);
+	if (!node) return DONE;
+	this.node = node;
+	return { value: node };
+};
+
+function VDoc(node) {
+	this.node = node;
+}
+
+VDoc.prototype[Symbol.iterator] = function () {
+	return new VDocIterator(this.node);
+};
+
 function nextNode(node /* VNode */) {
 	var type = node.type,
 	    inode = node.inode,
@@ -11146,7 +11799,7 @@ function nextNode(node /* VNode */) {
 	var depth = node.depth || 0;
 	// FIXME improve check
 	if (type != 17 && (type == 1 || type == 5 || type == 6 || type == 14) && node.count() === 0) {
-		return new Step(inode, node.name, node.parent, depth, node.indexInParent);
+		return new Step(node);
 	}
 	if (type != 17 && node.count() > 0) {
 		// if we can still go down, return firstChild
@@ -11168,7 +11821,7 @@ function nextNode(node /* VNode */) {
 			node = node.parent;
 			if (depth === 0 || !node) return;
 			inode = node.inode;
-			node = new Step(inode, node.name, node.parent, depth, node.indexInParent);
+			node = new Step(node);
 			//console.log("found step", node.type, depth, indexInParent);
 			return node;
 		} else {
@@ -11212,7 +11865,7 @@ function stringify(input) {
 	var _iteratorError = undefined;
 
 	try {
-		for (var _iterator = docIter(input)[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+		for (var _iterator = new VDoc(input)[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
 			var _node = _step.value;
 
 			var type = _node.type;
@@ -11316,10 +11969,8 @@ function self(f) {
 function iter(node, f, cb) {
 	// FIXME pass doc?
 	var i = 0,
-	    prev;
-	if (!f) f = function f(node) {
-		prev = node;
-	};
+	    prev = node;
+	if (!f) f = function f() {};
 	node = _doc.ensureDoc.bind(this)(node);
 	f(node, i++);
 	while (node) {
@@ -11329,7 +11980,7 @@ function iter(node, f, cb) {
 		}
 	}
 	if (cb) cb();
-	//return prev;
+	return prev;
 }
 
 var isVNode = exports.isVNode = function isVNode(n) {
@@ -11384,24 +12035,36 @@ var last = exports.last = function last(n) {
 	return n.__cx ? n.__cx[1].size : n.parent ? n.parent.size : 1;
 };
 
+var _isEq = function _isEq(a, b) {
+	return a === b;
+};
+
 // TODO convert qname to integer when parent is array
-function _nodeTest(type, qname) {
+function _nodeTest(typeTest, qnameOrKey) {
 	var f;
-	if (qname === undefined) {
-		f = type;
+	if (qnameOrKey === undefined) {
+		f = typeTest;
 	} else {
-		var hasWildcard = /\*/.test(qname);
+		var hasWildcard = /\*/.test(qnameOrKey);
 		if (hasWildcard) {
-			var regex = new RegExp(qname.replace(/\*/, "(\\w[\\w0-9-_]*)"));
+			var regex = new RegExp(qnameOrKey.replace(/\*/, "(\\w[\\w0-9-_]*)"));
 			f = function f(n) {
-				return type(n) && regex.test(n.name);
+				var isTuple = n.parent.type == 6;
+				if (isTuple || n.name) {
+					return typeTest(n) && regex.test(isTuple ? n.key : n.name);
+				}
+				return typeTest(n);
 			};
 		} else {
 			//return _seq.seq(_get(qname, 1), _transducers.filter(_isElement));
 			f = function f(n) {
-				return n.name === qname && type(n);
+				var isTuple = n.parent.type == 6;
+				if (isTuple || n.name) {
+					return _isEq(isTuple ? n.key : n.name, qnameOrKey) && typeTest(n);
+				}
+				return typeTest(n);
 			};
-			f.__Accessor = qname;
+			f.__Accessor = qnameOrKey;
 		}
 	}
 	f.__is_NodeTypeTest = true;
@@ -11412,8 +12075,8 @@ function element(qname) {
 	return _nodeTest(_isElement, qname);
 }
 
-function list() {
-	return _nodeTest(_isList);
+function list(keyOrIndex) {
+	return _nodeTest(_isList, keyOrIndex);
 }
 
 /*export function map() {
@@ -11679,6 +12342,7 @@ function _axify(path) {
 			if (at) path = path.substring(1);
 			return at ? attribute(path) : child(element(path));
 		} else if (typeof path == "function") {
+			if (path.__is_NodeTypeTest) return child(path);
 			return self(path);
 		} else {
 			// TODO throw error
@@ -11700,7 +12364,7 @@ function name($a) {
 	return $a.name;
 }
 
-},{"./doc":71,"./pretty":80,"./seq":83,"./transducers":84}],69:[function(require,module,exports){
+},{"./doc":85,"./pretty":94,"./seq":97,"./transducers":98}],83:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -11715,7 +12379,7 @@ function stripBOM(str) {
 	}
 }
 
-},{}],70:[function(require,module,exports){
+},{}],84:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -11852,7 +12516,7 @@ function c(value) {
 	return _v(8, value);
 }
 
-},{"./qname":81,"./seq":83}],71:[function(require,module,exports){
+},{"./qname":95,"./seq":97}],85:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -11876,7 +12540,8 @@ function ensureDoc(node) {
 	if (!node) return;
 	var cx = this && this.vnode ? this : inode;
 	if (!node.inode) {
-		if (cx.getType(node) == 9) {
+		var type = cx.getType(node);
+		if (type == 9 || type == 11) {
 			var root = cx.first(node);
 			return cx.vnode(root, cx.vnode(node), 1, 0);
 		} else {
@@ -11921,7 +12586,7 @@ function t(children) {
 	return _d.bind(cx)(11, children);
 }
 
-},{"./construct":70,"./inode":74,"./seq":83}],72:[function(require,module,exports){
+},{"./construct":84,"./inode":88,"./seq":97}],86:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -12208,7 +12873,7 @@ export function nodesList(node) {
 }
 */
 
-},{"./dom":72,"./transducers":84,"./vnode":86}],73:[function(require,module,exports){
+},{"./dom":86,"./transducers":98,"./vnode":100}],87:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -12236,7 +12901,7 @@ function error(qname, message) {
 	throw err;
 }
 
-},{"../errors.json":65}],74:[function(require,module,exports){
+},{"../errors.json":79}],88:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -12551,7 +13216,11 @@ function values(inode, type) {
 	type = type || _inferType(inode);
 	if (type == 1 || type == 9 || type == 11) return inode.$children;
 	if (type == 2) return [[inode.$name, inode.$value]];
-	if (type == 6) return Object.values(inode);
+	if (type == 6)
+		// tuple-wise
+		return Object.entries(inode).map(function (kv) {
+			return { $key: kv[0], $value: kv[1] };
+		});
 	if (type == 8) return [inode.$comment];
 	return inode;
 }
@@ -12646,12 +13315,12 @@ function stringify(inode, type) {
 		str += "<l3:a name=\"" + inode.$key + "\">" + inode.$value + "</l3:a>";
 	} else if (type == 5) {
 		var val = (0, _transducers.forEach)(inode, function (c) {
-			return stringify(c, 0, json, false);
+			return stringify(c, 0, true, false);
 		}).join("");
 		str += "<l3:l" + (val ? ">" + val + "</l3:l>" : "/>");
 	} else if (type == 6) {
 		var _val = (0, _transducers.forEach)(Object.entries(inode), function (c) {
-			return stringify({ $key: c[0], $value: stringify(c[1], 0, json, false) }, 2, json, false);
+			return stringify({ $key: c[0], $value: stringify(c[1], 0, true, false) }, 2, json, false);
 		}).join("");
 		str += "<l3:m" + (_val ? ">" + _val + "</l3:m>" : "/>");
 	} else {
@@ -12667,7 +13336,7 @@ function stringify(inode, type) {
 
 var getType = exports.getType = _inferType;
 
-},{"./inode":74,"./multimap":78,"./pretty":80,"./transducers":84,"./vnode":86}],75:[function(require,module,exports){
+},{"./inode":88,"./multimap":92,"./pretty":94,"./transducers":98,"./vnode":100}],89:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -12936,7 +13605,7 @@ function fromL3(l3) {
 	return cx.finalize(parents[15]);
 }
 
-},{"./access":68,"./inode":74}],76:[function(require,module,exports){
+},{"./access":82,"./inode":88}],90:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -13073,7 +13742,7 @@ function parse($a) {
 	return result;
 }
 
-},{"../access":68,"../construct":70,"../doc":71,"../dom":72,"../inode":74,"../l3":75,"../modify":77,"../parser":79,"../render":82,"../seq":83,"../validate":85}],77:[function(require,module,exports){
+},{"../access":82,"../construct":84,"../doc":85,"../dom":86,"../inode":88,"../l3":89,"../modify":91,"../parser":93,"../render":96,"../seq":97,"../validate":99}],91:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -13134,7 +13803,7 @@ function removeChild(node, child) {
 	return _ascend(node, this);
 }
 
-},{"./access":68,"./doc":71}],78:[function(require,module,exports){
+},{"./access":82,"./doc":85}],92:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -13197,7 +13866,7 @@ function multimap() {
 	return new MultiMap();
 }
 
-},{}],79:[function(require,module,exports){
+},{}],93:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -13386,7 +14055,7 @@ var Parser = exports.Parser = function (_EventEmitter) {
 	return Parser;
 }(_events.EventEmitter);
 
-},{"./bom":69,"./inode":74,"events":5,"sax":67}],80:[function(require,module,exports){
+},{"./bom":83,"./inode":88,"events":5,"sax":81}],94:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -13460,7 +14129,7 @@ function prettyXML(text) {
 	return str[0] == '\n' ? str.slice(1) : str;
 }
 
-},{}],81:[function(require,module,exports){
+},{}],95:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -13484,19 +14153,34 @@ function QName(uri, name) {
 
 var q = exports.q = QName;
 
-},{}],82:[function(require,module,exports){
+},{}],96:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
 });
 exports.render = render;
+exports.renderStream = renderStream;
 
 var _access = require("./access");
+
+var _doc = require("./doc");
 
 var _dom = require("./dom");
 
 var dom = _interopRequireWildcard(_dom);
+
+var _Observable = require("rxjs/Observable");
+
+var _Subject = require("rxjs/Subject");
+
+require("rxjs/add/operator/switchMap");
+
+require("rxjs/add/observable/from");
+
+require("rxjs/add/observable/empty");
+
+require("rxjs/add/observable/never");
 
 function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
 
@@ -13528,13 +14212,7 @@ function render(vnode, root) {
 	};
 	// ensure paths by calling iter
 	// TODO stream / iterator
-	var domNodes = [];
-	// iter/ensureDoc will append the root to a documentFragment
-	// other use cases will have to rely on fastdom.js
-	_access.iter.bind(dom)(root, function (node) {
-		domNodes.push(node);
-	});
-	var i = 0;
+	var cur = _doc.ensureDoc.bind(dom)(root);
 	var skipDepth = 0,
 	    append = false,
 	    nextSame = false;
@@ -13544,10 +14222,8 @@ function render(vnode, root) {
 		// perhaps it would be better to separate VNode and domNodes, but where to put the WeakMap?
 		if (node.type == 9) return;
 		var type = node.type,
-		    inode = node.inode,
 		    depth = node.depth,
-		    domNode = node.domNode,
-		    cur = domNodes[i];
+		    domNode = node.domNode;
 		//next = domNodes[i+1],
 		//nn = nextNode(node);
 		var curSame = nextSame || same(cur, node);
@@ -13570,13 +14246,13 @@ function render(vnode, root) {
 					if (cur.type == 1) cur.inode.parentNode.removeChild(cur.inode);
 					// remove from dom, retry this node
 					// keep node untill everything is removed
-					i++;
+					cur = (0, _access.nextNode)(cur);
 					return handleNode(node);
 				} else {
 					if (type == 1) {
 						if (cur.type != 17) cur.inode.parentNode.removeChild(cur.inode);
 						// remove from dom, retry this node
-						i++;
+						cur = (0, _access.nextNode)(cur);
 						return handleNode(node);
 					} else if (type == 3) {
 						// if we're updating a text node, we should be sure it's the same parent
@@ -13607,22 +14283,151 @@ function render(vnode, root) {
 			}
 		}
 		if (!append) {
-			i++;
+			if (cur) cur = (0, _access.nextNode)(cur);
 		} else {
 			append = false;
 		}
 	};
 	(0, _access.iter)(vnode, handleNode);
-	var l = domNodes.length;
-	for (; --l >= i;) {
-		var node = domNodes[l];
-		if (node.type == 1) node.inode.parentNode.removeChild(node.inode);
+	//var l = domNodes.length;
+	if (cur) {
+		do {
+			cur = (0, _access.nextNode)(cur);
+			if (cur.type == 1) cur.inode.parentNode.removeChild(cur.inode);
+		} while (cur);
 	}
 	// place back updated node
 	oriParent.appendChild(root);
 }
 
-},{"./access":68,"./dom":72}],83:[function(require,module,exports){
+function renderStream(source, root) {
+	// FIXME stateless
+	var oriParent = root.parentNode;
+	// this could be achieved by updating documentFragment, which is in root.parent
+	var parents = [];
+	var attrFunc = function attrFunc(domNode, kv) {
+		return domNode.setAttribute(kv[0], kv[1]), domNode;
+	};
+	// ensure paths by calling iter
+	var target = _Observable.Observable.from(new _access.VDoc(_doc.ensureDoc.bind(dom)(root)));
+
+	var pauserSrc = new _Subject.Subject();
+	var pauserTrg = new _Subject.Subject();
+
+	var pausableSrc = pauserSrc.switchMap(function (paused) {
+		if (paused) console.log("pausedSrc");
+		return paused ? _Observable.Observable.empty() : source;
+	});
+	var pausableTrg = pauserTrg.switchMap(function (paused) {
+		if (paused) console.log("pausedTrg");
+		return paused ? _Observable.Observable.empty() : target;
+	});
+	var skipDepth = 0,
+	    append = false,
+	    nextSame = false;
+	var node, cur;
+	var handleNode = function handleNode() {
+		// TODO this won't work when pushed from server
+		// we could diff an L3 buffer and update the tree (stateless)
+		// perhaps it would be better to separate VNode and domNodes, but where to put the WeakMap?
+		if (node.type == 9) return;
+		var type = node.type,
+		    depth = node.depth,
+		    domNode = node.domNode;
+		//next = domNodes[i+1],
+		//nn = nextNode(node);
+		var curSame = nextSame || same(cur, node);
+		// NOTE pair-wise comparison doesn't work!
+		//nextSame = same(next,nn);
+		if (cur && curSame) {
+			// skip until next
+			node.domNode = cur.inode;
+			skipDepth = cur.depth;
+			if (type == 1) parents[depth] = node;
+		} else {
+			if (cur) {
+				if (cur.depth == depth - 1) {
+					//console.log("append",cur);
+					append = true;
+				} else if (cur.depth == depth + 1) {
+					// console.log("remove",cur);
+					// don't remove text, it will be garbage collected
+					// TODO l3 nodes, use VNode interface
+					if (cur.type == 1) cur.inode.parentNode.removeChild(cur.inode);
+					// remove from dom, retry this node
+					// keep node untill everything is removed
+					pauserTrg.next(false);
+					pauserSrc.next(true);
+					return; // handleNode();
+				} else {
+					if (type == 1) {
+						if (cur.type != 17) cur.inode.parentNode.removeChild(cur.inode);
+						// remove from dom, retry this node
+						pauserTrg.next(false);
+						pauserSrc.next(true);
+						return; // handleNode();
+					} else if (type == 3) {
+						// if we're updating a text node, we should be sure it's the same parent
+						if (cur.depth == skipDepth + 1) {
+							// TODO fix interface
+							cur.inode.nodeValue = node.value;
+						} else {
+							append = true;
+						}
+					}
+				}
+			}
+			if (!cur || append) {
+				//console.log("empty",type, append)
+				if (type == 1) {
+					domNode = document.createElement(node.name);
+					if (parents[depth - 1]) {
+						var parent = parents[depth - 1];
+						parent.domNode.appendChild(domNode);
+					}
+					node.attrEntries().reduce(attrFunc, domNode);
+					parents[depth] = node;
+				} else if (type == 3) {
+					domNode = document.createTextNode(node.value);
+					parents[depth - 1].domNode.appendChild(domNode);
+				}
+				node.domNode = domNode;
+			}
+		}
+		if (!append) {
+			pauserTrg.next(false);
+		} else {
+			append = false;
+			pauserSrc.next(false);
+		}
+	};
+	pausableTrg.subscribe({
+		complete: function complete() {
+			cur = null;
+		},
+		next: function next(node) {
+			pauserTrg.next(true);
+			cur = node;
+			handleNode();
+		}
+	});
+	pausableSrc.subscribe({
+		complete: function complete() {
+			// place back updated node
+			node = null;
+			oriParent.appendChild(root);
+		},
+		next: function next(prev) {
+			pauserSrc.next(true);
+			node = prev;
+			handleNode();
+		}
+	});
+	//pauserTrg.next(false);
+	pauserSrc.next(false);
+}
+
+},{"./access":82,"./doc":85,"./dom":86,"rxjs/Observable":31,"rxjs/Subject":34,"rxjs/add/observable/empty":38,"rxjs/add/observable/from":39,"rxjs/add/observable/never":40,"rxjs/add/operator/switchMap":44}],97:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -13931,7 +14736,7 @@ function exactlyOne($arg) {
 	return $arg;
 }
 
-},{"./error":73,"./transducers":84,"rxjs/Observable":30,"rxjs/add/observable/from":34,"rxjs/add/operator/filter":35,"rxjs/add/operator/map":36,"rxjs/add/operator/reduce":37}],84:[function(require,module,exports){
+},{"./error":87,"./transducers":98,"rxjs/Observable":31,"rxjs/add/observable/from":39,"rxjs/add/operator/filter":41,"rxjs/add/operator/map":42,"rxjs/add/operator/reduce":43}],98:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -14984,7 +15789,7 @@ function range(n) {
 	return (0, _seq.seq)(new _RangeObservable.RangeObservable(s, n));
 }
 
-},{"./seq":83,"rxjs/Observable":30,"rxjs/observable/RangeObservable":44}],85:[function(require,module,exports){
+},{"./seq":97,"rxjs/Observable":31,"rxjs/observable/RangeObservable":52}],99:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -15497,7 +16302,7 @@ var validator = {
 	}
 };
 
-},{"./access":68,"./doc":71,"./transducers":84,"big.js":66}],86:[function(require,module,exports){
+},{"./access":82,"./doc":85,"./transducers":98,"big.js":80}],100:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -15635,5 +16440,5 @@ VNode.prototype.get = function (idx) {
 	return new _access.VNodeIterator(val.next ? val : val[Symbol.iterator](), this, this.cx.vnode);
 };
 
-},{"./access":68}]},{},[76])(76)
+},{"./access":82}]},{},[90])(90)
 });
