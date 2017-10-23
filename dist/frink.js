@@ -14301,6 +14301,8 @@ function render(vnode, root) {
 }
 
 function renderStream(source, root) {
+	var shouldAppend = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
+
 	// FIXME stateless
 	var oriParent = root.parentNode;
 	// this could be achieved by updating documentFragment, which is in root.parent
@@ -14309,36 +14311,30 @@ function renderStream(source, root) {
 		return domNode.setAttribute(kv[0], kv[1]), domNode;
 	};
 	// ensure paths by calling iter
-	var target = _Observable.Observable.from(new _access.VDoc(_doc.ensureDoc.bind(dom)(root)));
+	var cur = _doc.ensureDoc.bind(dom)(root);
 
 	var pauserSrc = new _Subject.Subject();
-	var pauserTrg = new _Subject.Subject();
 
 	var pausableSrc = pauserSrc.switchMap(function (paused) {
 		if (paused) console.log("pausedSrc");
 		return paused ? _Observable.Observable.empty() : source;
 	});
-	var pausableTrg = pauserTrg.switchMap(function (paused) {
-		if (paused) console.log("pausedTrg");
-		return paused ? _Observable.Observable.empty() : target;
-	});
+
 	var skipDepth = 0,
-	    append = false,
-	    nextSame = false;
-	var node, cur;
-	var handleNode = function handleNode() {
-		// TODO this won't work when pushed from server
-		// we could diff an L3 buffer and update the tree (stateless)
-		// perhaps it would be better to separate VNode and domNodes, but where to put the WeakMap?
-		if (node.type == 9) return;
+	    append = false;
+	if (shouldAppend && cur) {
+		// we should append to the selected DOM node, not overwrite it
+		parents[0] = { domNode: cur.inode };
+		cur = cur.first();
+	}
+	var handleNode = function handleNode(node, paused) {
+		// FIXME it would be better to separate VNode and domNodes, but where to put the WeakMap?
+		if (!node || node.type == 9) return;
 		var type = node.type,
 		    depth = node.depth,
 		    domNode = node.domNode;
-		//next = domNodes[i+1],
-		//nn = nextNode(node);
-		var curSame = nextSame || same(cur, node);
+		var curSame = same(cur, node);
 		// NOTE pair-wise comparison doesn't work!
-		//nextSame = same(next,nn);
 		if (cur && curSame) {
 			// skip until next
 			node.domNode = cur.inode;
@@ -14347,25 +14343,37 @@ function renderStream(source, root) {
 		} else {
 			if (cur) {
 				if (cur.depth == depth - 1) {
+					// this means there's a different node in the DOM tree
+					// if the DOM depth equals the source depth minus one,
+					// it means that it's a sibling of something to be rendered,
+					// so we're going to append to it's parent
 					//console.log("append",cur);
 					append = true;
 				} else if (cur.depth == depth + 1) {
+					// this means the DOM depth is higher than our source
+					// so we're going to remove it no matter what
+					// when it's removed, we retry the source to see
+					// if it's the same as the next DOM node or
+					// if we can append to the next DOM node, etc.
 					// console.log("remove",cur);
 					// don't remove text, it will be garbage collected
 					// TODO l3 nodes, use VNode interface
 					if (cur.type == 1) cur.inode.parentNode.removeChild(cur.inode);
 					// remove from dom, retry this node
-					// keep node untill everything is removed
-					pauserTrg.next(false);
+					// keep node until everything is removed
 					pauserSrc.next(true);
-					return; // handleNode();
+					if (cur) cur = (0, _access.nextNode)(cur);
+					return handleNode(node, true);
 				} else {
+					// this means the depth of the DOM node is either equal (but the nodes aren't the same)
+					// or it's way off
+					// in case it's a branch we're going to retry either way
 					if (type == 1) {
 						if (cur.type != 17) cur.inode.parentNode.removeChild(cur.inode);
 						// remove from dom, retry this node
-						pauserTrg.next(false);
 						pauserSrc.next(true);
-						return; // handleNode();
+						if (cur) cur = (0, _access.nextNode)(cur);
+						return handleNode(node, true);
 					} else if (type == 3) {
 						// if we're updating a text node, we should be sure it's the same parent
 						if (cur.depth == skipDepth + 1) {
@@ -14378,6 +14386,7 @@ function renderStream(source, root) {
 				}
 			}
 			if (!cur || append) {
+				// we may append
 				//console.log("empty",type, append)
 				if (type == 1) {
 					domNode = document.createElement(node.name);
@@ -14395,35 +14404,26 @@ function renderStream(source, root) {
 			}
 		}
 		if (!append) {
-			pauserTrg.next(false);
+			if (cur) cur = (0, _access.nextNode)(cur);
 		} else {
-			append = false;
 			pauserSrc.next(false);
 		}
 	};
-	pausableTrg.subscribe({
-		complete: function complete() {
-			cur = null;
-		},
-		next: function next(node) {
-			pauserTrg.next(true);
-			cur = node;
-			handleNode();
-		}
-	});
 	pausableSrc.subscribe({
 		complete: function complete() {
+			if (cur) {
+				do {
+					cur = (0, _access.nextNode)(cur);
+					if (cur.type == 1) cur.inode.parentNode.removeChild(cur.inode);
+				} while (cur);
+			}
 			// place back updated node
-			node = null;
 			oriParent.appendChild(root);
 		},
-		next: function next(prev) {
-			pauserSrc.next(true);
-			node = prev;
-			handleNode();
+		next: function next(node) {
+			handleNode(node);
 		}
 	});
-	//pauserTrg.next(false);
 	pauserSrc.next(false);
 }
 
