@@ -168,9 +168,9 @@
 				var e = performance.now();
 				console.log("parse", e - s);
 				s = performance.now();
-				n.render(out,document.body);
-				n.render(out,document.body);
-				n.render(out,document.body);
+				//n.render(out,document.body);
+				n.renderStream(out,document.body);
+				//n.render(out,document.body);
 				var e = performance.now();
 				console.log(e - s);
 				/*n.on(document.forms.test,"submit", evt => {
