@@ -1,6 +1,6 @@
 import { ensureDoc } from "./doc";
 
-import { compose, into, transform, forEach, filter, cat, foldLeft } from "./transducers";
+import { compose, into, forEach, filter, foldLeft } from "./transducers";
 
 import { seq, isSeq } from "./seq";
 
@@ -25,18 +25,18 @@ VNodeIterator.prototype.next = function () {
 	return { value: this.f(v.value,this.parent,this.indexInParent) };
 };
 
-export function Step(inode,name,parent,depth,indexInParent){
-	this.inode = inode;
-	this.name = name;
-	this.parent = parent;
-	this.depth = depth;
-	this.indexInParent = indexInParent;
+export function Step(node){
+	this.node = node;
+	this.inode = node.inode;
+	this.parent = node.parent;
+	this.depth = node.depth;
+	this.indexInParent = node.indexInParent;
 }
 
 Step.prototype.type = 17;
 
 Step.prototype.toString = function(){
-	return "Step {depth:" + this.depth + ", closes:" + this.name + "}";
+	return "Step {depth:" + this.node.depth + ", closes:" + this.node.name + "}";
 };
 
 /*
@@ -49,6 +49,35 @@ export function* docIter(node) {
 	}
 }
 */
+
+function VDocIterator(node) {
+	this.node = ensureDoc(node);
+	this._init = false;
+	this.__is_VDocIterator = true;
+}
+
+VDocIterator.prototype.next = function () {
+	let node = this.node;
+	if (!this._init) {
+		this._init = true;
+		if (!node) return DONE;
+		return { value: node };
+	}
+	node = nextNode(node);
+	if (!node) return DONE;
+	this.node = node;
+	return { value: node };
+};
+
+export function VDoc(node){
+	this.node = node;
+}
+
+VDoc.prototype[Symbol.iterator] = function(){
+	return new VDocIterator(this.node);
+};
+
+
 export function nextNode(node /* VNode */) {
 	var type = node.type,
 		inode = node.inode,
@@ -57,7 +86,7 @@ export function nextNode(node /* VNode */) {
 	var depth = node.depth || 0;
 	// FIXME improve check
 	if(type != 17 && (type == 1 || type == 5  || type == 6 || type == 14) && node.count() === 0) {
-		return new Step(inode, node.name, node.parent, depth, node.indexInParent);
+		return new Step(node);
 	}
 	if(type != 17 && node.count() > 0) {
 		// if we can still go down, return firstChild
@@ -79,7 +108,7 @@ export function nextNode(node /* VNode */) {
 			node = node.parent;
 			if (depth === 0 || !node) return;
 			inode = node.inode;
-			node = new Step(inode, node.name, node.parent, depth, node.indexInParent);
+			node = new Step(node);
 			//console.log("found step", node.type, depth, indexInParent);
 			return node;
 		} else {
@@ -118,7 +147,7 @@ export function stringify(input){
 	const docAttrFunc = (z, kv) => {
 		return z += kv[0] == "DOCTYPE" ? "<!" + kv[0] + " " + kv[1] + ">" : "<?" + kv[0] + " " + kv[1] + "?>";
 	};
-	for (let node of docIter(input)) {
+	for (let node of new VDoc(input)) {
 		let type = node.type;
 		if (type == 1) {
 			str += "<" + node.name;
@@ -202,8 +231,8 @@ export function self(f) {
 
 export function iter(node, f, cb) {
 	// FIXME pass doc?
-	var i=0,prev;
-	if(!f) f = (node) => {prev = node;};
+	var i=0, prev=node;
+	if(!f) f = () => {};
 	node = ensureDoc.bind(this)(node);
 	f(node,i++);
 	while (node) {
@@ -213,7 +242,7 @@ export function iter(node, f, cb) {
 		}
 	}
 	if(cb) cb();
-	//return prev;
+	return prev;
 }
 
 export const isVNode = n => !!n && n.__is_VNode;
