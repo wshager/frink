@@ -169,10 +169,14 @@
 				console.log("parse", e - s);
 				s = performance.now();
 				//n.render(out,document.body);
-				n.renderStream(out,document.body);
+				var source = n.toObservable(n.vdoc(out));
+				source = n.renderStream(source,document.body).subscribe({
+					complete:()=>{
+						var e = performance.now();
+						console.log(e - s);
+					}
+				});
 				//n.render(out,document.body);
-				var e = performance.now();
-				console.log(e - s);
 				/*n.on(document.forms.test,"submit", evt => {
 					evt.preventDefault();
 					var err = n.validate(evt.target,null,{form:true});
