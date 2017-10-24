@@ -73,6 +73,10 @@ export function VDoc(node){
 	this.node = node;
 }
 
+export function vdoc(node){
+	return new VDoc(node);
+}
+
 VDoc.prototype[Symbol.iterator] = function(){
 	return new VDocIterator(this.node);
 };
