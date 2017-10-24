@@ -4,9 +4,8 @@
  * @copyright 2017 W.S. Hager, slightly modified + extended version /w basic Observable interop and XQuery nomenclature
 */
 
-// "seq" is reserved for Frink sequences
-import { seq } from "./seq";
-import { RangeObservable } from "rxjs/observable/RangeObservable";
+// NOTE "seq" is reserved for Frink sequences
+
 import { Observable } from "rxjs/Observable";
 
 
@@ -983,8 +982,4 @@ export function foldLeft(iterable, z, f) {
 		return arguments.length == 2 ? iterable.reduce(z) : iterable.reduce(f, z);
 	}
 	return arguments.length == 2 ? reduce(iterable, transformer(z)) : reduce(iterable, transformer(f), z);
-}
-
-export function range(n,s=0) {
-	return seq(new RangeObservable(s,n));
 }

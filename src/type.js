@@ -4,7 +4,7 @@ import {
 	error
 } from "./error";
 
-import { seq, first, isSeq, empty } from "./seq";
+import { seq, create, first, isSeq, empty, range, zeroOrOne, oneOrMore, exactlyOne } from "./seq";
 
 import { isVNode, isEmptyNode } from "./access";
 
@@ -12,7 +12,7 @@ import { isArray, get as aGet } from "./array";
 
 import { isMap, get as mGet } from "./map";
 
-import { compose, forEach, filter, foldLeft, into, range } from "./transducers";
+//import { compose, forEach, filter, foldLeft, into } from "./transducers";
 
 // TODO complete math (e.g. type checks for idiv and friends)
 
@@ -148,39 +148,44 @@ const emptyUntypedAtomic = () => new UntypedAtomic("");
 // TODO create from Type classes
 export function decimal($a) {
 	// type test
-	if ($a === undefined) return ;
-	return cast($a, Decimal, zeroInt);
+	return seq($a).map(a => cast(a, Decimal, zeroInt));
 }
 
 export function integer($a) {
-	if(isSeq($a)) return forEach($a, integer);
-	return cast(Math.floor($a), Integer, zeroInt);
+	return seq($a).map(a => cast(Math.floor(a), Integer, zeroInt));
 }
 
 export function string($a) {
 	// type test
-	if($a === undefined) return emptyString();
-	return isSeq($a) || isVNode($a) ? data($a,String,emptyString) : cast($a, String, emptyString);
+	if(empty($a)) return seq(emptyString());
+	// FIXME somehow reduce?
+	return seq($a).map(a => isVNode(a) ? data(a,String,emptyString) : cast(a, String, emptyString));
 }
 
 export function number($a) {
 	// type test
-	return cast($a, Number, zero);
+	return seq($a).map(a => cast(a, Number, zero));
 }
 
 export function float($a) {
 	// type test
-	return cast($a, Float, zero);
+	return seq($a).map(a => cast(a, Float, zero));
 }
 
 export function double($a) {
 	// type test
-	return cast($a, Number, zero);
+	return seq($a).map(a => cast(a, Number, zero));
 }
 
 export function boolean($a) {
 	// type test
-	return _boolean($a);
+
+	return seq($a).map(a => {
+		if (!isVNode(a)) {
+			return error("err:FORG0006");
+		}
+		return _isVNode ? true : !!a.valueOf();
+	});
 }
 
 export function cast($a, $b, emptyType = null) {
@@ -198,30 +203,23 @@ function _cast(a, b, emptyType = null) {
 }
 
 export function to($a, $b) {
-	let a = first($a);
-	let b = first($b);
-	a = a !== undefined ? +a.valueOf() : 1;
-	b = b !== undefined ? +b.valueOf() : 0;
-	return range(b + 1, a);
+	return exactlyOne($a).concat(exactlyOne($b)).reduce((a,b) => range(b + 1, a));
 }
 
 export function indexOf($a, $b) {
-	$a = first($a);
-	$b = first($b);
-	return $a.findKeys(function(i) {
-		return _boolean($b.op("equals", i));
-	});
+	return exactlyOne($b).concatMap(b => $a.map((x,i) => b === x ? i + 1 : 0).filter(x => x));
 }
 
 export function call(...a) {
-	let f = first(a[0]);
-	if (isArray(f)) {
-		return aGet(f,first(a[1]));
-	} else if (isMap(f)) {
-		return mGet(f,first(a[1]));
-	} else {
-		return f.apply(this, a.slice(1));
-	}
+	seq(a[0]).concatMap(f => {
+		if (isArray(f)) {
+			return aGet(f,a[1]);
+		} else if (isMap(f)) {
+			return mGet(f,a[1]);
+		} else {
+			return f.apply(this, a.slice(1));
+		}
+	});
 }
 
 function numbertest(a) {
@@ -314,52 +312,20 @@ function _promote(a, b) {
 	return [a, b];
 }
 
-function _opReducer(iterable, opfn, other, general) {
-	var otherIsSeq = isSeq(other);
+function _opReducer($a, opfn, $b, general) {
 	if (general) {
-		/*if(!isSeq(iterable)) {
-			var v = iterable;
-			return (otherIsSeq ? foldLeft(other, false, function (pre, cur) {
-				return pre || opfn(v, cur);
-			}) : opfn(v, other));
-		} else {*/
-		return foldLeft(iterable,false,function(acc, v) {
-			return acc || (otherIsSeq ? foldLeft(other,false,function(pre, cur) {
-				return pre || opfn(v, cur);
-			}) : opfn(v, other));
-		});
-		//}
-	} else if (!isSeq(iterable) || iterable.size == 1) {
-		let b = otherIsSeq ? first(other) : other;
-		return opfn(first(iterable), b);
+		return a.reduce((acc, a) => {
+			return $b.reduce(function(acc, b) {
+				return acc || opfn(a, b);
+			},acc);
+		},false);
 	} else {
-		return forEach(iterable,function(v) {
-			return otherIsSeq ? foldLeft(other,false,function(pre, cur) {
-				return pre || opfn(v, cur);
-			}) : opfn(v, other);
+		return $a.concatMap(a => {
+			return $b.reduce(function(a,b) {
+				return opfn(a, b);
+			},a);
 		});
 	}
-}
-
-// TODO without eval!
-//function isNodeSeq($a) {
-//	return node(first($a));
-//}
-
-// FIXME the unmarshalling of seqs is probably more efficient than anything else...
-// EXCEPT a filter + a lazy foldRight maybe
-export function _boolean($a) {
-	if(isSeq($a)){
-		var s = $a.size;
-		if(!s) return false;
-		var a = first($a);
-		var _isVNode = isVNode(a);
-		if (s > 1 && !_isVNode) {
-			return error("err:FORG0006");
-		}
-		return _isVNode ? true : !!a.valueOf();
-	}
-	return !!$a.valueOf();
 }
 
 export function and($a, $b) {
@@ -410,13 +376,13 @@ export function op($a, operator, $b) {
 		if (comp) {
 			$a = data($a);
 			$b = data($b);
+			console.log("a",$a)
 		}
 		if (!general) {
-			if (empty($a)) return $a;
-			if (empty($b)) return $b;
 			// FIXME NOT! allow arithmetic on sequences (why not?)...
 			// FIXME reduce when comp result is seq of booleans
-			if ($b.size > 1) return error("err:XPTY0004");
+			$a = exactlyOne($a);
+			$b = exactlyOne($b);
 		}
 	} else if (typeof operator == "function") {
 		opfn = operator;
@@ -427,43 +393,42 @@ export function op($a, operator, $b) {
 }
 
 export function data($a,castToType = UntypedAtomic,emptyType = emptyUntypedAtomic) {
-	return dataImpl($a,false,castToType,emptyType);
+	return dataImpl(seq($a),false,castToType,emptyType);
 }
 
 function dataImpl(node, fltr, castToType, emptyType) {
-	var ret;
 	if (isSeq(node)) {
-		if (empty(node)) return node;
-		var a = into(node,compose(forEach(_ => dataImpl(_, fltr,castToType,emptyType)),filter(_ => undefined !== _)),seq());
-		if (!a.size) {
-			ret = emptyType();
-		} else {
-			ret = a;
-		}
-		return ret;
+		return empty(node).concatMap(isEmpty => {
+			if(isEmpty){
+				return node;
+			} else {
+				var $a = node.concatMap(_ => dataImpl(_, fltr,castToType,emptyType));
+				return $a.isEmpty().concatMap(isEmpty => isEmpty ? seq(emptyType()) : $a);
+			}
+		});
 	}
-	if(isEmptyNode(node)) return undefined;
-	if (!isVNode(node)) return node;
+	if(isEmptyNode(node)) return seq();
+	if (!isVNode(node)) return seq(node);
 	var type = node.type;
-	if (fltr && fltr === type) return undefined;
+	if (fltr && fltr === type) return seq();
+	var $ret;
 	if (type === 1) {
-		ret = into(node,compose(forEach(_ => dataImpl(_, fltr,castToType,emptyType)),filter(_ => undefined !== _)),seq());
+		$ret = seq(into(node,forEach(_ => dataImpl(_, fltr,castToType,emptyType)),[])).concatAll();
 	} else {
-		ret = node.value;
-		if (typeof ret == "string" && castToType != String) {
-			ret = !ret ? undefined : _cast(ret, castToType,emptyType);
+		var val = node.value;
+		// if string, cast
+		if (typeof val == "string" && castToType != String) {
+			val = !val ? undefined : _cast(val, castToType, emptyType);
 		}
+		$ret = seq(val);
 	}
     // there was a node, so coerce to emptyType, even if it was empty
-	return isSeq(ret) && !ret.size ? emptyType() : ret;
+	return empty($ret).concatMap(isEmpty ? seq(emptyType()) : $ret);
 }
 
-export function instanceOf($a, $b, card = null) {
-    // TODO add cardinality
-	let a = first($a);
-	let b = first($b);
-	var t = a === undefined || b === undefined ? false : a.constructor === b;
-	return t;
+export function instanceOf($a, $b, $card = null) {
+    if(!$card) $card = seq(x => seq(x));
+	return exactlyOne($card).concatMap(card => exactlyOne($b).concatMap(b => card($a).reduce((c,a) => c && a.constructor === b,true)));
 }
 
 export function minus($a) {
