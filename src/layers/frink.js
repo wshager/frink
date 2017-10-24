@@ -1,5 +1,9 @@
 import { first } from "../seq";
 
+import { Observable } from "rxjs/Observable";
+
+import "rxjs/add/observable/from";
+
 import * as inode from "../inode";
 
 import * as dom from "../dom";
@@ -21,6 +25,8 @@ export * from "../seq";
 export * from "../doc";
 
 export { dom };
+
+export const toObservable = x => Observable.from(x); 
 
 //export * from "../dom-util";
 
