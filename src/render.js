@@ -5,10 +5,18 @@ import * as dom from "./dom";
 import { Observable } from "rxjs/Observable";
 import { Subject } from "rxjs/Subject";
 
-import "rxjs/add/operator/switchMap";
 import "rxjs/add/observable/from";
+import "rxjs/add/observable/of";
 import "rxjs/add/observable/empty";
 import "rxjs/add/observable/never";
+import "rxjs/add/observable/merge";
+
+import "rxjs/add/operator/switchMap";
+import "rxjs/add/operator/merge";
+import "rxjs/add/operator/buffer";
+import "rxjs/add/operator/do";
+import "rxjs/add/operator/distinctUntilChanged";
+
 
 function same(cur,nxt){
 	if(nxt === cur) return true;
@@ -122,6 +130,52 @@ export function render(vnode, root) {
 	oriParent.appendChild(root);
 }
 
+Observable.prototype.pausableBuffered = function pausableBuffered(pauser) {
+	const source = this;
+	const output = new Subject();
+	const sourceComplete = Observable.create(function(observer) {
+		observer.next(false);
+		source.subscribe({
+			complete: () => {
+				observer.next(true);
+				observer.complete();
+			}
+		});
+	});
+
+	const initializedPauser = Observable.merge(
+		Observable.of(false),
+		pauser,
+		sourceComplete
+	);
+	const endPauseSignal = initializedPauser
+		.map(x => !!x)
+		.distinctUntilChanged();
+
+	const passthrough = initializedPauser
+		.switchMap(paused => paused ? Observable.never() : source);
+	const bufferableEvents = initializedPauser
+		.switchMap(paused => paused ? source : Observable.never());
+
+	const buffered = new Subject();
+	bufferableEvents
+		.buffer(endPauseSignal)
+		.subscribe(arr => arr.forEach(val => buffered.next(val)));
+
+	const bufferedOutput = Observable.merge(
+		passthrough,
+		buffered
+	);
+
+	// Becuase Rx.Observable.never doesn't complete, the resulting merge
+	// will not either
+	sourceComplete
+		.switchMap(complete => complete ? Observable.empty() : bufferedOutput)
+		.subscribe(output);
+
+	return output;
+};
+
 export function renderStream(source, root, shouldAppend = false) {
 	// FIXME stateless
 	const oriParent = root.parentNode;
@@ -130,13 +184,10 @@ export function renderStream(source, root, shouldAppend = false) {
 	const attrFunc = (domNode, kv) => (domNode.setAttribute(kv[0], kv[1]), domNode);
 	// ensure paths by calling iter
 	var cur = ensureDoc.bind(dom)(root);
+	oriParent.appendChild(root);
+	//const pauser = new Subject();
 
-	const pauserSrc = new Subject();
-
-	const pausableSrc = pauserSrc.switchMap(paused => {
-		if(paused) console.log("pausedSrc");
-		return paused ? Observable.empty() : source;
-	});
+	//const pausable = source.pausableBuffered(pauser);
 
 	var skipDepth = 0, append = false;
 	if(shouldAppend && cur) {
@@ -144,7 +195,7 @@ export function renderStream(source, root, shouldAppend = false) {
 		parents[0] = {domNode:cur.inode};
 		cur = cur.first();
 	}
-	const handleNode = function(node,paused) {
+	const handleNode = function(node) {
 		// FIXME it would be better to separate VNode and domNodes, but where to put the WeakMap?
 		if(!node || node.type == 9) return;
 		var type = node.type,
@@ -178,7 +229,7 @@ export function renderStream(source, root, shouldAppend = false) {
 					if (cur.type == 1) cur.inode.parentNode.removeChild(cur.inode);
 					// remove from dom, retry this node
 					// keep node until everything is removed
-					pauserSrc.next(true);
+					//pauser.next(true);
 					if(cur) cur = nextNode(cur);
 					return handleNode(node,true);
 				} else {
@@ -188,7 +239,7 @@ export function renderStream(source, root, shouldAppend = false) {
 					if(type == 1){
 						if (cur.type != 17) cur.inode.parentNode.removeChild(cur.inode);
 						// remove from dom, retry this node
-						pauserSrc.next(true);
+						//pauser.next(true);
 						if(cur) cur = nextNode(cur);
 						return handleNode(node,true);
 					} else if (type == 3) {
@@ -223,10 +274,10 @@ export function renderStream(source, root, shouldAppend = false) {
 		if(!append) {
 			if(cur) cur = nextNode(cur);
 		} else {
-			pauserSrc.next(false);
+			//pauser.next(false);
 		}
 	};
-	pausableSrc.subscribe({
+	return source.do({
 		complete:function(){
 			if(cur) {
 				do {
@@ -235,11 +286,11 @@ export function renderStream(source, root, shouldAppend = false) {
 				} while(cur);
 			}
 			// place back updated node
-			oriParent.appendChild(root);
+
 		},
 		next:function (node) {
 			handleNode(node);
 		}
 	});
-	pauserSrc.next(false);
+	//pauser.next(false);
 }
