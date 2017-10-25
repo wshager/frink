@@ -50,19 +50,19 @@ class UntypedAtomic extends String {
 		this._value = a;
 	}
 	//cast(other) {
-		//If the atomic value is an instance of xdt:untypedAtomic
-		//and the other is an instance of a numeric type,
-		//then the xdt:untypedAtomic value is cast to the type xs:double.
+	//If the atomic value is an instance of xdt:untypedAtomic
+	//and the other is an instance of a numeric type,
+	//then the xdt:untypedAtomic value is cast to the type xs:double.
 
-		//If the atomic value is an instance of xdt:untypedAtomic
-		//and the other is an instance of xdt:untypedAtomic or xs:string,
-		//then the xdt:untypedAtomic value is cast to the type xs:string.
+	//If the atomic value is an instance of xdt:untypedAtomic
+	//and the other is an instance of xdt:untypedAtomic or xs:string,
+	//then the xdt:untypedAtomic value is cast to the type xs:string.
 
-		//If the atomic value is an instance of xdt:untypedAtomic
-		//and the other is not an instance of xs:string, xdt:untypedAtomic, or any numeric type,
-		//then the xdt:untypedAtomic value is cast to the dynamic type of the other value.
+	//If the atomic value is an instance of xdt:untypedAtomic
+	//and the other is not an instance of xs:string, xdt:untypedAtomic, or any numeric type,
+	//then the xdt:untypedAtomic value is cast to the dynamic type of the other value.
 
-		// NO-OP, moved elsewhere
+	// NO-OP, moved elsewhere
 	//}
 	toString() {
 		return this._value.toString();
@@ -263,8 +263,6 @@ function _comp(op, invert, a, b) {
 			throw new Error("Operator " + op + " not implemented for " + a + " (" + (a.constructor.name) + ")");
 		}
 	}
-	//console.log(a,b,op,ret);
-
 	return invert ? !ret : ret;
 }
 
@@ -314,11 +312,12 @@ function _promote(a, b) {
 
 function _opReducer($a, opfn, $b, general) {
 	if (general) {
-		return a.reduce((acc, a) => {
-			return $b.reduce(function(acc, b) {
+		// TODO once it's true, stop further processing
+		return $a.concatMap(function (a) {
+			return $b.reduce(function (acc, b) {
 				return acc || opfn(a, b);
-			},acc);
-		},false);
+			}, false);
+		}).reduce((acc,a) => acc || a);
 	} else {
 		return $a.concatMap(a => {
 			return $b.reduce(function(a,b) {
@@ -376,13 +375,12 @@ export function op($a, operator, $b) {
 		if (comp) {
 			$a = data($a);
 			$b = data($b);
-			console.log("a",$a)
 		}
 		if (!general) {
 			// FIXME NOT! allow arithmetic on sequences (why not?)...
 			// FIXME reduce when comp result is seq of booleans
-			$a = exactlyOne($a);
-			$b = exactlyOne($b);
+			$a = zeroOrOne($a);
+			$b = zeroOrOne($b);
 		}
 	} else if (typeof operator == "function") {
 		opfn = operator;
@@ -422,12 +420,12 @@ function dataImpl(node, fltr, castToType, emptyType) {
 		}
 		$ret = seq(val);
 	}
-    // there was a node, so coerce to emptyType, even if it was empty
+	// there was a node, so coerce to emptyType, even if it was empty
 	return empty($ret).concatMap(isEmpty ? seq(emptyType()) : $ret);
 }
 
 export function instanceOf($a, $b, $card = null) {
-    if(!$card) $card = seq(x => seq(x));
+	if(!$card) $card = seq(x => seq(x));
 	return exactlyOne($card).concatMap(card => exactlyOne($b).concatMap(b => card($a).reduce((c,a) => c && a.constructor === b,true)));
 }
 

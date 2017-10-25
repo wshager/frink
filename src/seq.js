@@ -109,7 +109,7 @@ export function insertBefore(s,pos,ins) {
  */
 export function zeroOrOne($arg) {
 	var s = seq($arg);
-	return s.isEmpty().merge(s.skip(1).take(1).isEmpty()).reduce((a,x) => a || x).switchMap(isEmptyOrOne => isEmptyOrOne ? s : error("FORG0003"));
+	return s.isEmpty().merge(s.skip(1).isEmpty()).reduce((a,x) => a || x).switchMap(isEmptyOrOne => isEmptyOrOne ? s : error("FORG0003"));
 }
 /**
  * [oneOrMore returns arg OR error if arg not one or more]
@@ -127,5 +127,5 @@ export function oneOrMore($arg) {
  */
 export function exactlyOne($arg) {
 	var s = seq($arg);
-	return s.isEmpty().merge(s.skip(1).take(1).isEmpty()).reduce((a,x) => a || x).switchMap(isEmptyOrOne => isEmptyOrOne ? error("FORG0005") : s);
+	return s.isEmpty().merge(s.skip(1).isEmpty().map(x => !x)).reduce((a,x) => a || x).switchMap(isEmptyOrMore => isEmptyOrMore ? error("FORG0005") : s);
 }
