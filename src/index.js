@@ -56,7 +56,7 @@ export * from "./seq";
 
 export * from "./subseq";
 
-export * from "./transducers";
+//export * from "./transducers";
 
 export * from "./type";
 

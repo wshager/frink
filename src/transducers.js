@@ -8,6 +8,7 @@
 
 import { Observable } from "rxjs/Observable";
 
+import { isFunction, toString, isArray, isObject, isNumber, DONE } from "./util";
 
 // basic protocol helpers
 var symbolExists = typeof Symbol !== "undefined";
@@ -62,13 +63,10 @@ function ArrayIterator(arr) {
 ArrayIterator.prototype.next = function() {
 	if(this.index < this.arr.length) {
 		return {
-			value: this.arr[this.index++],
-			done: false
+			value: this.arr[this.index++]
 		};
 	}
-	return {
-		done: true
-	};
+	return DONE;
 };
 
 function ObjectIterator(obj) {
@@ -81,34 +79,12 @@ ObjectIterator.prototype.next = function() {
 	if(this.index < this.keys.length) {
 		var k = this.keys[this.index++];
 		return {
-			value: [k, this.obj[k]],
-			done: false
+			value: [k, this.obj[k]]
 		};
 	}
-	return {
-		done: true
-	};
+	return DONE;
 };
 
-// helpers
-
-var toString = Object.prototype.toString;
-var isArray = typeof Array.isArray === "function" ? Array.isArray : function(obj) {
-	return toString.call(obj) == "[object Array]";
-};
-
-export function isFunction(x) {
-	return typeof x === "function";
-}
-
-export function isObject(x) {
-	return x instanceof Object &&
-		Object.getPrototypeOf(x) === Object.getPrototypeOf({});
-}
-
-export function isNumber(x) {
-	return typeof x === "number";
-}
 
 function Reduced(value) {
 	this["@@transducer/reduced"] = true;
@@ -951,12 +927,11 @@ LazyTransformer.prototype.next = function() {
 
 	if(this.items.length) {
 		return {
-			value: this.items.pop(),
-			done: false
+			value: this.items.pop()
 		};
 	}
 	else {
-		return { done: true };
+		return DONE;
 	}
 };
 

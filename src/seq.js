@@ -1,11 +1,17 @@
 import { Observable } from "rxjs/Observable";
 import { error } from "./error";
+import { isObject, isUndefOrNull } from "./util";
+
 import "rxjs/add/observable/of";
 import "rxjs/add/observable/from";
+import "rxjs/add/observable/fromPromise";
+import "rxjs/add/observable/range";
+import "rxjs/add/observable/empty";
+import "rxjs/add/observable/throw";
+
 import "rxjs/add/operator/isEmpty";
 import "rxjs/add/operator/take";
 import "rxjs/add/operator/skip";
-import "rxjs/add/operator/findIndex";
 import "rxjs/add/operator/first";
 import "rxjs/add/operator/reduce";
 import "rxjs/add/operator/map";
@@ -15,7 +21,18 @@ import "rxjs/add/operator/merge";
 import "rxjs/add/operator/mergeMap";
 import "rxjs/add/operator/concat";
 import "rxjs/add/operator/concatMap";
+import "rxjs/add/operator/switch";
 import "rxjs/add/operator/switchMap";
+
+import { map as _map, filter as _filter, reduce as _reduce } from 'rxjs/operators';
+
+export const forEach = _map;
+export const filter = _filter;
+export const foldLeft = _reduce;
+
+export { pipe as compose } from "rxjs/util/pipe";
+
+export { take, skip } from "rxjs/operators";
 
 /*function _asyncIteratorToObservable(asyncIter) {
 	const forEach = (ai, fn, cb) => {
@@ -44,7 +61,7 @@ LazySeq.prototype.toString = function(){
 	return "Seq [" + this.iterable + "]";
 };
 */
-// just resolve a seq of promises, like Promise.all
+// resolve an observable like a promise
 export function when(s,rs,rj){
 	return s.buffer().subscribe({
 		next:buf => {
@@ -60,14 +77,13 @@ export function isSeq(a){
 	return !!(a && a instanceof Observable);
 }
 
-const undef = s => s === undefined || s === null;
-
 export function seq(...a){
 	if (a.length == 0) return Observable.empty();
 	if (a.length == 1){
 		var x = a[0];
 		if(isSeq(x)) return x;
-		if(undef(x)) return Observable.empty();
+		if(isUndefOrNull(x)) return Observable.empty();
+		if(isObject(x) && (x instanceof Promise || typeof x.then == "function")) return Observable.fromPromise(x);
 		if(Array.isArray(x) || (x[Symbol.iterator] && typeof x != "string") || typeof x.next == "function") return Observable.from(x);
 		return Observable.of(x);
 	}
@@ -79,10 +95,8 @@ export function create(o){
 }
 
 export const first = s => {
-	if(!isSeq(s)) s = seq(s);
-	return s.first();
+	return seq(s).first();
 };
-
 
 export function empty(s){
 	return seq(s).isEmpty();
@@ -99,7 +113,13 @@ export function count(s){
 export function insertBefore(s,pos,ins) {
 	s = seq(s);
 	pos = pos - 1;
-	return s.take(pos).merge(seq(ins),s.drop(pos));
+	return s.take(pos).merge(seq(ins),s.skip(pos));
+}
+
+export function range($n,$s=0) {
+	$n = zeroOrOne($n);
+	$s = zeroOrOne($s);
+	return $s.concatMap(s => $n.concatMap(n => Observable.range(s,n)));
 }
 
 /**

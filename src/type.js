@@ -12,6 +12,8 @@ import { isArray, get as aGet } from "./array";
 
 import { isMap, get as mGet } from "./map";
 
+import { isUndef, isUndefOrNull } from "./util";
+
 //import { compose, forEach, filter, foldLeft, into } from "./transducers";
 
 // TODO complete math (e.g. type checks for idiv and friends)
@@ -157,57 +159,62 @@ export function integer($a) {
 
 export function string($a) {
 	// type test
+	const cc = String;
+	if(isUndef($a)) return seq(cc);
 	if(empty($a)) return seq(emptyString());
 	// FIXME somehow reduce?
-	return seq($a).map(a => isVNode(a) ? data(a,String,emptyString) : cast(a, String, emptyString));
+	return seq($a).concatMap(a => isVNode(a) ? data(a, cc, emptyString) : cast(a, cc, emptyString));
 }
 
 export function number($a) {
 	// type test
-	return seq($a).map(a => cast(a, Number, zero));
+	const cc = Number;
+	if(isUndef($a)) return seq(cc);
+	return seq($a).map(a => cast(a, cc, zero));
 }
 
 export function float($a) {
 	// type test
-	return seq($a).map(a => cast(a, Float, zero));
+	const cc = Number;
+	if(isUndef($a)) return seq(cc);
+	return seq($a).map(a => cast(a, cc, zero));
 }
 
-export function double($a) {
-	// type test
-	return seq($a).map(a => cast(a, Number, zero));
-}
+export const double = number;
+
+const hasZeroOrOne = $a => $a.skip(1).isEmpty();
 
 export function boolean($a) {
 	// type test
-
-	return seq($a).map(a => {
-		if (!isVNode(a)) {
-			return error("err:FORG0006");
-		}
-		return _isVNode ? true : !!a.valueOf();
-	});
+	$a = seq($a);
+	return empty($a).concatMap(test => test ?
+		seq(false) :
+		hasZeroOrOne($a).concatMap(test => test ?
+			$a.map(a => a.valueOf()) :
+			$a.concatMap((a,i) => isVNode(a) ? true : error("err:FORG0006",`Item ${i+1} is not a node`))
+		)
+	);
 }
 
 export function cast($a, $b, emptyType = null) {
-	if(isSeq($a)) {
-		if(!$a.size && emptyType) return emptyType();
-		return op($a,_cast, $b);
-	}
-	return _cast($a,$b,emptyType);
+	$a = seq($a);
+	$b = exactlyOne($b);
+	if(empty($a) && emptyType) return seq(emptyType());
+	return op($a,_cast, $b);
 }
 
 function _cast(a, b, emptyType = null) {
-	if((a === undefined || a === null) && emptyType) return emptyType();
+	if(isUndefOrNull(a) && emptyType) return emptyType();
 	if (a.constructor !== b) a = new b(a.toString());
 	return a;
 }
 
 export function to($a, $b) {
-	return exactlyOne($a).concat(exactlyOne($b)).reduce((a,b) => range(b + 1, a));
+	return range($b, $a);
 }
 
 export function indexOf($a, $b) {
-	return exactlyOne($b).concatMap(b => $a.map((x,i) => b === x ? i + 1 : 0).filter(x => x));
+	return zeroOrOne($b).concatMap(b => $a.map((x,i) => b === x ? i + 1 : 0).filter(x => x));
 }
 
 export function call(...a) {
@@ -260,7 +267,7 @@ function _comp(op, invert, a, b) {
 			b = ab[1];
 			ret = a[op](b);
 		} else {
-			throw new Error("Operator " + op + " not implemented for " + a + " (" + (a.constructor.name) + ")");
+			return error("XPST0017","Operator " + op + " not implemented for " + a + " (" + (a.constructor.name) + ")");
 		}
 	}
 	return invert ? !ret : ret;
@@ -312,31 +319,26 @@ function _promote(a, b) {
 
 function _opReducer($a, opfn, $b, general) {
 	if (general) {
-		// TODO once it's true, stop further processing
-		return $a.concatMap(function (a) {
-			return $b.reduce(function (acc, b) {
-				return acc || opfn(a, b);
-			}, false);
-		}).reduce((acc,a) => acc || a);
+		return $a.concatMap(a => $b.reduce((acc, b) => acc || opfn(a, b), false)).first(x => x, () => true, false);
 	} else {
-		return $a.concatMap(a => {
-			return $b.reduce(function(a,b) {
-				return opfn(a, b);
-			},a);
-		});
+		return $a.concatMap(a => $b.reduce((a, b) => opfn(a, b), a));
 	}
 }
 
 export function and($a, $b) {
-	return _boolean($a) && _boolean($b);
+	$a = boolean($a);
+	$b = boolean($b);
+	return _opReducer($a, (a,b) => a && b, $b);
 }
 
 export function or($a, $b) {
-	return _boolean($a) || _boolean($b);
+	$a = boolean($a);
+	$b = boolean($b);
+	return _opReducer($a, (a,b) => a || b, $b);
 }
 
 export function not($a) {
-	return !first($a);
+	return seq($a).map(a => !a);
 }
 
 const logic = {
@@ -385,7 +387,7 @@ export function op($a, operator, $b) {
 	} else if (typeof operator == "function") {
 		opfn = operator;
 	} else {
-		return error("xxx", "No such operator");
+		return error("XPST0017", "Unknown operator: "+operator);
 	}
 	return _opReducer($a, opfn, $b, general);
 }

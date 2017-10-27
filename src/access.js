@@ -6,6 +6,8 @@ import { seq, isSeq } from "./seq";
 
 import { prettyXML } from "./pretty";
 
+import { DONE } from  "./util";
+
 export function VNodeIterator(iter, parent, f){
 	this.iter = iter;
 	this.parent = parent;
@@ -13,10 +15,6 @@ export function VNodeIterator(iter, parent, f){
 	this.indexInParent = -1;
 	this.__is_VNodeIterator = true;
 }
-
-const DONE = {
-	done: true
-};
 
 VNodeIterator.prototype.next = function () {
 	var v = this.iter.next();
