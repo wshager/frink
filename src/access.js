@@ -79,7 +79,7 @@ VDoc.prototype[Symbol.iterator] = function(){
 	return new VDocIterator(this.node);
 };
 
-
+// FIXME nextNode is never eligable for seqs, so it shouldn't be exposed
 export function nextNode(node /* VNode */) {
 	var type = node.type,
 		inode = node.inode,
@@ -167,22 +167,20 @@ export function stringify(input){
 	return prettyXML(str);
 }
 
-export function firstChild(node) {
-	// FIXME return root if doc (or something else?)
-	var next = ensureDoc.bind(this)(node);
-	if(node !== next) return next;
-	// next becomes parent, node = firstChild
-	node = next.first();
-	if(node) return next.vnode(node,next,next.depth + 1, 0);
+export function firstChild($node) {
+	// assume ensureDoc returns the correct node
+	return ensureDoc.bind(this)($node).concatMap(node => {
+		let next = node.first();
+		return next ? seq(node.vnode(next,node,node.depth + 1, 0)) : seq();
+	});
 }
 
-export function nextSibling(node){
-	node = ensureDoc.bind(this)(node);
-	var parent = node.parent;
-	var next = parent.next(node);
-	// create a new node
-	// very fast, but now we haven't updated path, so we have no index!
-	if(next) return parent.vnode(next, parent, node.depth, node.indexInParent+1);
+export function nextSibling($node){
+	return ensureDoc.bind(this)($node).concatMap(node => {
+		var parent = node.parent;
+		var next = parent.next(node);
+		return next ? seq(parent.vnode(next, parent, node.depth, node.indexInParent+1)) : seq();
+	});
 }
 
 /*
