@@ -1,4 +1,4 @@
-import { iter, nextNode, VDoc } from "./access";
+import { iter, nextNode } from "./access";
 import { ensureDoc } from "./doc";
 import * as dom from "./dom";
 
