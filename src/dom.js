@@ -224,14 +224,3 @@ export const getType = inode => {
 	let isElem = nodeType == 1;
 	return isElem ? getL3Type(nodeName) | 1 : nodeType;
 };
-/*
-export function nodesList(node) {
-	var list = [];
-	var next = nextNode(node);
-	do {
-		list.push(next);
-		next = next && nextNode(next);
-	} while (next);
-	return list;
-}
-*/
