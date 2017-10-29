@@ -1,6 +1,7 @@
 import { Observable } from "rxjs/Observable";
 import { error } from "./error";
 import { isObject, isUndefOrNull } from "./util";
+import { isVNode } from "./access";
 
 import "rxjs/add/observable/of";
 import "rxjs/add/observable/from";
@@ -24,7 +25,7 @@ import "rxjs/add/operator/concatMap";
 import "rxjs/add/operator/switch";
 import "rxjs/add/operator/switchMap";
 
-import { map as _map, filter as _filter, reduce as _reduce } from 'rxjs/operators';
+import { map as _map, filter as _filter, reduce as _reduce } from "rxjs/operators";
 
 export const forEach = _map;
 export const filter = _filter;
@@ -84,7 +85,7 @@ export function seq(...a){
 		if(isSeq(x)) return x;
 		if(isUndefOrNull(x)) return Observable.empty();
 		if(isObject(x) && (x instanceof Promise || typeof x.then == "function")) return Observable.fromPromise(x);
-		if(Array.isArray(x) || (x[Symbol.iterator] && typeof x != "string") || typeof x.next == "function") return Observable.from(x);
+		if(Array.isArray(x) || (x[Symbol.iterator] && typeof x != "string" && !isVNode(x))) return Observable.from(x);
 		return Observable.of(x);
 	}
 	return Observable.from(a);
