@@ -338,7 +338,7 @@ export function or($a, $b) {
 }
 
 export function not($a) {
-	return seq($a).map(a => !a);
+	return boolean($a).map(a => !a);
 }
 
 const logic = {
