@@ -1,6 +1,8 @@
 import { isQName } from "./qname";
 
-import { first, isSeq } from "./seq";
+import { seq, first, isSeq } from "./seq";
+
+import { isVNode } from "./access";
 
 // faux VNode
 function vnode(inode,type,name,value){
@@ -14,14 +16,7 @@ function vnode(inode,type,name,value){
 }
 
 function _n(type, name, children){
-	if(children === undefined) {
-		children = [];
-	} else if(isSeq(children)) {
-		children = children.toArray();
-	} else if(children.constructor != Array) {
-		if(!children.__is_VNode) children = x(children);
-		children = [children];
-	}
+	children = seq(children).concatMap(c => isSeq(c) ? c : isVNode(c) ? seq(c) : x(c));
 	return vnode(function (parent, ref) {
 		var ns;
 		if(type == 1) {
@@ -40,16 +35,11 @@ function _n(type, name, children){
 			0,
 			type
 		);
-		for (let i = 0; i < children.length; i++) {
-			let child = children[i];
-			child = child.inode(node);
-		}
-		node = node.finalize();
-		// insert into the parent means: update all parents until we come to the root
-		// but the parents of my parent will be updated elsewhere
-		// we just mutate the parent, because it was either cloned or newly created
-		node.parent = parent.modify(node, ref);
-		return node;
+		return children.concatMap(child => {
+			return child.inode(node);
+		}).reduce(function (node, child) {
+			return node.modify(child, ref);
+		}, node);
 	}, type, name);
 }
 
@@ -80,13 +70,8 @@ function _a(name, child) {
 }
 
 function _v(type,val) {
-	return vnode(function (parent, ref) {
-		// reuse insertIndex here to create a named map entry
-		let node = parent.vnode(parent.ivalue(type, val), parent);
-		// we don't want to do checks here
-		// we just need to call a function that will insert the node into the parent
-		node.parent = parent.modify(node,ref);
-		return node;
+	return vnode(function (parent) {
+		return seq(val).map(val => parent.vnode(parent.ivalue(type, val), parent));
 	}, type, null, val);
 }
 
@@ -98,7 +83,7 @@ function _v(type,val) {
  * @return {[type]}          [description]
  */
 export function e(name, children) {
-	return _n(1, name, children);
+	return seq(_n(1, name, children));
 }
 
 export function l(children) {
@@ -118,7 +103,7 @@ export function p(target, content){
 }
 
 export function x(value = null) {
-	return _v(typeof value == "string" ? 3 : 12, value);
+	return seq(_v(3, value));
 }
 
 export function c(value){
