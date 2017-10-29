@@ -18,6 +18,8 @@ assertEq("boolean",n.boolean(n.seq()),false);
 
 assertThrows("boolean",() => n.boolean(n.seq(true,false)));
 
+assertEq("not",n.not(true),false);
+
 assertEq("or",n.or(n.seq(true),false),true);
 
 assertEq("and",n.and(n.seq(true),false),false);
@@ -26,4 +28,4 @@ assertEq("to",n.to(1,3),n.seq(1,2,3));
 
 console.log("All tests passed");
 
-//n.to(1,3).subscribe(console.log)
+n.e("test").subscribe(console.log);
