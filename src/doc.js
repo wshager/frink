@@ -41,11 +41,9 @@ function _d(type,children){
 	children = seq(children).concatMap(c => isSeq(c) ? c : isVNode(c) ? seq(c) : x(c));
 	var cx = this.vnode ? this : inode;
 	let node = cx.vnode(cx.emptyINode(type,"#document"),null,0);
-	return children.concatMap(child => {
-		return child.inode(node);
-	}).reduce(function (node, child) {
-		return node.modify(child);
-	}, node);
+	return children
+		.concatMap(child => child.inode(node))
+		.reduce((node, child) => node.modify(child), node);
 }
 
 export function d(children) {
