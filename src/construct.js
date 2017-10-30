@@ -1,6 +1,6 @@
 import { isQName } from "./qname";
 
-import { seq, first, isSeq } from "./seq";
+import { seq, first, isSeq, exactlyOne } from "./seq";
 
 import { isVNode } from "./access";
 
@@ -35,37 +35,29 @@ function _n(type, name, children){
 			0,
 			type
 		);
-		return children.concatMap(child => {
-			return child.inode(node);
-		}).reduce(function (node, child) {
-			return node.modify(child, ref);
-		}, node);
+		return children
+			.concatMap(child => child.inode(node))
+			.reduce((node, child) => node.modify(child, ref), node);
 	}, type, name);
 }
 
 function _a(name, child) {
-	if(isSeq(child)) {
-		child = first(child);
-	} else if(Array.isArray(child)){
-		child = child[0];
-	} else if(!child.__is_VNode) {
-		child = x(child);
-	}
+	child = exactlyOne(child).concatMap(c => isSeq(c) ? c : isVNode(c) ? seq(c) : x(c));
 	return vnode(function (parent) {
-		var node = parent.vnode(parent.ituple(name, child), parent);
+		var node = parent.vnode(parent.ituple(name), parent);
 		// node is an attr node /w child as $val
-		// push node to
-		child = child.inode(node);
-		//node.type = child.type;
-		node = node.finalize();
-		if (parent.type == 1) {
-			// TODO conversion rules!
-			parent.attr(name, node.value + "");
-		} else if (parent.type == 6) {
-			// tuple
-			parent.push([node.inode.$name,node.inode.$value]);
-		}
-		return node;
+		return child
+			.concatMap(child => child.inode(node))
+			.reduce((node, child) => {
+				if (parent.type == 1) {
+					// TODO conversion rules!
+					parent.attr(name, child.value + "");
+				} else if (parent.type == 6) {
+					// tuple
+					parent.push([name, child.inode]);
+				}
+				return node.modify(child,name);
+			}, node);
 	}, 2, name);
 }
 
@@ -83,19 +75,19 @@ function _v(type,val) {
  * @return {[type]}          [description]
  */
 export function e(name, children) {
-	return seq(_n(1, name, children));
+	return exactlyOne(name).map(name => _n(1, name, children));
 }
 
 export function l(children) {
-	return _n(5, null, children);
+	return seq(_n(5, null, children));
 }
 
 export function m(children){
-	return _n(6, null, children);
+	return seq(_n(6, null, children));
 }
 
 export function a(name, value){
-	return _a(name,value);
+	return exactlyOne(name).map(name => _a(name,value));
 }
 
 export function p(target, content){
@@ -107,5 +99,5 @@ export function x(value = null) {
 }
 
 export function c(value){
-	return _v(8, value);
+	return seq(_v(8, value));
 }
