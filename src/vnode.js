@@ -87,8 +87,6 @@ VNode.prototype.attr = function(k,v){
 
 VNode.prototype.modify = function(node,ref) {
 	this.inode = this.cx.modify(this.inode,node,ref,this.type);
-	// ensure value is still correct
-	if(this.type == 2) this.value = this.inode.$value;
 	return this;
 };
 
