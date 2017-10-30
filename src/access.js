@@ -2,7 +2,7 @@ import { ensureDoc } from "./doc";
 
 import { compose, into, forEach, filter, foldLeft } from "./transducers";
 
-import { seq, isSeq } from "./seq";
+import { seq, isSeq, create } from "./seq";
 
 import { prettyXML } from "./pretty";
 
@@ -71,8 +71,20 @@ export function VDoc(node){
 	this.node = node;
 }
 
-export function vdoc(node){
-	return new VDoc(node);
+export function vdoc(node) {
+	node = ensureDoc(node);
+	return create(o => {
+		return node.subscribe({
+			next:function(node){
+				while(node){
+					o.next(node);
+					node = nextNode(node);
+				}
+				o.complete();
+			},
+			error:o.error
+		});
+	});
 }
 
 VDoc.prototype[Symbol.iterator] = function(){
