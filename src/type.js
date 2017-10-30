@@ -161,23 +161,23 @@ export function string($a) {
 	// type test
 	const cc = String;
 	if(isUndef($a)) return seq(cc);
-	if(empty($a)) return seq(emptyString());
+	//if(empty($a)) return seq(emptyString());
 	// FIXME somehow reduce?
-	return seq($a).concatMap(a => isVNode(a) ? data(a, cc, emptyString) : cast(a, cc, emptyString));
+	return zeroOrOne($a).concatMap(a => isVNode(a) ? data(a, cc, emptyString) : cast(a, cc, emptyString));
 }
 
 export function number($a) {
 	// type test
 	const cc = Number;
 	if(isUndef($a)) return seq(cc);
-	return seq($a).map(a => cast(a, cc, zero));
+	return zeroOrOne($a).map(a => cast(a, cc, zero));
 }
 
 export function float($a) {
 	// type test
 	const cc = Number;
 	if(isUndef($a)) return seq(cc);
-	return seq($a).map(a => cast(a, cc, zero));
+	return zeroOrOne($a).map(a => cast(a, cc, zero));
 }
 
 export const double = number;

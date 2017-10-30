@@ -26,3 +26,20 @@ export const isUndefOrNull = s => isUndef(s) || isNull(s);
 export const DONE = {
 	done: true
 };
+
+//const regexAstralSymbols = /[\uD800-\uDBFF][\uDC00-\uDFFF]/g;
+
+export function ucs2length(string) {
+	let counter = 0;
+	// string.replace(regexAstralSymbols,"_")
+	const length = string.length;
+	while (counter < length) {
+		const value = string.charCodeAt(counter++);
+		if (value >= 0xD800 && value <= 0xDBFF && counter < length) {
+			// It's a high surrogate, and there is a next character.
+			const extra = string.charCodeAt(counter);
+			if ((extra & 0xFC00) == 0xDC00) counter++; // Low surrogate.
+		}
+	}
+	return counter;
+}

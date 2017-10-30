@@ -1,16 +1,22 @@
 import XRegExp from "xregexp";
 
-import { seq, isSeq, first } from "./seq";
+import { seq, first, zeroOrOne, exactlyOne } from "./seq";
 
 import { string } from "./type";
 
-import { e, a, x, q } from "./construct";
+import { e, a, x } from "./construct";
 
 import { appendChild } from "./modify";
 
-import { isNode } from "./access";
+import { isVNode } from "./access";
 
-import { into, transform, compose, forEach, filter, foldLeft, cat } from "./transducers";
+import { isUndef } from "./util";
+
+import { ucs2length } from "./util";
+
+//import { into, transform, compose, forEach, filter, foldLeft, cat } from "./transducers";
+
+
 
 
 const _regexpCache = {};
@@ -36,7 +42,7 @@ function _repcached(rep){
 
 export function analyzeString($str,$pat) {
 	var str = first(string($str));
-    var ret = e("fn:analyze-string-result");
+	var ret = e("fn:analyze-string-result");
 	var index = 0;
 	if(str){
 		let pat = first($pat);
@@ -80,79 +86,73 @@ export function analyzeString($str,$pat) {
 }
 
 export function tokenize($str,$pat) {
-	var str = first(string($str));
-	if(!str) return seq();
-	let pat = first($pat);
-    return into(str.toString().split(_cached(pat)),forEach(s => string(s)), seq());
+	return zeroOrOne($str)
+		.concatMap(str => exactlyOne($pat)
+			.concatMap(pat => str.toString().split(_cached(pat)).map(s => string(s))));
 }
 
 export function substring($str,$s,$l) {
-	var str = first(string($str)),
-		s = Math.round(first($s)) - 1;
-	if (!$l) return str.substring(s);
-	var l = first($l);
-	return string(str.substring(s,s + Math.round(l)));
+	return string(zeroOrOne($str)
+		//.concatMap(str => string(str))
+		.concatMap(str => exactlyOne($s).concatMap(s => {
+			s = Math.round(s) - 1;
+			return isUndef($l) ? str.substring(s) : exactlyOne($l).map(l => str.substring(s,s + Math.round(l)));
+		})));
 }
 
 export function stringToCodepoints($str){
-	var str = first(string($str));
-	var ret = [];
-	for(var i=0,l=str.length;i<l;i++){
-		ret[i] = str.codePointAt(i);
-	}
-	return seq(ret);
+	zeroOrOne($str).concatMap(str => {
+		// TODO integer opt-in
+		var ret = [];
+		for(var i=0,l=str.length;i<l;i++){
+			ret[i] = str.codePointAt(i);
+		}
+		return ret;
+	});
 }
 
 export function codepointsToString($seq){
-	return string(foldLeft($seq,"",(acc,_) => acc + String.fromCodePoint(_)));
+	return string(seq($seq).reduce((acc,_) => acc + String.fromCodePoint(_.valueOf())),"");
 	//return seq($seq.map(_ => String.fromCodePoint(_)).join(""));
 }
 
 export function upperCase($str) {
-	return string(first(string($str)).toUpperCase());
+	return string(zeroOrOne($str).map(str => str.toUpperCase()));
 }
 
 export function lowerCase($str) {
-	return string(first(string($str)).toLowerCase());
+	return string(zeroOrOne($str).map(str => str.toLowerCase()));
 }
 
 export function normalizeSpace($str) {
-	return string(first(string($str)).replace(/^[\x20\x9\xD\xA]+|[\x20\x9\xD\xA]+$/g,"").replace(/[\x20\x9\xD\xA]+/g," "));
+	return string(zeroOrOne($str).map(str => str.replace(/^[\x20\x9\xD\xA]+|[\x20\x9\xD\xA]+$/g,"").replace(/[\x20\x9\xD\xA]+/g," ")));
 }
 
 export function matches($str,$pat) {
-    var str = first(string($str));
-	var pat = first($pat);
-	if(pat === undefined) return error("xxx");
-	if(str === undefined) return seq(false);
-    return !!str.valueOf().match(_cached(pat));
+	return zeroOrOne($str).concatMap(str => exactlyOne($pat).map(pat => _cached(pat).test(str.valueOf())));
 }
 
 export function replace($str,$pat,$rep) {
-	var str = first(string($str)),
-    	pat = first($pat),
-    	rep = first($rep);
-	if(pat === undefined || rep === undefined) return error("xxx");
-	if(str === undefined) return seq();
-    return string(XRegExp.replace(str.valueOf(),_cached(pat),_repcached(rep),"all"));
+	return string(zeroOrOne($str)
+		.concatMap(str => exactlyOne($pat)
+			.concatMap(pat => exactlyOne($rep)
+				.map(rep => XRegExp.replace(str.valueOf(),_cached(pat),_repcached(rep),"all")))));
 }
 
-
-const regexAstralSymbols = /[\uD800-\uDBFF][\uDC00-\uDFFF]/g;
-
 export function stringLength($str) {
-	let str = first(string($str));
-	if(str === undefined) return seq();
-	return str.replace(regexAstralSymbols,"_").toString().length;
+	$str = zeroOrOne($str);
+	return $str.isEmpty().concatMap(test => test ? seq(0) : $str.map(str => ucs2length(str)));
 }
 
 export function stringJoin($seq,$sep) {
-	let sep = first($sep);
-	return string(into($seq,forEach(s => string(s)),[]).join(sep !== undefined ? sep : ""));
+	return seq($seq).reduce((acc = [],_) => {
+		acc.push(_);
+		return acc;
+	},undefined).concatMap(a => isUndef($sep) ? seq(a.join("")) : $sep.map(sep => a.join(sep)));
 }
 
 export function concat(... args){
-    return string(transform(args,compose(forEach(s => string(s)),cat)).join(""));
+	return string(transform(args,compose(forEach(s => string(s)),cat)).join(""));
 }
 
 export function normalizeUnicode($str,$form) {

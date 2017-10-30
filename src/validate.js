@@ -4,24 +4,12 @@ import { nextNode } from "./access";
 
 import { forEach, foldLeft, into } from "./transducers";
 
+import { ucs2length } from "./util";
+
 import Big from "big.js";
 
 function get(obj, prop) {
 	if (obj.hasOwnProperty(prop)) return obj[prop];
-}
-
-function ucs2length(string) {
-	let counter = 0;
-	const length = string.length;
-	while (counter < length) {
-		const value = string.charCodeAt(counter++);
-		if (value >= 0xD800 && value <= 0xDBFF && counter < length) {
-			// It's a high surrogate, and there is a next character.
-			const extra = string.charCodeAt(counter);
-			if ((extra & 0xFC00) == 0xDC00) counter++; // Low surrogate.
-		}
-	}
-	return counter;
 }
 
 function _formAttrNameToKey(k){
