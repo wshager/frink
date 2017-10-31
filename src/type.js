@@ -4,17 +4,15 @@ import {
 	error
 } from "./error";
 
-import { seq, create, first, isSeq, empty, range, zeroOrOne, oneOrMore, exactlyOne } from "./seq";
+import { seq, first, empty, range, zeroOrOne, exactlyOne } from "./seq";
 
-import { isVNode, isEmptyNode } from "./access";
+import { isVNode, isEmptyNode, vdoc } from "./access";
 
 import { isArray, get as aGet } from "./array";
 
 import { isMap, get as mGet } from "./map";
 
 import { isUndef, isUndefOrNull } from "./util";
-
-//import { compose, forEach, filter, foldLeft, into } from "./transducers";
 
 // TODO complete math (e.g. type checks for idiv and friends)
 
@@ -157,13 +155,13 @@ export function integer($a) {
 	return seq($a).map(a => cast(Math.floor(a), Integer, zeroInt));
 }
 
-export function string($a) {
+export function string($a, card = zeroOrOne) {
 	// type test
 	const cc = String;
 	if(isUndef($a)) return seq(cc);
 	//if(empty($a)) return seq(emptyString());
-	// FIXME somehow reduce?
-	return zeroOrOne($a).concatMap(a => isVNode(a) ? data(a, cc, emptyString) : cast(a, cc, emptyString));
+	// NOTE allow overriding cardinality
+	return card($a).concatMap(a => isVNode(a) ? data(a, cc, emptyString) : cast(a, cc, emptyString));
 }
 
 export function number($a) {
@@ -199,8 +197,7 @@ export function boolean($a) {
 export function cast($a, $b, emptyType = null) {
 	$a = seq($a);
 	$b = exactlyOne($b);
-	if(empty($a) && emptyType) return seq(emptyType());
-	return op($a,_cast, $b);
+	return empty($a).concatMap(test => test ? emptyType ? seq(emptyType()) : seq() : op($a,_cast, $b));
 }
 
 function _cast(a, b, emptyType = null) {
@@ -393,37 +390,28 @@ export function op($a, operator, $b) {
 }
 
 export function data($a,castToType = UntypedAtomic,emptyType = emptyUntypedAtomic) {
-	return dataImpl(seq($a),false,castToType,emptyType);
+	return seq($a).concatMap(a => dataImpl(a, castToType, emptyType));
 }
 
-function dataImpl(node, fltr, castToType, emptyType) {
-	if (isSeq(node)) {
-		return empty(node).concatMap(isEmpty => {
-			if(isEmpty){
-				return node;
-			} else {
-				var $a = node.concatMap(_ => dataImpl(_, fltr,castToType,emptyType));
-				return $a.isEmpty().concatMap(isEmpty => isEmpty ? seq(emptyType()) : $a);
-			}
-		});
-	}
+function dataImpl(node, castToType, emptyType) {
 	if(isEmptyNode(node)) return seq();
 	if (!isVNode(node)) return seq(node);
-	var type = node.type;
-	if (fltr && fltr === type) return seq();
-	var $ret;
-	if (type === 1) {
-		$ret = seq(into(node,forEach(_ => dataImpl(_, fltr,castToType,emptyType)),[])).concatAll();
-	} else {
-		var val = node.value;
-		// if string, cast
-		if (typeof val == "string" && castToType != String) {
-			val = !val ? undefined : _cast(val, castToType, emptyType);
+	return vdoc(node).concatMap(node => {
+		var type = node.type;
+		var $ret;
+		if (type == 3) {
+			var val = node.value;
+			// if string, cast
+			if (typeof val == "string" && castToType != String) {
+				val = !val ? undefined : _cast(val, castToType, emptyType);
+			}
+			$ret = seq(val);
 		}
-		$ret = seq(val);
-	}
-	// there was a node, so coerce to emptyType, even if it was empty
-	return empty($ret).concatMap(isEmpty ? seq(emptyType()) : $ret);
+		// there was a node, so coerce to emptyType, even if it was empty
+		return empty($ret).concatMap(function (isEmpty) {
+			return isEmpty ? seq(emptyType()) : $ret;
+		});
+	});
 }
 
 export function instanceOf($a, $b, $card = null) {
