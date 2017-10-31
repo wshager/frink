@@ -49,13 +49,6 @@ function _a(name, child) {
 		return child
 			.concatMap(child => child.inode(node))
 			.reduce((node, child) => {
-				if (parent.type == 1) {
-					// TODO conversion rules!
-					parent.attr(name, child.value + "");
-				} else if (parent.type == 6) {
-					// tuple
-					parent.push([name, child.inode]);
-				}
 				return node.modify(child,name);
 			}, node);
 	}, 2, name);
