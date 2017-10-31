@@ -5,11 +5,13 @@ require("rxjs/add/operator/zip");
 
 exports.assertEq = function assertEq(name,$a,$b){
 	$a.zip(n.seq($b)).subscribe(ab => {
-		const [a,b] = ab;
-		assert.equal(JSON.stringify(a),JSON.stringify(b));
+		let [a,b] = ab;
+		a = JSON.stringify(a);
+		b = JSON.stringify(b);
+		assert.equal(a,b,`Error in test ${name}, expected ${b} got ${a}`);
 		console.log("testing",name,":",a,"equals",b);
 	});
-}
+};
 
 exports.assertThrows = function assertThrows(name,f){
 	assert.throws(() => {
@@ -18,6 +20,6 @@ exports.assertThrows = function assertThrows(name,f){
 				console.log("testing",name,": throws",err.toString());
 				throw new Error(err);
 			}
-		})
+		});
 	});
-}
+};
