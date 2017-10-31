@@ -27,11 +27,11 @@ export const DONE = {
 	done: true
 };
 
-//const regexAstralSymbols = /[\uD800-\uDBFF][\uDC00-\uDFFF]/g;
+const regexAstralSymbols = /[\uD800-\uDBFF][\uDC00-\uDFFF]/g;
 
 export function ucs2length(string) {
 	let counter = 0;
-	// string.replace(regexAstralSymbols,"_")
+	string = string.replace(regexAstralSymbols,"_");
 	const length = string.length;
 	while (counter < length) {
 		const value = string.charCodeAt(counter++);
