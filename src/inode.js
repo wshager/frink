@@ -334,7 +334,7 @@ export function modify(inode, node, ref, type){
 			inode.push(node.inode);
 		}
 	} else if (type == 6) {
-		inode[node.key] = node.inode.$value;
+		inode[node.name] = node.inode.$value;
 	}
 	return inode;
 }
