@@ -4,7 +4,7 @@ import { VNode } from "./vnode";
 
 import { prettyXML } from "./pretty";
 
-import { forEach, foldLeft, range, drop } from "./transducers";
+import { forEach, foldLeft, range } from "./transducers";
 
 import * as multimap from "./multimap";
 
@@ -317,7 +317,10 @@ export function attrEntries(inode){
 export function modify(inode, node, ref, type){
 	type = type || _inferType(inode);
 	if (type == 1 || type == 9 || type == 11) {
-		if (ref !== undefined) {
+		if(node.type == 2) {
+			// TODO conversion rules!
+			inode.$attrs[name] = node.value + "";
+		} else if (ref !== undefined) {
 			inode.$children.splice(ref.indexInParent, 0, node.inode);
 		} else {
 			inode.$children.push(node.inode);
