@@ -317,15 +317,15 @@ export function attrEntries(inode){
 export function modify(inode, node, ref, type){
 	type = type || _inferType(inode);
 	if (type == 1 || type == 9 || type == 11) {
-		if(node.type == 2) {
+		if (node.type == 2) {
 			// TODO conversion rules!
-			inode.$attrs[name] = node.value + "";
+			inode.$attrs[node.name] = node.inode.$value + "";
 		} else if (ref !== undefined) {
 			inode.$children.splice(ref.indexInParent, 0, node.inode);
 		} else {
 			inode.$children.push(node.inode);
 		}
-	} else if(type == 2) {
+	} else if (type == 2) {
 		inode.$value = node.inode;
 	} else if (type == 5) {
 		if (ref !== undefined) {
@@ -334,7 +334,7 @@ export function modify(inode, node, ref, type){
 			inode.push(node.inode);
 		}
 	} else if (type == 6) {
-		inode[node.key] = node.inode;
+		inode[node.key] = node.inode.$value;
 	}
 	return inode;
 }
