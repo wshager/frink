@@ -2,7 +2,7 @@ import * as rrb from "rrb-vector";
 
 import { error } from "./error";
 
-import { seq, first, isSeq } from "./seq";
+import { seq, first, isSeq, foldLeft as seqFoldLeft, zeroOrOne, exactlyOne } from "./seq";
 
 import * as t from "./transducers";
 
@@ -56,7 +56,7 @@ export default function array(...a) {
 export function join($a) {
 	if ($a === undefined) return error("XPTY0004");
 	// assume a sequence of vectors
-	return t.foldLeft($a,rrb.empty,function(pre,cur){
+	return seqFoldLeft($a,rrb.empty,function(pre,cur){
 		var v = first(cur);
 		if(!isArray(v)) return error("XPTY0004","One of the items for array:join is not an array.");
 		return pre.concat(v);
@@ -148,5 +148,5 @@ export function filter($a,$f){
 }
 
 export function foldLeft($a,$z,$f){
-	return t.foldLeft(first($a),$z,first($f));
+	return zeroOrOne($a).concatMap(a => exactlyOne($z).concatMap(z => exactlyOne($f).concatMap(f => t.foldLeft(a,z,f))));
 }
