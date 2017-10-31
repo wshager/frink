@@ -8,16 +8,11 @@ import { e, a, x } from "./construct";
 
 import { appendChild } from "./modify";
 
-import { isVNode } from "./access";
+//import { isVNode } from "./access";
 
 import { isUndef } from "./util";
 
 import { ucs2length } from "./util";
-
-//import { into, transform, compose, forEach, filter, foldLeft, cat } from "./transducers";
-
-
-
 
 const _regexpCache = {};
 
@@ -41,54 +36,55 @@ function _repcached(rep){
 }
 
 export function analyzeString($str,$pat) {
-	var str = first(string($str));
-	var ret = e("fn:analyze-string-result");
-	var index = 0;
-	if(str){
-		let pat = first($pat);
-		XRegExp.replace(str.toString(),_cached(pat),function(... args){
-			var match = args.shift();
-			var str = args.pop();
-			var idx = args.pop();
-			// the rest is groups
-			if(idx > index) ret = appendChild(ret,e("fn:non-match",x(str.substring(index,idx))));
-			index = idx + match.length;
-			var len = args.length;
-			var me = e("fn:match");
-			if(len > 0) {
-				var children = [];
-				for(let i = 0;i<len;i++){
-					let _ = args[i];
-					if (_ !== undefined) {
-						// nest optional groups that are empty
-						// TODO nested groups
-						if(_ !== "") {
-							children[i] = e("fn:group",seq(a("nr",Number(i+1)),x(_)));
-						} else {
-							var clen = children.length;
-							if(clen) {
-								var last = children[clen - 1];
-								last = appendChild(last,e("fn:group",seq(a("nr",Number(i+1)))));
+	return string($str).concatMap(str => {
+		var $ret = e("fn:analyze-string-result");
+		var index = 0;
+		if(!str) return $ret;
+		return exactlyOne($pat).concatMap(pat => {
+			XRegExp.replace(str.toString(),_cached(pat),function(... args){
+				var match = args.shift();
+				var str = args.pop();
+				var idx = args.pop();
+				// the rest is groups
+				if(idx > index) $ret = appendChild($ret,e("fn:non-match",x(str.substring(index,idx))));
+				index = idx + match.length;
+				var len = args.length;
+				var $me = e("fn:match");
+				if(len > 0) {
+					var children = [];
+					for(let i = 0;i<len;i++){
+						let _ = args[i];
+						if (_ !== undefined) {
+							// nest optional groups that are empty
+							// TODO nested groups
+							if(_ !== "") {
+								children[i] = e("fn:group",seq(a("nr",Number(i+1)),x(_)));
+							} else {
+								var clen = children.length;
+								if(clen) {
+									var $last = children[clen - 1];
+									children[clen - 1] = appendChild($last,e("fn:group",seq(a("nr",Number(i+1)))));
+								}
 							}
 						}
+						if(children[i]) $me = appendChild($me,children[i]);
 					}
-					if(children[i]) me = appendChild(me,children[i]);
+					if(children.length) $ret = appendChild($ret,$me);
+				} else if(match) {
+					$me = appendChild($me,x(match));
+					$ret = appendChild($ret,$me);
 				}
-				if(children.length) ret = appendChild(ret,me);
-			} else if(match) {
-				me = appendChild(me,x(match));
-				ret = appendChild(ret,me);
-			}
+			});
+			if(index < str.length) $ret = appendChild($ret,e("fn:non-match",x(str.substr(index))));
+			return $ret;
 		});
-		if(index < str.length) ret = appendChild(ret,e("fn:non-match",x(str.substr(index))));
-	}
-	return ret;
+	});
 }
 
 export function tokenize($str,$pat) {
-	return zeroOrOne($str)
+	return string($str)
 		.concatMap(str => exactlyOne($pat)
-			.concatMap(pat => str.toString().split(_cached(pat)).map(s => string(s))));
+			.concatMap(pat => seq(str.toString().split(_cached(pat))).concatMap(s => string(s))));
 }
 
 export function substring($str,$s,$l) {
@@ -96,12 +92,12 @@ export function substring($str,$s,$l) {
 		//.concatMap(str => string(str))
 		.concatMap(str => exactlyOne($s).concatMap(s => {
 			s = Math.round(s) - 1;
-			return isUndef($l) ? str.substring(s) : exactlyOne($l).map(l => str.substring(s,s + Math.round(l)));
+			return isUndef($l) ? seq(str.substr(s)) : exactlyOne($l).map(l => str.substr(s,Math.round(l)));
 		})));
 }
 
 export function stringToCodepoints($str){
-	zeroOrOne($str).concatMap(str => {
+	return zeroOrOne($str).concatMap(str => {
 		// TODO integer opt-in
 		var ret = [];
 		for(var i=0,l=str.length;i<l;i++){
@@ -112,8 +108,7 @@ export function stringToCodepoints($str){
 }
 
 export function codepointsToString($seq){
-	return string(seq($seq).reduce((acc,_) => acc + String.fromCodePoint(_.valueOf())),"");
-	//return seq($seq.map(_ => String.fromCodePoint(_)).join(""));
+	return stringJoin(seq($seq).map(_ => String.fromCodePoint(_.valueOf())));
 }
 
 export function upperCase($str) {
@@ -145,18 +140,17 @@ export function stringLength($str) {
 }
 
 export function stringJoin($seq,$sep) {
-	return seq($seq).reduce((acc = [],_) => {
+	// frink implementation allows passing a different cardinality test to string...
+	return string(string($seq,seq).reduce((acc = [],_) => {
 		acc.push(_);
 		return acc;
-	},undefined).concatMap(a => isUndef($sep) ? seq(a.join("")) : $sep.map(sep => a.join(sep)));
+	},undefined).concatMap(a => isUndef($sep) ? seq(a.join("")) : seq($sep).map(sep => a.join(sep))));
 }
 
 export function concat(... args){
-	return string(transform(args,compose(forEach(s => string(s)),cat)).join(""));
+	return stringJoin(seq(args).concatMap(a => string(a)));
 }
 
 export function normalizeUnicode($str,$form) {
-	var str = first(string($str));
-	var form = first($form);
-	return !str ? seq() : string(!form ? str.normalize() : str.normalize(form.toUpperCase()));
+	return string(zeroOrOne($str).concatMap(str => isUndef($form) ? seq(str.normalize()) : seq($form).map(form => str.normalize(form.toUpperCase()))));
 }
