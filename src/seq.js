@@ -1,6 +1,6 @@
 import { Observable } from "rxjs/Observable";
 import { error } from "./error";
-import { isObject, isUndefOrNull } from "./util";
+import { isObject, isUndef, isUndefOrNull, isUntypedAtomic } from "./util";
 import { isVNode } from "./access";
 
 import "rxjs/add/observable/of";
@@ -22,14 +22,25 @@ import "rxjs/add/operator/merge";
 import "rxjs/add/operator/mergeMap";
 import "rxjs/add/operator/concat";
 import "rxjs/add/operator/concatMap";
+import "rxjs/add/operator/concatAll";
 import "rxjs/add/operator/switch";
 import "rxjs/add/operator/switchMap";
 
-import { map as _map, filter as _filter, reduce as _reduce } from "rxjs/operators";
+import { concatMap, filter as rxFilter} from "rxjs/operators";
 
-export const forEach = _map;
-export const filter = _filter;
-export const foldLeft = _reduce;
+export const forEach = concatMap;
+export const filter = rxFilter;
+const _wrap = fn => (acc,v) => {
+	return seq(fn(acc,v));
+};
+export const foldLeft = (...args) => {
+	const len = args.length;
+	const $s = seq(args[0]).map(s => seq(s));
+	const $fn = exactlyOne(len == 2 ?  args[1] : args[2]);
+	const $seed = len == 2 ? seq() : seq($seed);
+	const _reducer = $seed => $fn.concatMap(fn => seq($s.reduce(_wrap(fn),$seed))).concatAll();
+	return len == 2 ? _reducer(undefined) : _reducer($seed);
+};
 
 export { pipe as compose } from "rxjs/util/pipe";
 
@@ -85,10 +96,10 @@ export function seq(...a){
 		if(isSeq(x)) return x;
 		if(isUndefOrNull(x)) return Observable.empty();
 		if(isObject(x) && (x instanceof Promise || typeof x.then == "function")) return Observable.fromPromise(x);
-		if(Array.isArray(x) || (x[Symbol.iterator] && typeof x != "string" && !isVNode(x))) return Observable.from(x);
+		if(Array.isArray(x) || (x[Symbol.iterator] && typeof x != "string" && !isUntypedAtomic(x) && !isVNode(x))) return Observable.from(x);
 		return Observable.of(x);
 	}
-	return Observable.from(a);
+	return Observable.from(a).map(a => seq(a)).concatAll();
 }
 
 export function create(o){
