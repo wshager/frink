@@ -1,27 +1,12 @@
 import { ensureDoc } from "./doc";
 
-import { compose, into, forEach, filter, foldLeft } from "./transducers";
+import { error } from "./error";
 
-import { seq, isSeq, create } from "./seq";
+import { seq, isSeq, create, forEach, filter, compose, foldLeft, exactlyOne } from "./seq";
 
 import { prettyXML } from "./pretty";
 
-import { DONE } from  "./util";
-
-export function VNodeIterator(iter, parent, f){
-	this.iter = iter;
-	this.parent = parent;
-	this.f = f;
-	this.indexInParent = -1;
-	this.__is_VNodeIterator = true;
-}
-
-VNodeIterator.prototype.next = function () {
-	var v = this.iter.next();
-	this.indexInParent++;
-	if (v.done) return DONE;
-	return { value: this.f(v.value,this.parent,this.indexInParent) };
-};
+import { isUndef } from "./util";
 
 export function Step(node){
 	this.node = node;
@@ -37,61 +22,35 @@ Step.prototype.toString = function(){
 	return "Step {depth:" + this.node.depth + ", closes:" + this.node.name + "}";
 };
 
-/*
-export function* docIter(node) {
-	node = ensureDoc.bind(this)(node);
-	yield node;
-	while (node) {
-		node = nextNode(node);
-		if(node) yield node;
-	}
-}
-*/
+const _vnodeFromCx = (cx,node) => cx && "vnode" in cx ? cx.vnode : node.cx.vnode;
 
-function VDocIterator(node) {
-	this.node = ensureDoc(node);
-	this._init = false;
-	this.__is_VDocIterator = true;
-}
-
-VDocIterator.prototype.next = function () {
-	let node = this.node;
-	if (!this._init) {
-		this._init = true;
-		if (!node) return DONE;
-		return { value: node };
-	}
-	node = nextNode(node);
-	if (!node) return DONE;
-	this.node = node;
-	return { value: node };
-};
-
-export function VDoc(node){
-	this.node = node;
-}
-
-export function vdoc(node) {
-	node = ensureDoc(node);
-	return create(o => {
-		return node.subscribe({
-			next:function(node){
-				while(node){
-					o.next(node);
-					node = nextNode(node);
-				}
-				o.complete();
-			},
-			error:o.error
-		});
+export function children($node) {
+	const cx = this;
+	return ensureDoc.bind(cx)($node).concatMap(node => {
+		const vnode = _vnodeFromCx(cx,node);
+		const values = node.type == 2 ? [node.inode] : node.values();
+		const depth = node.depth + 1;
+		return seq(values).map((inode, idx) => vnode(inode,node,depth,idx + 1));
 	});
 }
 
-VDoc.prototype[Symbol.iterator] = function(){
-	return new VDocIterator(this.node);
-};
+export function vdoc($node) {
+	const cx = this;
+	$node = ensureDoc.bind(cx)($node);
+	return create(o => $node.subscribe({
+		next:function(node){
+			while(node){
+				o.next(node);
+				node = nextNode(node);
+			}
+			o.complete();
+		},
+		error:o.error
+	}));
+}
 
 // FIXME nextNode is never eligable for seqs, so it shouldn't be exposed
+// TODO write nextNode function: create observable for current node, subscribe and call nextNode
 export function nextNode(node /* VNode */) {
 	var type = node.type,
 		inode = node.inode,
@@ -153,15 +112,14 @@ export function* prevNode(node){
 	}
 }
 */
-export function stringify(input){
-	var str = "";
+export function stringify($input){
 	const attrFunc = (z, kv) => {
 		return z += " " + kv[0] + "=\"" + kv[1] + "\"";
 	};
 	const docAttrFunc = (z, kv) => {
 		return z += kv[0] == "DOCTYPE" ? "<!" + kv[0] + " " + kv[1] + ">" : "<?" + kv[0] + " " + kv[1] + "?>";
 	};
-	for (let node of new VDoc(input)) {
+	return vdoc($input).reduce((str,node) => {
 		let type = node.type;
 		if (type == 1) {
 			str += "<" + node.name;
@@ -175,70 +133,65 @@ export function stringify(input){
 		} else if (type == 17) {
 			str += "</" + node.name + ">";
 		}
-	}
-	return prettyXML(str);
+		return str;
+	},"").map(str => prettyXML(str));
 }
 
 export function firstChild($node) {
+	const cx = this;
 	// assume ensureDoc returns the correct node
-	return ensureDoc.bind(this)($node).concatMap(node => {
+	return ensureDoc.bind(cx)($node).concatMap(node => {
+		const vnode = _vnodeFromCx(cx,node);
 		let next = node.first();
-		return next ? seq(node.vnode(next,node,node.depth + 1, 0)) : seq();
+		return next ? seq(vnode(next,node,node.depth + 1, 0)) : seq();
 	});
 }
 
-export function nextSibling($node){
-	return ensureDoc.bind(this)($node).concatMap(node => {
+const _nextOrPrev = (cx,$node,dir) => {
+	return ensureDoc.bind(cx)($node).concatMap(node => {
+		const vnode = _vnodeFromCx(cx,node);
 		var parent = node.parent;
-		var next = parent.next(node);
-		return next ? seq(parent.vnode(next, parent, node.depth, node.indexInParent+1)) : seq();
+		const sib = parent && parent[dir > 0 ? "next" : "previous"](node);
+		return sib ? seq(vnode(sib, parent, node.depth, node.indexInParent + dir)) : seq();
 	});
-}
-
-/*
-export function* children(node){
-	node = ensureDoc.bind(this)(node);
-	var i = 0;
-	for(var c of node.values()){
-		if(c) yield node.vnode(c, node, node.depth + 1, i++);
-	}
-}
-*/
-export function getDoc(node) {
-	node = ensureDoc.bind(this)(node);
-	do {
-		node = node.parent;
-	} while(node.parent);
-	return node;
-}
-
-export function lastChild(node){
-	node = ensureDoc.bind(this)(node);
-	var last = node.last();
-	return node.vnode(last,node,node.depth+1, node.count() - 1);
-}
-
-export function parent(node) {
-	if(!arguments.length) return Axis(parent);
-	return node.parent ? seq(new VNodeIterator([node.parent.inode][Symbol.iterator](),node.parent.parent, node)) : seq();
-}
-
-function Singleton(val) {
-	this.val = val;
-}
-
-Singleton.prototype.next = function () {
-	if (this.val !== undefined) {
-		var val = this.val;
-		this.val = undefined;
-		return { value: val };
-	}
-	return { done: true };
 };
 
+export function nextSibling($node){
+	return _nextOrPrev(this, $node, 1);
+}
+
+export function previousSibling($node){
+	return _nextOrPrev(this, $node, -1);
+}
+
+export function getDoc($node) {
+	var cx = this;
+	return ensureDoc.bind(cx)($node).concatMap(node => {
+		do {
+			node = node.parent;
+		} while(node.parent);
+		return seq(node);
+	});
+}
+
+export function lastChild($node){
+	var cx = this;
+	return ensureDoc.bind(cx)($node).concatMap(node => {
+		const last = node.last();
+		const vnode = cx.vnode || node.cx.vnode;
+		return vnode(last,node,node.depth+1, node.count() - 1);
+	});
+}
+
+export function parent($node) {
+	if(!arguments.length) return Axis(parent);
+	var cx = this;
+	return ensureDoc.bind(cx)($node).concatMap(node => seq(node.parent));
+}
+
 export function self(f) {
-	if(f.name !== "transForEach" && f.name !== "transFilter") f = forEach(f);
-	return Axis(node => new Singleton(node), f, 3);
+	if(f.name !== "forEach" && f.name !== "filter") f = forEach(f);
+	return Axis(node => node, f, 3);
 }
 
 export function iter(node, f, cb) {
@@ -350,40 +303,43 @@ function _attrGet(key,node){
 	} else {
 		entries = node.attrEntries();
 	}
-	return into(entries, kv => node.vnode(node.ituple(kv[0], kv[1]), node.parent, node.depth + 1, node.indexInParent),seq())[Symbol.iterator]();
+	return seq(entries).map(kv => node.vnode(node.ituple(kv[0], kv[1]), node.parent, node.depth + 1, node.indexInParent));
 }
 
 // TODO make axis default, process node here, return seq(VNodeIterator)
 // TODO maybe have Axis receive post-process func/seq
-export function attribute(qname) {
-	var hasWildcard = /\*/.test(qname);
-	// getter of attributes / pre-processor of attributes
-	// TODO iterator!
-	// filter of attributes
-	var f;
-	if (hasWildcard) {
-		var regex = new RegExp(qname.replace(/\*/, "(\\w[\\w0-9-_]*)"));
-		//	attrEntries returns tuples
-		f = n => _isAttribute(n) && regex.test(n.name);
-		// no direct access
-		qname = null;
-	} else {
-		// name check provided by directAccess
-		f = n => _isAttribute(n);
-	}
-	return Axis(_attrGet.bind(null,qname),filter(f),2);
+export function attribute($qname) {
+	if(isUndef($qname)) $qname = "*";
+	return exactlyOne($qname).map(qname => {
+		var hasWildcard = /\*/.test(qname);
+		// getter of attributes / pre-processor of attributes
+		// TODO iterator!
+		// filter of attributes
+		var f;
+		if (hasWildcard) {
+			var regex = new RegExp(qname.replace(/\*/, "(\\w[\\w0-9-_]*)"));
+			//	attrEntries returns tuples
+			f = n => _isAttribute(n) && regex.test(n.name);
+			// no direct access
+			qname = null;
+		} else {
+			// name check provided by directAccess
+			f = n => _isAttribute(n);
+		}
+		return Axis(_attrGet.bind(null,qname),filter(f),2);
+	});
 }
 
 export function text() {
 	var f = n => _isText(n) && !!n.value;
 	f.__is_NodeTypeTest = true;
-	return f;
+	return seq(f);
 }
 
 export function node() {
 	var f = n => _isElement(n) || (_isText(n) && !!n.value);
 	f.__is_NodeTypeTest = true;
-	return f;
+	return seq(f);
 }
 
 // TODO create axis functions that return a function
@@ -404,6 +360,7 @@ function Axis(g,f,type){
 	};
 }
 export function child(f) {
+	const cx = this;
 	if(f.__is_NodeTypeTest){
 		// this means it's a predicate, and the actual function should become a filter
 		if(f.__Accessor) {
@@ -411,96 +368,34 @@ export function child(f) {
 		}
 		f = filter(f);
 	}
-	return Axis(node => node[Symbol.iterator](),f);
+	return Axis(node => children.bind(cx)(node),f);
 }
 
-const _isSiblingIterator = n => !!n && n.__is_SiblingIterator;
-
-const isVNodeIterator = n => !!n && n.__is_VNodeIterator;
-
-function SiblingIterator(inode, parent, depth, indexInParent, dir){
-	this.inode = inode;
-	this.parent = parent;
-	this.depth = depth;
-	this.indexInParent = indexInParent;
-	this.dir = dir;
-	this.__is_SiblingIterator = true;
+export function siblingsOrSelf($node){
+	var cx = this;
+	return ensureDoc.bind(cx)($node).concatMap(node => children.bind(cx)(node.parent));
 }
 
-SiblingIterator.prototype.next = function(){
-	var v = this.dir.call(this.parent.inode,this.name,this.inode);
-	this.index++;
-	if (!v) return DONE;
-	this.inode = v;
-	return { value: this.parent.vnode(v, this.parent, this.depth, this.indexInParent) };
-};
-
-SiblingIterator.prototype[Symbol.iterator] = function () {
-	return this;
-};
-
-export function followingSibling(node) {
-	if (arguments.length === 0) return Axis(followingSibling);
-	node = ensureDoc.bind(this)(node);
-	return seq(new SiblingIterator(node.inode, node.parent, node.depth, node.indexInParent));
-}
-
-/*function* _combinedIter(iters, f) {
-	for(var x of iters) {
-		var next;
-		// expect everything to be a faux iterator
-		while(next = f(x).next(), !next.done) {
-			yield next.value;
-		}
-	}
-}*/
-
-function CombinedIterator(iters,f){
-	this.iter = f(iters.shift());
-	this.iters = iters;
-	this.f = f;
-	this.index = 0;
-}
-
-CombinedIterator.prototype.next = function() {
-	if (!this.iter) return DONE;
-	var v = this.iter.next();
-	if (!v || v.done) {
-		if(this.iters.length) {
-			this.iter = this.f(this.iters.shift());
-			return this.next();
-		}
-		return DONE;
-	}
-	return v;
-};
-
-function _combinedIter(iters, f) {
-	return new CombinedIterator(iters,f);
-}
-
-// make sure all paths are transducer-funcs
-export function select(node, ...paths) {
-	// usually we have a sequence
-	// TODO make lazy:
-	// - combine iterators for each node seq to one iterator
-	// - bind the composed function to the combined iterator
-	// - combine the combined iterator
-	var cur = node;
-	var bed = ensureDoc.bind(this);
-	while (paths.length > 0) {
-		let path = paths.shift();
-		path = _axify(path);
-		// TODO skip self
-		var skipCompare = path.__type == 2 || path.__type == 3;
-		var f = path.f;
-		// rebind step function to the context
-		var bound = n => path.g(bed(n));
-		if (!skipCompare) f = compose(f, filter(_comparer()));
-		var x = isSeq(cur) ? _combinedIter(cur.toArray(), bound) : bound(cur);
-		cur = into(x, f,seq());
-	}
-	return cur;
+export function select($node, ...paths) {
+	var cx = this;
+	var boundEnsureDoc = ensureDoc.bind(cx);
+	return seq(paths)
+		.concatMap(path => seq(_axify(path)))
+		// we're passing $node here, because we want to update it every iteration
+		.map(path => $node => {
+			// make sure all paths are funcs
+			// TODO skip self
+			var skipCompare = path.__type == 2 || path.__type == 3;
+			var f = path.f;
+			// rebind step function to the context
+			var bound = function bound(n) {
+				return path.g(boundEnsureDoc(n));
+			};
+			if (!skipCompare) f = compose(f, filter(_comparer()));
+			return seq($node).concatMap(node => f(bound(node)));
+		})
+		.reduce(($node, changeFn) => changeFn($node),boundEnsureDoc($node))
+		.concatAll();
 }
 
 function _comparer() {
@@ -549,21 +444,23 @@ export function* select2(node,...paths) {
 	}
 }
 */
-function _axify(path){
-	if(!path.__is_Axis){
-		// process strings (can this be combined?)
-		if (typeof path == "string") {
-			var at = /^@/.test(path);
-			if (at) path = path.substring(1);
-			return at ? attribute(path) : child(element(path));
-		} else if(typeof path == "function"){
-			if(path.__is_NodeTypeTest) return child(path);
-			return self(path);
-		} else {
-			// TODO throw error
+function _axify($path){
+	return seq($path).concatMap(path => {
+		if(!path.__is_Axis){
+			// process strings (can this be combined?)
+			if (typeof path == "string") {
+				var at = /^@/.test(path);
+				if (at) path = path.substring(1);
+				return at ? attribute(path) : child(element(path));
+			} else if(typeof path == "function"){
+				if(path.__is_NodeTypeTest) return child(path);
+				return self(path);
+			} else {
+				return error("XXX","Unknown axis provided");
+			}
 		}
-	}
-	return path;
+		return seq(path);
+	});
 }
 
 export function isEmptyNode(node){
