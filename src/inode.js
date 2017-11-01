@@ -164,19 +164,28 @@ export function get(inode,idx,type,cache){
 	return inode[idx];
 }
 */
-export function next(inode, node, type){
+
+const _nextOrPrev = (inode,node,type,dir) => {
 	type = type || _inferType(inode);
 	var idx = node.indexInParent;
-	if(type == 1 || type == 9) {
-		return inode.$children[idx+1];
+	if(type == 1 || type == 9 || type == 11) {
+		return inode.$children[idx + dir];
 	}
-	if(type == 5) return inode[idx+1];
+	if(type == 5) return inode[idx + dir];
 	if(type == 6) {
 		var entries = Object.entries(inode);
-		var kv = entries[idx + 1];
+		var kv = entries[idx + dir];
 		// pass tuple-wise
 		return {$key:kv[0],$value:kv[1]};
 	}
+};
+
+export function next(inode, node, type){
+	return _nextOrPrev(inode, node, type, 1);
+}
+
+export function previous(inode, node, type){
+	return _nextOrPrev(inode, node, type, -1);
 }
 
 export function push(inode,kv,type){
