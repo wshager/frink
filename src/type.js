@@ -14,6 +14,8 @@ import { isMap, get as mGet } from "./map";
 
 import { isUndef, isUndefOrNull } from "./util";
 
+import { stringJoin } from "./string";
+
 // TODO complete math (e.g. type checks for idiv and friends)
 
 // one big pile
@@ -390,7 +392,7 @@ export function op($a, operator, $b) {
 }
 
 export function data($a,castToType = UntypedAtomic,emptyType = emptyUntypedAtomic) {
-	return seq($a).concatMap(a => dataImpl(a, castToType, emptyType));
+	return stringJoin(seq($a).concatMap(a => dataImpl(a, castToType, emptyType)));
 }
 
 function dataImpl(node, castToType, emptyType) {
@@ -398,19 +400,15 @@ function dataImpl(node, castToType, emptyType) {
 	if (!isVNode(node)) return seq(node);
 	return vdoc(node).concatMap(node => {
 		var type = node.type;
-		var $ret;
 		if (type == 3) {
 			var val = node.value;
 			// if string, cast
 			if (typeof val == "string" && castToType != String) {
 				val = !val ? undefined : _cast(val, castToType, emptyType);
 			}
-			$ret = seq(val);
+			return seq(val);
 		}
-		// there was a node, so coerce to emptyType, even if it was empty
-		return empty($ret).concatMap(function (isEmpty) {
-			return isEmpty ? seq(emptyType()) : $ret;
-		});
+		return seq();
 	});
 }
 
