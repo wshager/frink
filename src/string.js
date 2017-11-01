@@ -1,6 +1,6 @@
 import XRegExp from "xregexp";
 
-import { seq, first, zeroOrOne, exactlyOne } from "./seq";
+import { seq, zeroOrOne, exactlyOne } from "./seq";
 
 import { string } from "./type";
 
@@ -10,9 +10,7 @@ import { appendChild } from "./modify";
 
 //import { isVNode } from "./access";
 
-import { isUndef } from "./util";
-
-import { ucs2length } from "./util";
+import { isUndef, ucs2length } from "./util";
 
 const _regexpCache = {};
 
