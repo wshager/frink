@@ -2,7 +2,7 @@ import { ensureDoc } from "./doc";
 
 import { error } from "./error";
 
-import { seq, isSeq, create, forEach, filter, compose, foldLeft, exactlyOne } from "./seq";
+import { seq, isSeq, create, forEach, filter, compose, foldLeft, zeroOrOne, exactlyOne } from "./seq";
 
 import { prettyXML } from "./pretty";
 
@@ -189,9 +189,11 @@ export function parent($node) {
 	return ensureDoc.bind(cx)($node).concatMap(node => seq(node.parent));
 }
 
-export function self(f) {
-	if(f.name !== "forEach" && f.name !== "filter") f = forEach(f);
-	return Axis(node => node, f, 3);
+export function self($f) {
+	return zeroOrOne($f).map(f => {
+		if(f.name !== "forEach" && f.name !== "filter") f = forEach(f);
+		return Axis(node => node, f, 3);
+	});
 }
 
 export function iter(node, f, cb) {
@@ -359,16 +361,18 @@ function Axis(g,f,type){
 		g:g
 	};
 }
-export function child(f) {
+export function child($f) {
 	const cx = this;
-	if(f.__is_NodeTypeTest){
-		// this means it's a predicate, and the actual function should become a filter
-		if(f.__Accessor) {
-			// TODO this means we can try direct access on a node
+	return zeroOrOne($f).map(f => {
+		if(f.__is_NodeTypeTest){
+			// this means it's a predicate, and the actual function should become a filter
+			if(f.__Accessor) {
+				// TODO this means we can try direct access on a node
+			}
+			f = filter(f);
 		}
-		f = filter(f);
-	}
-	return Axis(node => children.bind(cx)(node),f);
+		return Axis(node => children.bind(cx)(node),f);
+	});
 }
 
 export function siblingsOrSelf($node){
