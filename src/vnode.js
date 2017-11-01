@@ -50,6 +50,11 @@ VNode.prototype.next = function(node){
 	return this.cx.next(this.inode,node,this.type,this.cache);
 };
 
+VNode.prototype.previous = function(node){
+	if(!this.cache) this.cache = this.cx.cached(this.inode,this.type);
+	return this.cx.previous(this.inode,node,this.type,this.cache);
+};
+
 // TODO cache invalidation
 VNode.prototype.push = function(kv){
 	this.inode = this.cx.push(this.inode,kv,this.type);
@@ -110,19 +115,4 @@ VNode.prototype.emptyAttrMap = function(init) {
 
 VNode.prototype.ituple = function(key,inode){
 	return this.cx.ituple(key, inode);
-};
-
-// TODO create iterator that yields a node seq
-// position() should overwrite get(), but the check should be name or indexInParent
-VNode.prototype[Symbol.iterator] = function(){
-	var values = this.type == 2 ? [this.inode][Symbol.iterator]() : this.values()[Symbol.iterator]();
-	return new VNodeIterator(values, this, this.cx.vnode);
-};
-
-VNode.prototype.get = function(idx){
-	var val = this.cx.get(this.inode, idx, this.type, this.cache);
-	if (!val) return [];
-	//val = val.next || val.constructor == Array ? val : [val];
-	//console.log(val[Symbol.iterator]());
-	return new VNodeIterator(val.next ? val : val[Symbol.iterator](), this, this.cx.vnode);
 };
