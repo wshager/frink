@@ -17,6 +17,10 @@ export function isNumber(x) {
 	return typeof x === "number";
 }
 
+export function isUntypedAtomic(x) {
+	return x instanceof Object && x.constructor.name == "UntypedAtomic";
+}
+
 export const isUndef = s => s === undefined;
 
 export const isNull = s => s === null;
