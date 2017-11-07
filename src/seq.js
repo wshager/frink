@@ -42,6 +42,10 @@ export const foldLeft = (...args) => {
 	return len == 2 ? _reducer(undefined) : _reducer($seed);
 };
 
+export const from = a => Observable.from(a);
+
+export const of = a => Observable.of(a);
+
 export { pipe as compose } from "rxjs/util/pipe";
 
 export { take, skip } from "rxjs/operators";
