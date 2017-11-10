@@ -1,30 +1,26 @@
 const array = require("../lib/array");
-const assert = require("assert");
-const t = require("../lib/transducers");
-const s = require("../lib/seq");
-const n = require("../lib/type");
+const n = require("../lib/index");
+const shared = require("./shared");
 
-function assertEq(a,b){
-	assert.equal(JSON.stringify(a),JSON.stringify(b));
-}
+const assertEq = shared.assertEq;
+const assertThrows = shared.assertThrows;
 
-var x = array.default("a","b","c");
-
-assertEq(array.get(x,1),"a");
-assertEq(array.append(x,"d").toJS(),["a","b","c","d"]);
-assertEq(array.insertBefore(x,2,"d").toJS(),["a","d","b","c"]);
-assertEq(array.remove(x,2).toJS(),["a","c"]);
-assertEq(array.size(x),3);
-assertEq(array.tail(x).toJS(),["b","c"]);
-assertEq(array.head(x),"a");
-assertEq(array.subarray(x,2).toJS(),["b","c"]);
-assertEq(array.subarray(x,2,array.size(x) + 2 - 1).toJS(),["b","c"]);
-assertEq(array.subarray(x,2,1).toJS(),["b"]);
-
-
+var x = array.default(["a","b","c"]);
+assertEq("array.get",array.get(x,1),"a");
+assertEq("array.flatten",array.flatten(x,1),n.seq("a","b","c"));
+assertEq("array.append",array.append(x,"d").concatAll(),n.seq("a","b","c","d"));
+assertEq("array.insertBefore",array.insertBefore(x,2,"d").concatAll(),["a","d","b","c"]);
+assertEq("array.remove",array.remove(x,2).concatAll(),n.seq("a","c"));
+assertEq("array.size",array.size(x),3);
+assertEq("array.tail",array.tail(x).concatAll(),n.seq("b","c"));
+assertEq("array.head",array.head(x),"a");
+assertEq("array.subarray 1",array.subarray(x,2).concatAll(),n.seq("b","c"));
+assertEq("array.subarray 2",array.subarray(x,1,2).concatAll(),n.seq("a","b"));
+assertEq("array.subarray 3", array.subarray(x,2,1).concatAll(),"b");
+assertEq("transform", n.transform(x,
+	n.compose(n.filter(_ => _ != "a"),n.forEach(_ => n.concat(_,".ok")))).concatAll(),n.seq("b.ok","c.ok"));
+assertEq("array.reverse",array.reverse(x).concatAll(),n.seq("c","b","a"));
+assertEq("array.foldLeft",array.foldLeft(x,"x",n.concat),"xabc");
+assertEq("array.join",array.join(n.seq(x,x)).concatAll(),n.seq("a","b","c","a","b","c"));
+assertThrows("not-list",() => array.head("a"));
 console.log("all tests passed");
-
-console.log(t.foldLeft(x,"",(a,b) => a + b));
-console.log(t.transform(x,t.compose(t.filter(_ => _ != "a"),t.forEach(_ => _ + ".ok"))));
-
-//console.log(array.default(n.string("a"),s.seq()));
