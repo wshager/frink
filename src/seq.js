@@ -1,6 +1,6 @@
 import { Observable } from "rxjs/Observable";
 import { error } from "./error";
-import { isObject, isUndef, isUndefOrNull, isUntypedAtomic } from "./util";
+import { isObject, isUndef, isUndefOrNull, isUntypedAtomic, isList, isMap } from "./util";
 import { isVNode } from "./access";
 
 import "rxjs/add/observable/of";
@@ -28,25 +28,41 @@ import "rxjs/add/operator/switchMap";
 
 import { concatMap, filter as rxFilter} from "rxjs/operators";
 
-export const forEach = concatMap;
-export const filter = rxFilter;
-const _wrap = fn => (acc,v) => {
-	return seq(fn(acc,v));
+import { pipe } from "rxjs/util/pipe";
+
+const fromArgs = args => seq(args.map(x => seq(x))).concatAll();
+
+const asArray = $s => $s.reduce((a,x) => {
+	a.push(x);
+	return a;
+},[]);
+
+export function compose(...args){
+	return asArray(fromArgs(args)).map(a => pipe.apply(a,a));
+}
+
+export const forEach = ($s,$fn) => {
+	if(!isUndef($fn)) return seq($fn).concatMap(fn => $s.concatMap(x => seq(fn(x))));
+	return seq($s).map(fn => concatMap(x => seq(fn(x))));
 };
+export const filter = rxFilter;
+const _wrap = fn => (...args) => {
+	return seq(fn.apply(null,args.map(x => seq(x))));
+};
+
 export const foldLeft = (...args) => {
 	const len = args.length;
-	const $s = seq(args[0]).map(s => seq(s));
-	const $fn = exactlyOne(len == 2 ?  args[1] : args[2]);
-	const $seed = len == 2 ? seq() : seq($seed);
-	const _reducer = $seed => $fn.concatMap(fn => seq($s.reduce(_wrap(fn),$seed))).concatAll();
-	return len == 2 ? _reducer(undefined) : _reducer($seed);
+	const $s = seq(args[0]);
+	const $seed = len == 2 ? undefined : seq(args[1]);
+	const $fn = exactlyOne(len == 2 ? args[1] : args[2]);
+	return $fn.concatMap(fn => seq($s.reduce(_wrap(fn),$seed))).concatAll();
 };
 
 export const from = a => Observable.from(a);
 
 export const of = a => Observable.of(a);
 
-export { pipe as compose } from "rxjs/util/pipe";
+export const fromPromise = a => Observable.fromPromise(a);
 
 export { take, skip } from "rxjs/operators";
 
@@ -99,11 +115,11 @@ export function seq(...a){
 		var x = a[0];
 		if(isSeq(x)) return x;
 		if(isUndefOrNull(x)) return Observable.empty();
-		if(isObject(x) && (x instanceof Promise || typeof x.then == "function")) return Observable.fromPromise(x);
-		if(Array.isArray(x) || (x[Symbol.iterator] && typeof x != "string" && !isUntypedAtomic(x) && !isVNode(x))) return Observable.from(x);
-		return Observable.of(x);
+		if(isObject(x) && (x instanceof Promise || typeof x.then == "function")) return fromPromise(x);
+		if(Array.isArray(x) || (x[Symbol.iterator] && typeof x != "string" && !isUntypedAtomic(x) && !isVNode(x) && !isList(x) && !isMap(x))) return from(x);
+		return of(x);
 	}
-	return Observable.from(a).map(a => seq(a)).concatAll();
+	return from(a).map(a => seq(a)).concatAll();
 }
 
 export function create(o){
@@ -138,6 +154,12 @@ export function range($n,$s=0) {
 	return $s.concatMap(s => $n.concatMap(n => Observable.range(s,n)));
 }
 
+export const isZeroOrOne = s => s.isEmpty().merge(s.skip(1).isEmpty()).reduce((a,x) => a || x);
+
+export const isOneOrMore = s => s.isEmpty().map(x => !x);
+
+export const isExactlyOne = s => s.isEmpty().merge(s.skip(1).isEmpty().map(x => !x)).reduce((a,x) => a || x).map(x => !x);
+
 /**
  * [zeroOrOne returns arg OR error if arg not zero or one]
  * @param  {Seq} $arg [Sequence to test]
@@ -145,7 +167,7 @@ export function range($n,$s=0) {
  */
 export function zeroOrOne($arg) {
 	var s = seq($arg);
-	return s.isEmpty().merge(s.skip(1).isEmpty()).reduce((a,x) => a || x).switchMap(isEmptyOrOne => isEmptyOrOne ? s : error("FORG0003"));
+	return isZeroOrOne(s).switchMap(test => test ? s : error("FORG0003"));
 }
 /**
  * [oneOrMore returns arg OR error if arg not one or more]
@@ -154,7 +176,7 @@ export function zeroOrOne($arg) {
  */
 export function oneOrMore($arg) {
 	var s = seq($arg);
-	return s.isEmpty().switchMap(isEmpty => isEmpty ? error("FORG0004") : s);
+	return isOneOrMore(s).switchMap(test => test ? s : error("FORG0004"));
 }
 /**
  * [exactlyOne returns arg OR error if arg not exactly one]
@@ -163,5 +185,20 @@ export function oneOrMore($arg) {
  */
 export function exactlyOne($arg) {
 	var s = seq($arg);
-	return s.isEmpty().merge(s.skip(1).isEmpty().map(x => !x)).reduce((a,x) => a || x).switchMap(isEmptyOrMore => isEmptyOrMore ? error("FORG0005") : s);
+	return isExactlyOne(s).switchMap(test => test ? s : error("FORG0005"));
+}
+
+export function transform($arg, $fn) {
+	var s = seq($arg);
+	return seq($fn).concatMap(fn =>
+		isExactlyOne(s)
+			.switchMap(test => test ?
+				s.concatMap(x => x[Symbol.iterator] ?
+					from(x)
+						.pipe(fn)
+						.reduce((a,x) => a["@@transducer/step"](a,x),x["@@transducer/init"]())
+						.map(x => x["@@transducer/result"](x)) :
+					s.pipe(fn)) :
+				s.pipe(fn)
+			));
 }

@@ -21,6 +21,16 @@ export function isUntypedAtomic(x) {
 	return x instanceof Object && x.constructor.name == "UntypedAtomic";
 }
 
+
+export function isList(maybe) {
+	return maybe && maybe.__is_List;
+}
+
+
+export function isMap(maybe) {
+	return maybe && maybe.__is_Map;
+}
+
 export const isUndef = s => s === undefined;
 
 export const isNull = s => s === null;
