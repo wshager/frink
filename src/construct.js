@@ -1,6 +1,6 @@
 import { isQName } from "./qname";
 
-import { seq, first, isSeq, exactlyOne } from "./seq";
+import { seq, isSeq, exactlyOne } from "./seq";
 
 import { isVNode } from "./access";
 
@@ -84,7 +84,7 @@ export function a(name, value){
 }
 
 export function p(target, content){
-	return _v(7, target+" "+content);
+	return seq(_v(7, target+" "+content));
 }
 
 export function x(value = null) {
