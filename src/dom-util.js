@@ -4,24 +4,25 @@
  */
 
 import { isVNode } from "./access";
-import { isSeq } from "./seq";
-import { forEach, foldLeft } from "./transducers";
+import { seq, isSeq, create, exactlyOne, oneOrMore } from "./seq";
+import { forEach } from "./util";
+import { error } from "./error";
 
-function domify(n){
-	// render
+function domify(){
 }
 
 export function ready() {
-	return new Promise(function(resolve,reject){
-		function completed() {
+	return create(o => {
+		const completed = () => {
 			document.removeEventListener("DOMContentLoaded", completed, false);
 			window.removeEventListener("load", completed, false);
-			resolve();
-		}
+			o.next();
+			o.complete();
+		};
 
 		if (document.readyState === "complete") {
 			// Handle it asynchronously to allow scripts the opportunity to delay ready
-			setTimeout(callback);
+			setTimeout(completed,0);
 
 		} else {
 
@@ -34,70 +35,47 @@ export function ready() {
 	});
 }
 
-export function byId(id, doc = document) {
-	return doc.getElementById(id);
+export function byId($id, $doc = document) {
+	return exactlyOne($id).concatMap(id => exactlyOne($doc).map(doc => doc.getElementById(id)));
 }
 
-export function query(query, doc = document) {
-	return doc.querySelectorAll(query);
+export function query($query, $doc = document) {
+	return exactlyOne($query).concatMap(query => exactlyOne($doc).concatMap(doc => doc.querySelectorAll(query)));
 }
 
-export function on(elm, type, fn, context = document) {
-	if (!elm) {
-		console.error("TypeError: You're trying to bind an event, but the element is null");
-		return;
-	}
-	try {
-		if (elm instanceof NodeList || isSeq(elm)) {
-			var handles = [];
-			forEach(elm, function (_) {
-				handles.push(on(_, type, fn));
-			});
-			return function () {
-				handles.forEach(function (_) {
-					_();
-				});
-			};
+export function on($elm, $type, $fn, $doc = document) {
+	oneOrMore($elm).concatMap(elm => {
+		try {
+			if (typeof elm == "string") {
+				return on(query(elm, $doc), $type, $fn);
+			}
+			if (isVNode(elm)) elm = elm._domNode || domify(elm);
+			return exactlyOne($type).concatMap(type => exactlyOne($fn).map(fn => {
+				elm.addEventListener(type, fn);
+				return () => elm.removeEventListener(type, fn);
+			}));
+		} catch (e) {
+			return error(e);
 		}
-		if (typeof elm == "string") {
-			return on(query(elm, context), type, fn);
+	});
+}
+
+export function click($elm) {
+	return oneOrMore($elm).map(elm => {
+		var clk = elm.onclick || elm.click;
+		if (typeof clk == "function") {
+			clk.apply(elm);
 		}
-		if (isVNode(elm)) elm = elm._domNode || domify(elm);
-		elm.addEventListener(type, fn);
-		return function () {
-			elm.removeEventListener(type, fn);
-		};
-	} catch (e) {
-		console.error(e);
-	}
+		return elm;
+	});
 }
 
-export function click(elm) {
-	if (elm instanceof NodeList) return forEach(elm, click);
-	var clk = elm.onclick || elm.click;
-	if (typeof clk == "function") {
-		clk.apply(elm);
-	}
+export function hasClass($elm, $name) {
+	return oneOrMore($elm).concatMap(elm => exactlyOne($name).map(name => !!elm.className.match(new RegExp("(^|\\s?)" + name + "($|\\s?)", "g"))));
 }
 
-export function hasClass(elm, name) {
-	if (elm instanceof NodeList) {
-		return foldLeft(elm, false, function (pre, _) {
-			return pre || hasClass(_, name);
-		});
-	}
-	return !!elm.className.match(new RegExp("(^|\\s?)" + name + "($|\\s?)", "g"));
-}
-
-export function removeClass(elm, name) {
-	//elm.classList.remove(name);
-	if (elm instanceof NodeList) {
-		forEach(elm, function (_) {
-			removeClass(_, name);
-		});
-	} else {
-		elm.className = elm.className.replace(new RegExp("(^|\\s?)" + name + "($|\\s?)", "g"), "");
-	}
+export function removeClass($elm, $name) {
+	return oneOrMore($elm).concatMap(elm => exactlyOne($name).map(name => elm.className = elm.className.replace(new RegExp("(^|\\s?)" + name + "($|\\s?)", "g"), "")));
 }
 
 export function toggleClass(elm, name, state = null) {
@@ -147,7 +125,6 @@ function place(node, target, position) {
 	}
 	return node;
 }
-
 
 export function elem(name, children = [], ns = null) {
 	var node = document.createElement(name);
