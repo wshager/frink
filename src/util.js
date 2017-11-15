@@ -1,3 +1,5 @@
+import { pcore, parray } from "pico-lambda";
+
 // helpers
 export const toString = Object.prototype.toString;
 export const isArray = typeof Array.isArray === "function" ? Array.isArray : function(obj) {
@@ -57,3 +59,8 @@ export function ucs2length(string) {
 	}
 	return counter;
 }
+
+export const pipe = pcore.pipe;
+export const forEach = parray.map;
+export const slice = parray.slice;
+export const foldLeft = parray.reduce;
