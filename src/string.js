@@ -146,7 +146,7 @@ export function stringJoin($seq,$sep) {
 }
 
 export function concat(... args){
-	return stringJoin(seq(args).concatMap(a => string(a)));
+	return stringJoin(seq(args));
 }
 
 export function normalizeUnicode($str,$form) {
