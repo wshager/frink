@@ -150,11 +150,11 @@ const emptyUntypedAtomic = () => new UntypedAtomic("");
 // TODO create from Type classes
 export function decimal($a) {
 	// type test
-	return seq($a).map(a => cast(a, Decimal, zeroInt));
+	return seq($a).concatMap(a => cast(a, Decimal, zeroInt));
 }
 
 export function integer($a) {
-	return seq($a).map(a => cast(Math.floor(a), Integer, zeroInt));
+	return seq($a).concatMap(a => cast(Math.floor(a), Integer, zeroInt));
 }
 
 export function string($a, card = zeroOrOne) {
@@ -170,14 +170,14 @@ export function number($a) {
 	// type test
 	const cc = Number;
 	if(isUndef($a)) return seq(cc);
-	return zeroOrOne($a).map(a => cast(a, cc, zero));
+	return zeroOrOne($a).concatMap(a => cast(a, cc, zero));
 }
 
 export function float($a) {
 	// type test
 	const cc = Number;
 	if(isUndef($a)) return seq(cc);
-	return zeroOrOne($a).map(a => cast(a, cc, zero));
+	return zeroOrOne($a).concatMap(a => cast(a, cc, zero));
 }
 
 export const double = number;
