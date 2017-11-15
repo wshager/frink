@@ -3,7 +3,7 @@ import { VNode } from "./vnode";
 
 //import { q } from "./qname";
 
-import { filter, take, compose, into } from "./transducers";
+import { filter, slice, pipe } from "./util";
 
 // import self!
 import * as cx from "./dom";
@@ -183,7 +183,7 @@ export function getAttribute(inode,key){
 
 export function count(inode, type){
 	if(type == 1 || type == 9 || type == 11){
-		return into(inode.childNodes,filter(ignoreWS),[]).length;
+		return pipe(filter(ignoreWS)).length;
 	}
 	// TODO l3
 	return 0;
@@ -191,7 +191,7 @@ export function count(inode, type){
 
 export function first(inode,type){
 	if(type == 1 || type == 9 || type == 11){
-		return into(inode.childNodes,compose(filter(ignoreWS),take(1)),[])[0];
+		return pipe(filter(ignoreWS),slice(0,1))(inode.childNodes)[0];
 	}
 }
 
