@@ -261,7 +261,6 @@ function _nodeTest(typeTest,qnameOrKey) {
 				return typeTest(n);
 			};
 		} else {
-			//return _seq.seq(_get(qname, 1), _transducers.filter(_isElement));
 			f = n => {
 				let isTuple = n.parent.type == 6;
 				if(isTuple || n.name) {
