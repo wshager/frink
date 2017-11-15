@@ -2,13 +2,13 @@ import * as ohamt from "ohamt";
 
 import * as rrb from "rrb-vector";
 
-import { VNode } from './vnode';
+import { VNode } from "./vnode";
 
-import { q } from './qname';
+import { q } from "./qname";
 
 import { prettyXML } from "./pretty";
 
-import { forEach, into } from "./transducers";
+import { forEach, pipe } from "./util";
 
 // import self!
 import * as cx from "./persist";
@@ -43,7 +43,7 @@ Value.prototype.size = 0;
 
 Value.prototype.toString = function(root = true, json = false) {
 	var str = this._value + "";
-	if(this._type == 3 && json) return '"'+str+'"';
+	if(this._type == 3 && json) return "\""+str+"\"";
 	return str;
 };
 
@@ -91,7 +91,7 @@ OrderedMap.prototype.toString = function(root = true, json = false){
 		str += this.toString();
 	} else  if(type == 6){
 		str += "{";
-		str += into(this,forEach(objFunc),[]).join(",");
+		str += pipe(forEach(objFunc),this).join(",");
 		str += "}";
 	} else if(type==9){
 		str = this.$attrs.reduce(docAttrFunc,str);
@@ -127,12 +127,12 @@ export function vnode(inode, parent, depth, indexInParent){
 }
 
 export function emptyINode(type, name, attrs, ns) {
-    var inode = type == 5 ? rrb.empty.beginMutation() : ohamt.make().beginMutation();
-    inode._type = type;
-    inode._name = name;
-    inode.$attrs = attrs;
+	var inode = type == 5 ? rrb.empty.beginMutation() : ohamt.make().beginMutation();
+	inode._type = type;
+	inode._name = name;
+	inode.$attrs = attrs;
 	inode._ns = ns;
-    return inode;
+	return inode;
 }
 
 export function emptyAttrMap(init){
