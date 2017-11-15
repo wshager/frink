@@ -60,6 +60,15 @@ export function ucs2length(string) {
 	return counter;
 }
 
+export function range(n) {
+	var arr = new Array(n);
+	for(var i=0; i<arr.length;) {
+		arr[i] = ++i;
+	}
+	return arr;
+}
+
+
 export const pipe = pcore.pipe;
 export const forEach = parray.map;
 export const slice = parray.slice;
