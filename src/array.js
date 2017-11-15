@@ -49,7 +49,7 @@ export default function array(...a) {
 	}
 	if(l==1){
 		const s = a[0];
-		if (isSeq(s)) return s;
+		if (isSeq(s)) return join(s);
 		if (isList(s)) return of(s);
 		if (isArray(s)) return of(rrb.fromArray(s));
 		// TODO VNode conversion
