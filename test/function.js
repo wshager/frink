@@ -13,12 +13,7 @@ const toObj = $m => $m.reduce((a,m) => {
 	return a;
 },{});
 
-var e = n.e("test",n.seq(n.a("a","bla"),n.p("b","bli")));
-n.ensureDoc(e).subscribe(x => console.log(x+""));
-var m = n.m([
-	n.a("x",
-		n.l([n.x("bla"),n.x("bli")])
-	),
-	n.a("y",n.l())
-]);
-n.ensureDoc(m).subscribe(x => console.log(x+""));
+assertEq("apply",n.apply((x,y) => x + y, a.default(1,2)),3);
+assertEq("sort",n.sort(n.seq(3,2,1)),n.seq(1,2,3));
+assertEq("loadModule",toObj(n.loadModule("http://www.w3.org/2005/xpath-functions")),fn);
+console.log("all tests passed");

@@ -13,6 +13,8 @@ assertEq("stringJoin",n.stringJoin(
 	])
 ),n.seq("blabli"));
 
+assertEq("concat",n.concat("a","b","c"),"abc");
+
 assertEq("stringJoin",n.stringJoin(n.seq("a","b","c"),","),"a,b,c");
 
 assertEq("stringToCodepoints",n.stringToCodepoints("abc"),n.seq(97,98,99));

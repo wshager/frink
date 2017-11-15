@@ -1,20 +1,11 @@
 const map = require("../lib/map");
 const n = require("../lib/index");
-const assert = require("assert");
-const t = require("../lib/transducers");
+const shared = require("./shared");
 
-function assertEq(a,b){
-	assert.equal(JSON.stringify(toJS(a)),JSON.stringify(b));
-}
+const assertEq = shared.assertEq;
+const assertThrows = shared.assertThrows;
 
-function toJS(m){
-	if(!map.isMap(m)) return m;
-	var o = {};
-	m.forEach(function(v,k){
-		o[k] = v;
-	});
-	return o;
-}
+var x = map.default(map.default({"a":1}));
 
 const operatorMap = map.default(n.seq(
 	map.entry(n.decimal(2.06), n.string("iff")),
@@ -40,27 +31,47 @@ const operatorMap = map.default(n.seq(
 	map.entry(n.decimal(10.02), n.string("union")),
 	map.entry(n.decimal(17.01), n.string("plus")),
 	map.entry(n.decimal(17.02), n.string("minus")),
-	map.entry(n.integer(18), n.string("for-each")),
+	map.entry(n.decimal(18), n.string("for-each")),
 	map.entry(n.decimal(19.01), n.string("select")),
 	map.entry(n.decimal(20.01), n.string("filter")),
 	map.entry(n.decimal(20.03), n.string("lookup")),
 	map.entry(n.decimal(20.04), n.string("array")),
 	map.entry(n.decimal(27.01), n.string("pair"))
 ));
+//x = map.merge(n.seq(x,map.entry("b",2)));
+var ar = [];
+
+for(let n=0;n<2600;n++){
+	//var k = String.fromCharCode(n+97);
+	var k = "";
+	for(var i=0;i<6+Math.random() * 10;i++){
+		k += String.fromCharCode(Math.floor(Math.random() * 26) + 97);
+	}
+	if(ar.indexOf(k)==-1) {
+		ar.push(k);
+	} else {
+		n--;
+	}
+	k = "";
+}
+
+const toObj = $m => $m.reduce((a,m) => {
+	for(var kv of m.entries()) {
+		a[kv[0]] = kv[1];
+	}
+	return a;
+},{});
 
 var m = map.default(map.entry("a",1),map.entry("b",2));
-assertEq(map.get(m,"b"),2);
-assertEq(map.put(m,"c",3),{"a":1,"b":2,"c":3});
-assertEq(map.forEachEntry(m,(k,v) => n.seq(k,v)).toArray(),["a",1,"b",2]);
-assertEq(map.keys(m).toArray(),["a","b"]);
+assertEq("map.get",map.get(m,"b"),2);
+assertEq("map.put",toObj(map.put(m,"c",3)),{"a":1,"b":2,"c":3});
+assertEq("map.put 2",toObj(map.put(m,"a",2)),{"a":2,"b":2});
+assertEq("map.remove",toObj(map.remove(m,"a")),{"b":2});
+assertEq("map.forEachEntry",map.forEachEntry(m,($k,$v) => n.concat($k,n.string($v))),n.seq("a1","b2"));
+assertEq("map.keys",map.keys(m),n.seq("a","b"));
 var m1 = map.default(map.entry("c",3),map.entry("d",4));
-assertEq(map.merge(n.seq(m,m1)),{"a":1,"b":2,"c":3,"d":4});
-
+assertEq("map.merge",toObj(map.merge(n.seq(m,m1))),{"a":1,"b":2,"c":3,"d":4});
 var m2 = map.default(map.entry("a",1),map.entry("a",2));
-assertEq(m2,{"a":2});
+assertEq("map.merge 2",toObj(m2),{"a":2});
 
 console.log("all tests passed");
-
-//console.log(map.keys(operatorMap).toArray());
-
-console.log(map.get(operatorMap,n.decimal(8.01)))

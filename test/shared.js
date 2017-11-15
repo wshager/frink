@@ -4,7 +4,7 @@ const n = require("../lib/index");
 require("rxjs/add/operator/zip");
 
 exports.assertEq = function assertEq(name,$a,$b){
-	$a.zip(n.seq($b)).subscribe(ab => {
+	n.seq($a).zip(n.seq($b)).subscribe(ab => {
 		let [a,b] = ab;
 		a = JSON.stringify(a);
 		b = JSON.stringify(b);
