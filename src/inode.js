@@ -4,7 +4,7 @@ import { VNode } from "./vnode";
 
 import { prettyXML } from "./pretty";
 
-import { forEach, foldLeft, range } from "./transducers";
+import { forEach, foldLeft, range } from "./util";
 
 import * as multimap from "./multimap";
 
@@ -229,7 +229,7 @@ export function cached(inode,type){
 	if(type == 5) {
 		return {
 			keys : function(){
-				return range(inode.length).toArray();
+				return range(inode.length);
 			}
 		};
 	}
