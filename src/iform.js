@@ -1,6 +1,6 @@
 import { VNode } from "./vnode";
 
-import { forEach } from "./transducers";
+import { forEach } from "./util";
 
 import * as cx from "./iform";
 
