@@ -284,9 +284,9 @@ export function list(keyOrIndex) {
 	return _nodeTest(_isList,keyOrIndex);
 }
 
-/*export function map() {
+export function map() {
 	return _nodeTest(_isMap);
-}*/
+}
 
 export function processingInstruction() {
 	return _nodeTest(_isPI);
