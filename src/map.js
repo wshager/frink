@@ -16,15 +16,15 @@ OrderedMap.prototype.__is_Map = true;
 
 OrderedMap.prototype._type = 6;
 
-OrderedMap.prototype["@@transducers/init"] = function(){
+OrderedMap.prototype["@@transducer/init"] = function(){
 	return ohamt.empty;
 };
 
-OrderedMap.prototype["@@transducers/step"] = function(m,kv) {
+OrderedMap.prototype["@@transducer/step"] = function(m,kv) {
 	return m.append(kv[0],kv[1]);
 };
 
-OrderedMap.prototype["@@transducers/result"] = function(m) {
+OrderedMap.prototype["@@transducer/result"] = function(m) {
 	return m;
 };
 
