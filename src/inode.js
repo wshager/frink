@@ -251,7 +251,7 @@ export function keys(inode,type){
 		}
 		return keys;
 	}
-	if(type == 5) return range(inode.length).toArray();
+	if(type == 5) return range(inode.length);
 	if(type == 6) return Object.keys(inode);
 	return [];
 }
