@@ -366,7 +366,9 @@ export function stringify(inode, type, json = false, root = true) {
 		}).join("");
 		str += "<l3:m" + (_val ? ">" + _val + "</l3:m>" : "/>");
 	} else {
-		if (type == 8) {
+		if (type == 7) {
+			str += "<?" + inode.$pi + "?>";
+		} else if (type == 8) {
 			str += "<!--" + inode.$comment + "-->";
 		} else {
 			var _val2 = inode === null ? "null" : inode;
