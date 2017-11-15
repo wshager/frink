@@ -10,6 +10,7 @@ import "rxjs/add/observable/range";
 import "rxjs/add/observable/empty";
 import "rxjs/add/observable/throw";
 
+import "rxjs/add/operator/toArray";
 import "rxjs/add/operator/isEmpty";
 import "rxjs/add/operator/take";
 import "rxjs/add/operator/skip";
@@ -25,20 +26,16 @@ import "rxjs/add/operator/concatMap";
 import "rxjs/add/operator/concatAll";
 import "rxjs/add/operator/switch";
 import "rxjs/add/operator/switchMap";
+import "rxjs/add/operator/zip";
 
 import { concatMap, filter as rxFilter} from "rxjs/operators";
 
 import { pipe } from "rxjs/util/pipe";
 
-const fromArgs = args => seq(args.map(x => seq(x))).concatAll();
-
-const asArray = $s => $s.reduce((a,x) => {
-	a.push(x);
-	return a;
-},[]);
+export const fromArgs = args => seq(args.map(x => seq(x))).concatAll();
 
 export function compose(...args){
-	return asArray(fromArgs(args)).map(a => pipe.apply(a,a));
+	return fromArgs(args).toArray().map(a => pipe.apply(a,a));
 }
 
 export const forEach = ($s,$fn) => {
