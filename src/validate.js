@@ -1,8 +1,10 @@
+import { exactlyOne } from "./seq";
+
 import { ensureDoc } from "./doc";
 
 import { nextNode } from "./access";
 
-import { forEach, foldLeft, into } from "./transducers";
+import { forEach, foldLeft, pipe } from "./util";
 
 import { ucs2length } from "./util";
 
@@ -33,18 +35,12 @@ function _formNodeToSchema(node){
 		}
 	}
 	if(inode.type == "select-one"){
-		s.enum = into(inode.options,forEach(o => o.value),[]);
+		s.enum = pipe(forEach(o => o.value))(inode.options);
 	}
 	return s;
 }
 
-/**
- * Validate a doc against a schema
- * @param {INode|VNode} doc The doc or VNode to validate
- * @param {any} schema A JSON schema with XML extension
- * @return {VNode} A document containing errors
- */
-export function validate(node, schema, params = {}) {
+function _validate(node,schema,params) {
 	node = node.inode ? node : ensureDoc.bind(this)(node);
 	var depth = node.depth,
 		entries = [],
@@ -93,6 +89,17 @@ export function validate(node, schema, params = {}) {
 		}
 	}
 	return err;
+}
+/**
+ * Validate a doc against a schema
+ * @param {INode|VNode} doc The doc or VNode to validate
+ * @param {any} schema A JSON schema with XML extension
+ * @return {VNode} A document containing errors
+ */
+export function validate($node, $schema, params = {}) {
+	$node = exactlyOne($node);
+	$node = ensureDoc.bind(this)($node);
+	return $node.concatMap(node => exactlyOne($schema).concatMap(schema => _validate(node,schema,params)));
 }
 
 
@@ -303,8 +310,8 @@ const validator = {
 		// this function will be passed to the children matching key + schema
 		// when applied, the function uses the matching prop and updated path
 		var props = schema[key];
-		schema = get(props, node.name);
-		if (schema) return validation(schema, params, node.name, path + "/" + index, err);
+		schema = get(props, node.key);
+		if (schema) return validation(schema, params, node.key, path + "/" + index, err);
 	},
 	patternProperties: function(schema, key, params, index, path, err, node){
 		var pattProps = get(schema, key);
