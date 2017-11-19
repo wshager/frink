@@ -1,5 +1,3 @@
-import { pcore, parray } from "pico-lambda";
-
 // helpers
 export const toString = Object.prototype.toString;
 export const isArray = typeof Array.isArray === "function" ? Array.isArray : function(obj) {
@@ -17,6 +15,10 @@ export function isObject(x) {
 
 export function isNumber(x) {
 	return typeof x === "number";
+}
+
+export function isDOMNode(x) {
+	return x && x instanceof Node;
 }
 
 export function isUntypedAtomic(x) {
@@ -67,9 +69,3 @@ export function range(n) {
 	}
 	return arr;
 }
-
-
-export const pipe = pcore.pipe;
-export const forEach = parray.map;
-export const slice = parray.slice;
-export const foldLeft = parray.reduce;
