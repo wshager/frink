@@ -1,6 +1,6 @@
 import { Observable } from "rxjs/Observable";
 import { error } from "./error";
-import { isObject, isUndef, isUndefOrNull, isUntypedAtomic, isList, isMap } from "./util";
+import { isObject, isDOMNode, isUndef, isUndefOrNull, isUntypedAtomic, isList, isMap } from "./util";
 import { isVNode } from "./access";
 
 import "rxjs/add/observable/of";
@@ -39,7 +39,7 @@ export function compose(...args){
 }
 
 export const forEach = ($s,$fn) => {
-	if(!isUndef($fn)) return seq($fn).concatMap(fn => $s.concatMap(x => seq(fn(x))));
+	if(!isUndef($fn)) return seq($fn).concatMap(fn => seq($s).concatMap(x => seq(fn(x))));
 	return seq($s).map(fn => concatMap(x => seq(fn(x))));
 };
 export const filter = rxFilter;
@@ -113,7 +113,7 @@ export function seq(...a){
 		if(isSeq(x)) return x;
 		if(isUndefOrNull(x)) return Observable.empty();
 		if(isObject(x) && (x instanceof Promise || typeof x.then == "function")) return fromPromise(x);
-		if(Array.isArray(x) || (x[Symbol.iterator] && typeof x != "string" && !isUntypedAtomic(x) && !isVNode(x) && !isList(x) && !isMap(x))) return from(x);
+		if(Array.isArray(x) || (x[Symbol.iterator] && typeof x != "string" && !isDOMNode(x) && !isUntypedAtomic(x) && !isVNode(x) && !isList(x) && !isMap(x))) return from(x);
 		return of(x);
 	}
 	return from(a).map(a => seq(a)).concatAll();
