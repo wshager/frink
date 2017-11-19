@@ -7,6 +7,7 @@ export function error(qname,message){
 	var code = typeof qname == "string" ? qname.replace(/^[^:]*:/,"") : qname;//.getLocalPart();
 	if(!message) message = codes[code];
 	var err = new Error(message);
+	console.trace();
 	err.name = code;
 	return Observable.throw(err);
 }
