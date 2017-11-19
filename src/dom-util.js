@@ -4,8 +4,8 @@
  */
 
 import { isVNode } from "./access";
-import { seq, isSeq, create, exactlyOne, oneOrMore } from "./seq";
-import { forEach } from "./util";
+import { create, exactlyOne, oneOrMore } from "./seq";
+import { fromEvent } from "rxjs/observable/fromEvent";
 import { error } from "./error";
 
 function domify(){
@@ -43,20 +43,13 @@ export function query($query, $doc = document) {
 	return exactlyOne($query).concatMap(query => exactlyOne($doc).concatMap(doc => doc.querySelectorAll(query)));
 }
 
-export function on($elm, $type, $fn, $doc = document) {
-	oneOrMore($elm).concatMap(elm => {
-		try {
-			if (typeof elm == "string") {
-				return on(query(elm, $doc), $type, $fn);
-			}
-			if (isVNode(elm)) elm = elm._domNode || domify(elm);
-			return exactlyOne($type).concatMap(type => exactlyOne($fn).map(fn => {
-				elm.addEventListener(type, fn);
-				return () => elm.removeEventListener(type, fn);
-			}));
-		} catch (e) {
-			return error(e);
+export function on($elm, $type, $doc = document) {
+	return oneOrMore($elm).concatMap(elm => {
+		if (typeof elm == "string") {
+			return on(query(elm, $doc), $type);
 		}
+		if (isVNode(elm)) elm = elm._domNode || domify(elm);
+		return exactlyOne($type).concatMap(type => fromEvent(elm,type));
 	});
 }
 
@@ -75,8 +68,17 @@ export function hasClass($elm, $name) {
 }
 
 export function removeClass($elm, $name) {
-	return oneOrMore($elm).concatMap(elm => exactlyOne($name).map(name => elm.className = elm.className.replace(new RegExp("(^|\\s?)" + name + "($|\\s?)", "g"), "")));
+	return oneOrMore($elm).concatMap(elm => oneOrMore($name).map(name => elm.className = elm.className.replace(new RegExp("(^|\\s?)" + name + "($|\\s?)", "g"), "")));
 }
+
+export function removeAttr($elm, $name) {
+	return oneOrMore($elm).concatMap(elm =>
+		oneOrMore($name).map(name => {
+			elm.removeAttribute(name);
+			return elm;
+		}));
+}
+/*
 
 export function toggleClass(elm, name, state = null) {
 	var hasc = hasClass(elm, name);
@@ -84,16 +86,6 @@ export function toggleClass(elm, name, state = null) {
 		removeClass(elm, name);
 	} else if (!hasc) {
 		elm.className += " " + name;
-	}
-}
-
-export function removeAttr(elm, name) {
-	if (elm instanceof NodeList) {
-		forEach(elm,function (_) {
-			_.removeAttribute(name);
-		});
-	} else {
-		elm.removeAttribute(name);
 	}
 }
 
@@ -172,7 +164,7 @@ export function placeAfter(node, target) {
 export function placeBefore(node, target) {
 	return place(node, target, 3);
 }
-
+*/
 /**
  * Match a DOM Node to a selector, or, if it doesn't match,
  * try matching up the ancestor tree
