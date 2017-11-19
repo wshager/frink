@@ -23,3 +23,5 @@ export const validate = va.validate.bind(inode);
 export const process = fu.process.bind(inode);
 
 export * from "../dom-util";
+
+export * from "../seq";
