@@ -1,10 +1,8 @@
-import { exactlyOne } from "./seq";
+import { exactlyOne, zeroOrOne } from "./seq";
 
 import { ensureDoc } from "./doc";
 
-import { nextNode } from "./access";
-
-import { forEach, foldLeft, pipe } from "./util";
+import { parent, nextNode } from "./access";
 
 import { ucs2length } from "./util";
 
@@ -23,6 +21,20 @@ function _formAttrNameToKey(k){
 	return k;
 }
 
+function _inferTypeFromFormat(format) {
+	switch (format) {
+	case "hidden":
+	case "radio":
+	case "submit":
+	case "text":
+		return "string";
+	case "checkbox":
+		return "boolean";
+	case "number":
+		return "integer";
+	}
+}
+
 function _formNodeToSchema(node){
 	var inode = node.inode;
 	var attrs = inode.attributes;
@@ -34,8 +46,13 @@ function _formNodeToSchema(node){
 			s[k] = a.value;
 		}
 	}
+	let type = _inferTypeFromFormat(s.format);
+	if(type) {
+		s.type == type;
+		delete s.format;
+	}
 	if(inode.type == "select-one"){
-		s.enum = pipe(forEach(o => o.value))(inode.options);
+		s.enum = [...inode.options].map(o => o.value);
 	}
 	return s;
 }
@@ -47,10 +64,10 @@ function _validate(node,schema,params) {
 		err = [],
 		index = "#",
 		path = "";
-	if(params.form){
+	if(params.form) {
 		index = node.name;
-		path = node.parent ? node.parent.name : path;
-		schema = node.schema = _formNodeToSchema(node);
+		path = node.parent ? node.parent.name : index;
+		node.schema = schema;
 	}
 	var entry = validation(schema, params, index, path, err);
 	entry[0].call(null, node);
@@ -99,7 +116,11 @@ function _validate(node,schema,params) {
 export function validate($node, $schema, params = {}) {
 	$node = exactlyOne($node);
 	$node = ensureDoc.bind(this)($node);
-	return $node.concatMap(node => exactlyOne($schema).concatMap(schema => _validate(node,schema,params)));
+	if(params.form){
+		return parent($node).concatMap(node => _validate(node,_formNodeToSchema(node),params));
+	}
+
+	return $node.concatMap(node => zeroOrOne($schema).concatMap(schema => _validate(node,schema,params)));
 }
 
 
@@ -283,7 +304,7 @@ const validator = {
 		var type = schema[key];
 		var ret;
 		if(type instanceof Array){
-			ret = foldLeft(forEach(type, t => types[t](node)),false,(r,z) => r || z);
+			ret = type.map(type, t => types[t](node)).reduce((r,z) => r || z,false);
 		} else {
 			ret = types[type](node);
 		}
