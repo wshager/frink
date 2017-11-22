@@ -69,3 +69,14 @@ export function range(n) {
 	}
 	return arr;
 }
+
+// Only Node.JS has a process variable that is of [[Class]] process
+export const isNodeEnv = () => {
+	let isNode = false;
+	try {
+		isNode = Object.prototype.toString.call(global.process) === "[object process]";
+	} catch(e) {
+		isNode = false;
+	}
+	return isNode;
+};
