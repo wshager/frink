@@ -27,6 +27,7 @@ import "rxjs/add/operator/concatAll";
 import "rxjs/add/operator/switch";
 import "rxjs/add/operator/switchMap";
 import "rxjs/add/operator/zip";
+import "rxjs/add/operator/share";
 
 import { concatMap, filter as rxFilter} from "rxjs/operators";
 
