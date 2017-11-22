@@ -18,7 +18,7 @@ export function isNumber(x) {
 }
 
 export function isDOMNode(x) {
-	return x && x instanceof Node;
+	return !isNodeEnv && x && x instanceof Node;
 }
 
 export function isUntypedAtomic(x) {
@@ -70,8 +70,7 @@ export function range(n) {
 	return arr;
 }
 
-// Only Node.JS has a process variable that is of [[Class]] process
-export const isNodeEnv = () => {
+const _isNode = () => {
 	let isNode = false;
 	try {
 		isNode = Object.prototype.toString.call(global.process) === "[object process]";
@@ -80,3 +79,5 @@ export const isNodeEnv = () => {
 	}
 	return isNode;
 };
+// Only Node.JS has a process variable that is of [[Class]] process
+export const isNodeEnv = _isNode();
