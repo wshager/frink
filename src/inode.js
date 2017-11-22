@@ -4,7 +4,7 @@ import { VNode } from "./vnode";
 
 import { prettyXML } from "./pretty";
 
-import { forEach, foldLeft, range } from "./util";
+import { range } from "./util";
 
 import * as multimap from "./multimap";
 
@@ -73,7 +73,7 @@ function _elemToString(e){
 	let str = "<"+e.$name;
 	let ns = e.$ns;
 	if(ns) str += " xmlns" + (ns.prefix ? ":" + ns.prefix : "") + "=\"" + ns.uri + "\"";
-	str = foldLeft(Object.entries(e.$attrs),str,attrFunc);
+	str = Object.entries(e.$attrs).reduce(attrFunc,str);
 	if(e.$children.length > 0){
 		str += ">";
 		for(let c of e.$children){
@@ -356,12 +356,12 @@ export function stringify(inode, type, json = false, root = true) {
 	} else if(type == 2) {
 		str += "<l3:a name=\""+inode.$key+"\">"+inode.$value+"</l3:a>";
 	} else if (type == 5) {
-		var val = forEach(inode, function (c) {
+		var val = inode.map(function (c) {
 			return stringify(c, 0, true, false);
 		}).join("");
 		str += "<l3:l" + (val ? ">" + val + "</l3:l>" : "/>");
 	} else if (type == 6) {
-		var _val = forEach(Object.entries(inode), function (c) {
+		var _val = Object.entries(inode).map(function (c) {
 			return stringify({$key:c[0], $value:stringify(c[1], 0, true, false)}, 2, json, false);
 		}).join("");
 		str += "<l3:m" + (_val ? ">" + _val + "</l3:m>" : "/>");
