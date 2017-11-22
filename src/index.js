@@ -8,7 +8,7 @@ import { readdir, readFile } from "./fs";
 
 import { isNodeEnv } from "./util";
 
-if(isNodeEnv() && !global.URL) {
+if(isNodeEnv && !global.URL) {
 	let url = require("url");
 	global.URL = url.URL;
 }
@@ -32,7 +32,7 @@ export function doc($file){
 	return zeroOrOne($file).concatMap(file => create(o => {
 		readFile(file.toString(),(err, res) => {
 			if(err) return o.error(err);
-			parse(res).subscribe({
+			parse(res.toString()).subscribe({
 				next:x => o.next(x),
 				error: err => o.error(err),
 				complete: () => o.complete()
