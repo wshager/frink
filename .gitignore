@@ -1,3 +1,4 @@
 .jshintrc
 node_modules
+lib/layers
 tests

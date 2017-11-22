@@ -1,40 +1,44 @@
 import * as inode from "./inode";
 
-import { seq, create, exactlyOne, zeroOrOne } from "./seq";
+import { zeroOrOne, create } from "./seq";
 
 import { Parser } from "./parser";
 
-// TODO move to better location
-// TODO update when loader spec is solid
-// TODO add easy access to a xhr / db module
-import { readFile, readdir } from "fs";
+import { readdir, readFile } from "./fs";
+
+import { isNodeEnv } from "./util";
+
+if(isNodeEnv && !global.URL) {
+	let url = require("url");
+	global.URL = url.URL;
+}
 
 export function parseString(str, cb) {
 	var parser = new Parser(inode);
 	return parser.parseString(str, cb);
 }
 
-export function parse($a){
-	return zeroOrOne($a).concatMap(a => create(o => {
-		parseString(a,function(err,ret){
+export function parse($s){
+	return zeroOrOne($s).concatMap(s => create(o => {
+		parseString(s,function(err,ret){
 			if(err) return o.error(err);
 			o.next(ret);
 			o.complete();
 		});
-	}));
+	})).share();
 }
 
 export function doc($file){
 	return zeroOrOne($file).concatMap(file => create(o => {
-		readFile(file.toString(),"utf-8",function(err,res){
+		readFile(file.toString(),(err, res) => {
 			if(err) return o.error(err);
 			parse(res.toString()).subscribe({
-				error: err => o.error(err),
 				next:x => o.next(x),
-				complete:() => o.complete()
+				error: err => o.error(err),
+				complete: () => o.complete()
 			});
 		});
-	}));
+	})).share();
 }
 
 export function collection($uri) {
@@ -43,13 +47,13 @@ export function collection($uri) {
 			if(err) return o.error(err);
 			res.forEach(file => {
 				doc(uri+"/"+file).subscribe({
-					error:err => o.error(err),
-					next:x => o.next(x)
+					next: x => o.next(x),
+					error: err => o.error(err)
 				});
 			});
 			o.complete();
 		});
-	}));
+	})).share();
 }
 
 export * from "./doc";
@@ -79,5 +83,3 @@ export * from "./function";
 export * from "./op";
 
 export * from "./validate";
-
-//export { array, map};

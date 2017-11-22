@@ -27,6 +27,7 @@ import "rxjs/add/operator/concatAll";
 import "rxjs/add/operator/switch";
 import "rxjs/add/operator/switchMap";
 import "rxjs/add/operator/zip";
+import "rxjs/add/operator/share";
 
 import { concatMap, filter as rxFilter} from "rxjs/operators";
 
@@ -151,7 +152,7 @@ export function range($n,$s=0) {
 	return $s.concatMap(s => $n.concatMap(n => Observable.range(s,n)));
 }
 
-export const isZeroOrOne = s => s.isEmpty().merge(s.skip(1).isEmpty()).reduce((a,x) => a || x);
+export const isZeroOrOne = s => s.isEmpty().map(x => !x).merge(s.skip(1).isEmpty()).reduce((a,x) => a || x);
 
 export const isOneOrMore = s => s.isEmpty().map(x => !x);
 
