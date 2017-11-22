@@ -1,41 +1,59 @@
 import * as inode from "./inode";
 
-import { seq, first } from "./seq";
+import { zeroOrOne, create } from "./seq";
 
 import { Parser } from "./parser";
 
-import * as array from "./array";
+import { readdir, readFile } from "./fs";
 
-import * as map from "./map";
+import { isNodeEnv } from "./util";
 
-// TODO move to better location
-// TODO update when loader spec is solid
-// TODO add easy access to a xhr / db module
-import { readFileSync, readdirSync } from "fs";
+if(isNodeEnv() && !global.URL) {
+	let url = require("url");
+	global.URL = url.URL;
+}
 
 export function parseString(str, cb) {
 	var parser = new Parser(inode);
 	return parser.parseString(str, cb);
 }
 
-export function parse($a){
-	var xml = first($a);
-	var result;
-	parseString(xml,function(err,ret){
-		if(err) console.log(err);
-		result = ret;
-	});
-	return result;
+export function parse($s){
+	return zeroOrOne($s).concatMap(s => create(o => {
+		parseString(s,function(err,ret){
+			if(err) return o.error(err);
+			o.next(ret);
+			o.complete();
+		});
+	})).share();
 }
 
 export function doc($file){
-	var file = first($file);
-	return parse(readFileSync(file.toString(),"utf-8"));
+	return zeroOrOne($file).concatMap(file => create(o => {
+		readFile(file.toString(),(err, res) => {
+			if(err) return o.error(err);
+			parse(res).subscribe({
+				next:x => o.next(x),
+				error: err => o.error(err),
+				complete: () => o.complete()
+			});
+		});
+	})).share();
 }
 
 export function collection($uri) {
-	var uri = first($uri);
-	return seq(readdirSync(uri).map(file => doc(uri+"/"+file)));
+	return zeroOrOne($uri).concatMap(uri => create(o => {
+		readdir(uri,function(err,res){
+			if(err) return o.error(err);
+			res.forEach(file => {
+				doc(uri+"/"+file).subscribe({
+					next: x => o.next(x),
+					error: err => o.error(err)
+				});
+			});
+			o.complete();
+		});
+	})).share();
 }
 
 export * from "./doc";
@@ -65,5 +83,3 @@ export * from "./function";
 export * from "./op";
 
 export * from "./validate";
-
-//export { array, map};
