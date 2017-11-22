@@ -1,17 +1,13 @@
 import * as inode from "./inode";
 
-import { seq, first } from "./seq";
+import { seq, create, exactlyOne, zeroOrOne } from "./seq";
 
 import { Parser } from "./parser";
-
-import * as array from "./array";
-
-import * as map from "./map";
 
 // TODO move to better location
 // TODO update when loader spec is solid
 // TODO add easy access to a xhr / db module
-import { readFileSync, readdirSync } from "fs";
+import { readFile, readdir } from "fs";
 
 export function parseString(str, cb) {
 	var parser = new Parser(inode);
@@ -19,23 +15,41 @@ export function parseString(str, cb) {
 }
 
 export function parse($a){
-	var xml = first($a);
-	var result;
-	parseString(xml,function(err,ret){
-		if(err) console.log(err);
-		result = ret;
-	});
-	return result;
+	return zeroOrOne($a).concatMap(a => create(o => {
+		parseString(a,function(err,ret){
+			if(err) return o.error(err);
+			o.next(ret);
+			o.complete();
+		});
+	}));
 }
 
 export function doc($file){
-	var file = first($file);
-	return parse(readFileSync(file.toString(),"utf-8"));
+	return zeroOrOne($file).concatMap(file => create(o => {
+		readFile(file.toString(),"utf-8",function(err,res){
+			if(err) return o.error(err);
+			parse(res.toString()).subscribe({
+				error: err => o.error(err),
+				next:x => o.next(x),
+				complete:() => o.complete()
+			});
+		});
+	}));
 }
 
 export function collection($uri) {
-	var uri = first($uri);
-	return seq(readdirSync(uri).map(file => doc(uri+"/"+file)));
+	return zeroOrOne($uri).concatMap(uri => create(o => {
+		readdir(uri,function(err,res){
+			if(err) return o.error(err);
+			res.forEach(file => {
+				doc(uri+"/"+file).subscribe({
+					error:err => o.error(err),
+					next:x => o.next(x)
+				});
+			});
+			o.complete();
+		});
+	}));
 }
 
 export * from "./doc";
