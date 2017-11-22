@@ -1,6 +1,6 @@
 import * as inode from "./inode";
 
-import { getDoc, iter, docIter, firstChild } from "./access";
+import { getDoc, vdoc, firstChild } from "./access";
 
 export function str2array(str, ar, idx){
 	for (var i=0, strLen=str.length; i<strLen; i++) {
@@ -44,75 +44,63 @@ Nil.prototype.next = function(){
  * @param  {VNode} doc The document
  * @return {ArrayBuffer}  A flat buffer
  */
-export function toL3(doc, to2D = false, schema = null){
+export function toL3($doc /*, to2D = false, schema = null*/){
 	var cx = this && this.vnode ? this : inode;
-	doc = getDoc.bind(cx)(doc);
-	var out = [],
-		names = {},
-		i = 0,
-		j = 15;
-	for (let attr of doc.attrEntries()) {
-		let name = attr[0],
-			attrname = "@" + name;
-		if (!names[attrname]) {
-			names[attrname] = ++j;
-			out[i++] = 15;
-			i = str2array(name, out, i);
-		}
-		out[i++] = docAttrType(attr[0]);
-		i = str2array(attr[0], out, i);
-		i = str2array(attr[1], out, i);
-	}
-	var schemaIter = schema ? docIter(schema) : new Nil();
-	var schemaEntry = schemaIter.next();
-	iter.bind(cx)(firstChild.bind(cx)(doc), function (node) {
-		let type = node.type,
-			depth = node.depth + 15,
-			name = node.name;
-		if (type == 17) return;
-		// if there's a schema entry and all schema props are equal then the node has a schema entry
-		// else if there's a schema entry, the value is not there (which was assumed valid)
-		// else write the node name + type
-		// if indexInParent is not equal, we skipped a schema entry
-		// TODO allow partial schema somewhere in the document tree
-		let nodeHasSchema = !schemaEntry.done && schemaEntry.depth == depth && schemaEntry.name == name;
-		// if this node has a schema, continue with next, else skip and try with next entry
-		if (nodeHasSchema) schemaEntry = schemaIter.next();
-		var nameIndex = 0;
-		if (typeof name === "string" && !nodeHasSchema) {
-			if (!names[name]) {
-				names[name] = ++j;
-				out[i++] = 15;
-				i = str2array(name, out, i);
+	return getDoc.bind(cx)($doc).concatMap(doc => {
+		//var schemaIter = schema ? docIter(schema) : new Nil();
+		//var schemaEntry = schemaIter.next();
+		return vdoc.bind(cx)(firstChild.bind(cx)(doc)).concatMap(function (node) {
+			let type = node.type;
+			if (type == 17) return [17];
+			if(type == 1) {
+				var d = [];
+				for(let attr of node.attrEntries()) Array.prototype.push.call(d,2,attr[0],3,attr[1]);
+				return Array.prototype.push.call(d,1,node.name);
 			}
-			nameIndex = names[name];
-		}
-		// TODO use text for values unless there's a schema
-		//  always store type
-		out[i++] = type;
-		out[i++] = depth;
-		if (!nodeHasSchema && nameIndex) out[i++] = nameIndex;
-		if (type == 1) {
-			// TODO how to serialize attrs with schema?
-			for (let attr of node.attrEntries()) {
-				let name = attr[0],
-					attrname = "@" + name;
-				if (!names[attrname]) {
-					names[attrname] = ++j;
+			if(type == 3) return [3,node.value];
+			// if there's a schema entry and all schema props are equal then the node has a schema entry
+			// else if there's a schema entry, the value is not there (which was assumed valid)
+			// else write the node name + type
+			// if indexInParent is not equal, we skipped a schema entry
+			// TODO allow partial schema somewhere in the document tree
+			//let nodeHasSchema = !schemaEntry.done && schemaEntry.depth == depth && schemaEntry.name == name;
+			// if this node has a schema, continue with next, else skip and try with next entry
+			//if (nodeHasSchema) schemaEntry = schemaIter.next();
+			/*var nameIndex = 0;
+			if (typeof name === "string" && !nodeHasSchema) {
+				if (!names[name]) {
+					names[name] = ++j;
 					out[i++] = 15;
 					i = str2array(name, out, i);
 				}
-				out[i++] = 2;
-				out[i++] = names[attrname];
-				i = str2array(attr[1], out, i);
+				nameIndex = names[name];
 			}
-		} else if (type == 3) {
-			i = str2array(node.value, out, i);
-		} else if (type == 12) {
-			i = str2array(node.value + "", out, i);
-		}
+			// TODO use text for values unless there's a schema
+			//  always store type
+			out[i++] = type;
+			out[i++] = depth;
+			if (!nodeHasSchema && nameIndex) out[i++] = nameIndex;
+			if (type == 1) {
+				// TODO how to serialize attrs with schema?
+				for (let attr of node.attrEntries()) {
+					let name = attr[0],
+						attrname = "@" + name;
+					if (!names[attrname]) {
+						names[attrname] = ++j;
+						out[i++] = 15;
+						i = str2array(name, out, i);
+					}
+					out[i++] = 2;
+					out[i++] = names[attrname];
+					i = str2array(attr[1], out, i);
+				}
+			} else if (type == 3) {
+				i = str2array(node.value, out, i);
+			} else if (type == 12) {
+				i = str2array(node.value + "", out, i);
+			}*/
+		});
 	});
-	return out;
 }
 
 export function fromL3(l3, schema = null) {
