@@ -2,7 +2,9 @@ import { ensureDoc } from "./doc";
 
 import { error } from "./error";
 
-import { seq, isSeq, create, forEach, filter, compose, foldLeft, zeroOrOne, exactlyOne } from "./seq";
+import { seq, isSeq, create, forEach, filter, foldLeft, zeroOrOne, exactlyOne } from "./seq";
+
+import { pipe } from "rxjs/util/pipe";
 
 import { prettyXML } from "./pretty";
 
@@ -179,7 +181,7 @@ export function lastChild($node){
 	return ensureDoc.bind(cx)($node).concatMap(node => {
 		const last = node.last();
 		const vnode = cx.vnode || node.cx.vnode;
-		return vnode(last,node,node.depth+1, node.count() - 1);
+		return last ? seq(vnode(last, node, node.depth, node.count() - 1)) : seq();
 	});
 }
 
@@ -394,7 +396,7 @@ export function select($node, ...paths) {
 			var bound = function bound(n) {
 				return path.g(boundEnsureDoc(n));
 			};
-			if (!skipCompare) f = compose(f, filter(_comparer()));
+			if (!skipCompare) f = pipe(f, filter(_comparer()));
 			return seq($node).concatMap(node => f(bound(node)));
 		})
 		.reduce(($node, changeFn) => changeFn($node),boundEnsureDoc($node))
