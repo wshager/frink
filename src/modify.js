@@ -6,6 +6,8 @@ import { firstChild } from "./access";
 
 import * as inode from "./inode";
 
+import { error } from "./error";
+
 const _isDocOrFrag = node => node.type == 9 || node.type == 11;
 
 function _ascend(node,cx){
@@ -24,7 +26,7 @@ export function appendChild(node, child) {
 	return ensureDoc.bind(cx)(node).concatMap(function (node) {
 		//if(!node || !node.size) return;
 		if (_isDocOrFrag(node) && node.count() > 0) {
-			throw new Error("Document can only contain one child.");
+			return error("XXX","Document can only contain one child.");
 		}
 		return child.concatMap(function (child) {
 			return typeof child.inode === "function" ? child.inode(node) : seq(child);
@@ -38,16 +40,18 @@ export function appendChild(node, child) {
 }
 
 export function insertChildBefore(node,ins){
-	node = ensureDoc.bind(this)(node);
-	//if(!node || !node.size) return;
-	let parent = node.parent;
-	if(typeof ins.inode == "function") {
-		ins.inode(parent,node);
-	} else {
-		// what?
-	}
-	node = parent;
-	return _ascend(node,this);
+	const cx = this && "vnode" in this ? this : inode;
+	return ensureDoc.bind(cx)(node).concatMap(function (node) {
+		//if(!node || !node.size) return;
+		let parent = node.parent;
+		if(typeof ins.inode == "function") {
+			ins.inode(parent,node);
+		} else {
+			// what?
+		}
+		node = parent;
+		return _ascend(node,cx);
+	});
 }
 
 export function removeChild(node,child){
