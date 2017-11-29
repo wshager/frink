@@ -482,6 +482,7 @@ export function isEmptyNode(node){
 }
 
 export function name($a) {
+	if(!arguments.length) return name;
 	return seq($a).concatMap(a => {
 		if (!isVNode(a)) {
 			return error("XXX","This is not a node");
