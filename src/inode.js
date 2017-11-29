@@ -37,6 +37,8 @@ function _inferType(inode){
 	} else if(cc == Object){
 		if("$children" in inode) {
 			return inode.$name == "#document" ? 9 : inode.$name == "#document-fragment" ? 11 : 1;
+		} else if(inode.$args) {
+			return inode.$name ? 14 : 15;
 		} else if("$value" in inode){
 			return 2;
 		} else if("$pi" in inode){
