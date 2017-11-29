@@ -2,10 +2,10 @@ import * as rrb from "rrb-vector";
 
 import { error } from "./error";
 
-import { seq, from, of, first, isSeq, foldLeft as seqFoldLeft, zeroOrOne, exactlyOne, isExactlyOne } from "./seq";
+import { seq, of, isSeq, foldLeft as seqFoldLeft, exactlyOne, isExactlyOne } from "./seq";
 
 // TODO option: call ensureDoc and handle everything via VNode (i.e. persistent or not)
-import { ensureDoc } from "./doc";
+//import { ensureDoc } from "./doc";
 
 import { list } from "./access";
 
@@ -49,7 +49,7 @@ export default function array(...a) {
 	}
 	if(l==1){
 		const s = a[0];
-		if (isSeq(s)) return join(s);
+		if (isSeq(s)) return seq(s.reduce((acc,x) => acc.push(x),rrb.empty));
 		if (isList(s)) return of(s);
 		if (isArray(s)) return of(rrb.fromArray(s));
 		// TODO VNode conversion
