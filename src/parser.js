@@ -51,6 +51,7 @@ export class Parser extends EventEmitter {
 					}
 				}
 				//nodeName = qname(node.uri, node.name);
+				nodeName = node.name;
 			}
 			var attrs = {};
 			for (key in ref) {
