@@ -76,6 +76,8 @@ export function nextNode(node /* VNode */) {
 		//console.log("found first", node.type, depth,indexInParent);
 		return node;
 	} else {
+		// emergency exit
+		if(!parent) return;
 		indexInParent++;
 		// if there are no more children, return a 'Step' to indicate a close
 		// it means we have to continue one or more steps up the path
