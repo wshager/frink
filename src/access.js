@@ -19,6 +19,8 @@ export function Step(node){
 }
 
 Step.prototype.type = 17;
+// mark step as vnode
+Step.prototype.__is_VNode = 17;
 
 Step.prototype.toString = function(){
 	return "Step {depth:" + this.node.depth + ", closes:" + this.node.name + "}";
@@ -74,6 +76,8 @@ export function nextNode(node /* VNode */) {
 		//console.log("found first", node.type, depth,indexInParent);
 		return node;
 	} else {
+		// emergency exit
+		if(!parent) return;
 		indexInParent++;
 		// if there are no more children, return a 'Step' to indicate a close
 		// it means we have to continue one or more steps up the path
@@ -297,16 +301,20 @@ export function comment() {
 	return _nodeTest(_isComment);
 }
 
-function _attrGet(key,node){
-	var entries;
-	if (key !== null) {
-		var val = node.attr(key);
-		if (!val) return [];
-		entries = [[key, val]];
-	} else {
-		entries = node.attrEntries();
-	}
-	return seq(entries).map(kv => node.vnode(node.ituple(kv[0], kv[1]), node.parent, node.depth + 1, node.indexInParent));
+function _attrGet(key,$node){
+	return seq($node).concatMap(node => {
+		var entries;
+		if (key !== null) {
+			var val = node.attr(key);
+			if (!val) return [];
+			entries = [[key, val]];
+		} else {
+			entries = node.attrEntries();
+		}
+		return seq(entries).map(function (kv) {
+			return node.vnode(node.ituple(kv[0], kv[1]), node.parent, node.depth + 1, node.indexInParent);
+		});
+	});
 }
 
 // TODO make axis default, process node here, return seq(VNodeIterator)
@@ -476,7 +484,12 @@ export function isEmptyNode(node){
 }
 
 export function name($a) {
-	if(isSeq($a)) return forEach($a,name);
-	if(!isVNode($a)) throw new Error("This is not a node");
-	return $a.name;
+	if(!arguments.length) return name;
+	return seq($a).concatMap(a => {
+		if (!isVNode(a)) {
+			return error("XXX","This is not a node");
+		}
+		if(a.type != 1) return seq();
+		return seq(a.name);
+	});
 }

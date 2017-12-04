@@ -37,6 +37,8 @@ function _inferType(inode){
 	} else if(cc == Object){
 		if("$children" in inode) {
 			return inode.$name == "#document" ? 9 : inode.$name == "#document-fragment" ? 11 : 1;
+		} else if(inode.$args) {
+			return inode.$name ? 14 : 15;
 		} else if("$value" in inode){
 			return 2;
 		} else if("$pi" in inode){
@@ -100,7 +102,7 @@ export function ivalue(type, value){
 export function vnode(inode, parent, depth, indexInParent, type) {
 	type = type || _inferType(inode);
 	var name,key = inode.$key,value;
-	if(type == 1 || type == 9 || type == 11){
+	if(type == 1 || type == 9 || type == 11 || type == 14){
 		name = inode.$name;
 	} else if(type == 2) {
 		name = inode.$name;
@@ -116,6 +118,8 @@ export function vnode(inode, parent, depth, indexInParent, type) {
 		value = inode.$comment;
 	} else if(type == 3 || type == 12){
 		value = inode;
+	} else if(type == 15) {
+		name = "quote";
 	}
 	// return vnode
 	return new VNode(
@@ -139,6 +143,11 @@ export function emptyINode(type, name, attrs, ns) {
 		inode.$attrs = attrs;
 		inode.$ns = ns;
 		inode.$children = [];
+	} else if(type == 14) {
+		inode.$name = name;
+		inode.$args = [];
+	} else if(type == 15) {
+		inode.$args = [];
 	}
 	return inode;
 }
@@ -170,6 +179,9 @@ const _nextOrPrev = (inode,node,type,dir) => {
 	var idx = node.indexInParent;
 	if(type == 1 || type == 9 || type == 11) {
 		return inode.$children[idx + dir];
+	}
+	if(type == 14 || type == 15) {
+		return inode.$args[idx + dir];
 	}
 	if(type == 5) return inode[idx + dir];
 	if(type == 6) {
@@ -259,6 +271,7 @@ export function keys(inode,type){
 export function values(inode,type){
 	type = type || _inferType(inode);
 	if(type == 1 || type == 9 || type == 11) return inode.$children;
+	if (type == 14 || type == 15) return inode.$args;
 	if (type == 2) return [[inode.$name,inode.$value]];
 	if(type == 6)
 		// tuple-wise
@@ -284,6 +297,8 @@ export function count(inode, type){
 	type = type || _inferType(inode);
 	if(type == 1 || type == 9 || type == 11){
 		return inode.$children.length;
+	} else if (type == 14 || type == 15) {
+		return inode.$args.length;
 	} else if(type == 5) {
 		return inode.length;
 	} else if(type == 6){
@@ -296,6 +311,8 @@ export function first(inode,type){
 	type = type || _inferType(inode);
 	if(type == 1 || type == 9 || type == 11){
 		return inode.$children[0];
+	} else if (type == 14 || type == 15) {
+		return inode.$args[0];
 	} else if(type == 5) {
 		return inode[0];
 	} else if(type == 6){
@@ -309,6 +326,7 @@ export function first(inode,type){
 export function last(inode,type){
 	type = type || _inferType(inode);
 	if(type == 1 || type == 9 || type == 11) return _last(inode.$children);
+	if (type == 14 || type == 15) return _last(inode.$args);
 	if(type == 5) return _last(inode);
 	if(type == 6) {
 		var entries = Object.entries(inode);
@@ -334,6 +352,12 @@ export function modify(inode, node, ref, type){
 		} else {
 			inode.$children.push(node.inode);
 		}
+	} else if (type == 14 || type == 15) {
+		if (ref !== undefined) {
+			inode.$args.splice(ref.indexInParent, 0, node.inode);
+		} else {
+			inode.$args.push(node.inode);
+		}
 	} else if (type == 2) {
 		inode.$value = node.inode;
 	} else if (type == 5) {
@@ -356,15 +380,21 @@ export function stringify(inode, type, json = false, root = true) {
 	} else if(type == 2) {
 		str += "<l3:a name=\""+inode.$key+"\">"+inode.$value+"</l3:a>";
 	} else if (type == 5) {
-		var val = inode.map(function (c) {
+		let _val = inode.map(function (c) {
 			return stringify(c, 0, true, false);
 		}).join("");
-		str += "<l3:l" + (val ? ">" + val + "</l3:l>" : "/>");
+		str += "<l3:l" + (_val ? ">" + _val + "</l3:l>" : "/>");
 	} else if (type == 6) {
-		var _val = Object.entries(inode).map(function (c) {
+		let _val = Object.entries(inode).map(function (c) {
 			return stringify({$key:c[0], $value:stringify(c[1], 0, true, false)}, 2, json, false);
 		}).join("");
 		str += "<l3:m" + (_val ? ">" + _val + "</l3:m>" : "/>");
+	} else if (type == 14 || type == 15) {
+		let _val = inode.$args.map(function (c) {
+			return stringify(c, 0, true, false);
+		}).join("");
+		let name = type == 14 ? inode.$name : "quote";
+		str += "<l3:f name=\"" + name + "\"" + (_val ? ">" + _val + "</l3:f>" : "/>");
 	} else {
 		if (type == 7) {
 			str += "<?" + inode.$pi + "?>";

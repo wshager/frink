@@ -75,7 +75,7 @@ export function put($m,$k,$v) {
 	return exactlyOne($m).concatMap(m => {
 		$v = seq($v);
 		return exactlyOne($k)
-			.concatMap(k => isExactlyOne($v).concatMap(test => test ? $v.map(v => m.set(k, v)) : m.set(k,$v)));
+			.concatMap(k => isExactlyOne($v).concatMap(test => test ? $v.map(v => m.set(k, v)) : seq(m.set(k,$v))));
 	});
 }
 
@@ -100,7 +100,7 @@ export function entry($k,$v){
 	$v = seq($v);
 	return seq($k).concatMap(k => {
 		var m  = _create();
-		return isExactlyOne($v).concatMap(test => test ? $v.map(v => m.set(k,v)) : m.set(k,$v));
+		return isExactlyOne($v).concatMap(test => test ? $v.map(v => m.set(k,v)) : seq(m.set(k,$v)));
 	});
 }
 
