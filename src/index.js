@@ -10,6 +10,8 @@ import { readdir, readFile } from "./fs";
 
 import { isNodeEnv } from "./util";
 
+import { fromL3Stream } from "./l3";
+
 if(isNodeEnv && !global.URL) {
 	let url = require("url");
 	global.URL = url.URL;
@@ -43,17 +45,13 @@ export function doc($file){
 	})).share();
 }
 
-export function docStreaming($file) {
-	return zeroOrOne($file).concatMap(file => create(o => {
-		readFile(file.toString(),(err, res) => {
-			if(err) return o.error(err);
-			return parseStreaming(res.toString()).subscribe({
-				next:x => o.next(x),
-				error: err => o.error(err),
-				complete: () => o.complete()
-			});
-		});
-	})).share();
+export function docL3Streaming($file) {
+	return zeroOrOne($file).concatMap(file => parseStreaming(file.toString())).share();
+}
+
+export function vdocStreaming($file) {
+	// TODO streaming parsing
+	return fromL3Stream(docL3Streaming($file),2).share();
 }
 
 export function collection($uri) {

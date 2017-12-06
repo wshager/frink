@@ -1,6 +1,12 @@
 import * as inode from "./inode";
 
+import { VNode } from "./vnode";
+
 import { getDoc, vdoc, firstChild } from "./access";
+
+import { create } from "./seq";
+
+import { Step } from "./access";
 
 export function str2array(str, ar, idx){
 	for (var i=0, strLen=str.length; i<strLen; i++) {
@@ -102,7 +108,7 @@ export function toL3($doc /*, to2D = false, schema = null*/){
 		});
 	});
 }
-
+/*
 export function fromL3(l3, schema = null) {
 	var names = {},
 		n = 15,
@@ -185,4 +191,192 @@ export function fromL3(l3, schema = null) {
 	}
 	process(entry);
 	return cx.finalize(parents[15]);
+}
+*/
+const isLeaf = type => type == 2 || type == 3 || type == 4 || type == 7 || type == 8 || type == 10 || type == 12 || type == 16;
+const isBranch = type => type == 1 || type == 5 || type == 6 || type == 9 || type == 11 || type == 14 || type == 15;
+
+function VNodeBuffer(nodes = []) {
+	this.nodes = nodes;
+}
+
+VNodeBuffer.prototype.add = function (v) {
+	this.nodes.unshift(v);
+};
+
+VNodeBuffer.prototype.count = function () {
+	return this.nodes.length;
+};
+
+VNodeBuffer.prototype.flush = function (sink, count = 1) {
+	var s = this.count();
+	while(s >= count){
+		//console.log("FLUSH",s,count);
+		sink.next(this.nodes.pop());
+		--s;
+	}
+};
+
+export function fromL3Stream(o,bufSize=1) {
+	const cx = this && "vnode" in this ? this : inode;
+	let ndepth = 0,
+		stack = [],
+		open = [],
+		parents = [],
+		openTuples = {},
+		buffered = null,
+		buf = new VNodeBuffer();
+	const checkStack = function() {
+		var l = stack.length;
+		if (!l) return;
+		const type = stack[0];
+		const ol = open.length - 1;
+		const last = open[ol],
+			parent = parents[ol];
+		const isClose = type == 17;
+		// buffered is used to add attributes to elements before they're emitted
+		// here buffered is released before anything else is processed (except attrs)
+		if (last == 1 && buffered !== null && type != 2) {
+			// console.log("buf",buffered.name);
+			buf.add(buffered);
+			buffered = null;
+		}
+		if (isClose) {
+			open.pop();
+			parents.pop();
+			//console.log("closing",ndepth,parent.inode);
+			--ndepth;
+			stack = [];
+			return buf.add(new Step(parent));
+		} else {
+			var _inode = void 0,
+				name = void 0,
+				key = void 0,
+				_isBranch = isBranch(type);
+			if (_isBranch) {
+				ndepth++;
+				switch (type) {
+				case 1:
+				{
+					name = stack[1];
+					_inode = { $type: type, $name: name, $children: [] };
+					_inode.$attrs = {};
+					if (last == 6) {
+						// emit inode /w key
+						key = openTuples[ndepth];
+						//console.log("picked up tuple",ndepth,key);
+						openTuples[ndepth] = undefined;
+					}
+					if (parent) parent.push([key, _inode]);
+					open.push(type);
+					// TODO use cx.vnode()
+					let depth = parent ? parent.depth + 1 : 1;
+					let node = new VNode(cx, _inode, _inode.$type, name, key, isLeaf(type) ? _inode.valueOf() : null, parent, depth);
+					// buffer attributes
+					buffered = node;
+					//console.log("opening element",ndepth,name, buffered);
+					parents.push(node);
+					stack = [];
+					return;
+				}
+				case 9:
+					name = "#document";
+					_inode = { $name: name, $children: [] };
+					break;
+				case 11:
+					name = "#document-fragment";
+					_inode = { $name: name, $children: [] };
+					break;
+				case 14:
+					name = stack[1];
+					_inode = { $name: name, $args: [] };
+					break;
+				case 15:
+					_inode = { $name: name, $args: [] };
+					break;
+				case 5:
+					_inode = []; //{$type:type,$children:[]};
+					break;
+				case 6:
+					// never emit until all tuples are closed
+					_inode = {};
+					break;
+				}
+				if (last == 6) {
+					// must be an open tuple
+					key = openTuples[ndepth - 1];
+					openTuples[ndepth - 1] = undefined;
+					//console.log("picked up tuple",ndepth,key);
+				}
+				if (parent) {
+					parent.push([key, _inode]);
+				}
+				open.push(type);
+			} else {
+				if (type == 2) {
+					// new model:
+					// - create tuple inode
+					// - don't emit tuple, but tuple value /w key
+					openTuples[ndepth] = stack[1];
+					//console.log("opening tuple",ndepth,stack[1]);
+					stack = [];
+					return;
+				} else {
+					var value = stack[1];
+					if(type == 12) value = JSON.parse(value);
+					_inode = new value.constructor(value);
+					if (openTuples[ndepth] !== undefined) {
+						key = openTuples[ndepth];
+						//console.log("picked up tuple",ndepth,key);
+						openTuples[ndepth] = undefined;
+						if (last == 6) {
+							if (parent) parent.push([key, _inode]);
+						} else if (last == 1) {
+							parent.attr(key, value);
+							stack = [];
+							return;
+						} else {
+							// error
+						}
+					} else {
+						if (parent) parent.push([null, _inode]);
+					}
+				}
+			}
+			stack = [];
+			var depth = parent ? parent.depth + 1 : type == 9 || type == 11 ? 0 : 1;
+			var node = new VNode(cx, _inode, type, name, key, isLeaf(type) ? _inode.valueOf() : null, parent, depth);
+			if (_isBranch) {
+				parents.push(node);
+			}
+			//console.log("buf",node.name);
+			buf.add(node);
+		}
+	};
+	return create(function (sink) {
+		return o.subscribe({
+			next: cur => {
+				// this will be the new version of streaming-fromL3!
+				if (typeof cur == "number") {
+					try {
+						checkStack();
+					} catch (err) {
+						return sink.error(err);
+					}
+					buf.flush(sink, bufSize);
+				}
+				stack.push(cur);
+			},
+			complete: () => {
+				try {
+					checkStack();
+				} catch (err) {
+					return sink.error(err);
+				}
+				// flush all
+				buf.flush(sink);
+				sink.complete();
+			}
+		});
+	});
 }

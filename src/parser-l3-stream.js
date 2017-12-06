@@ -1,24 +1,30 @@
 import * as sax from "sax";
 
-import { create, zeroOrOne } from "./seq";
+import * as fs from "fs";
 
-import { stripBOM } from "./bom";
+import { create } from "./seq";
+
+import * as stripBomStream from "strip-bom-stream";
 
 const hasProp = {}.hasOwnProperty;
 
-export function parse($str) {
-	const saxParser = sax.parser(true, {
+export function parse(file) {
+	const strict = true;
+	const options = {
 		trim: false,
 		normalize: false,
 		xmlns: true,
 		position: false
-	});
+	};
+	const saxStream = sax.createStream(strict, options);
+	// pipe is supported, and it's readable/writable
+	// same chunks coming in also go out.
 	const parents = [];
 	return create(o => {
-		saxParser.onerror = (function(error) {
+		saxStream.onerror = (function(error) {
 			o.error(error);
 		});
-		saxParser.onopentag = (function(node) {
+		saxStream.on("opentag",function(node) {
 			var nodeName = node.name,
 				nodeType = 1;
 			var key, ref = node.attributes;
@@ -54,8 +60,8 @@ export function parse($str) {
 				//ret = ret.concat(attribute(attr.uri ? qname(attr.uri, attr.name) : attr.name, attr.value));
 				attrs[attr.name] = attr.value;
 			}
+			const last = parents[parents.length - 1];
 			parents.push(nodeType);
-			const last = parents[parent.length];
 			if(last == 6) {
 				// emit the element as tuple when its parent is marked as map
 				// use the nodeName as key
@@ -80,11 +86,14 @@ export function parse($str) {
 				}
 			}
 		});
-		saxParser.onclosetag = function() {
+		saxStream.on("closetag",function() {
 			parents.pop();
-			o.next(17);
-		};
-		saxParser.onend = (function() {
+			const last = parents[parents.length - 1];
+			if(last != 6) {
+				o.next(17);
+			}
+		});
+		saxStream.on("end",function() {
 			o.complete();
 		});
 		var ontext = function(val, type=3) {
@@ -93,39 +102,39 @@ export function parse($str) {
 				o.next(val);
 			}
 		};
-		saxParser.ontext = ontext;
-		saxParser.oncdata = function(value) {
+		saxStream.on("text",ontext);
+		saxStream.on("cdata",function(value) {
 			// TODO handle CDATA text?
 			ontext(value, 3);
-		};
-		saxParser.ondoctype = function(value){
-			ontext(value,16);
-		};
-		saxParser.onprocessinginstruction = function(pi) {
-			ontext(pi.name+" "+pi.body, 7);
-		};
-		saxParser.oncomment = function(value) {
-			ontext(value, 8);
-		};
-		$str = zeroOrOne($str).concatMap(str => {
-			try {
-				str = str.toString();
-				if (str.trim() === "") {
-					this.emit("end", null);
-					return true;
-				}
-				str = stripBOM(str);
-				if(saxParser.closed) {
-					saxParser.onready = function(){
-						saxParser.onready = null;
-						saxParser.write(str).close();
-					};
-				} else {
-					saxParser.write(str).close();
-				}
-			} catch (err) {
-				o.error(err);
-			}
 		});
+		saxStream.on("doctype", function(value){
+			ontext(value,16);
+		});
+		saxStream.on("processinginstruction", function(pi) {
+			ontext(pi.name+" "+pi.body, 7);
+		});
+		saxStream.on("comment", function(value) {
+			ontext(value, 8);
+		});
+		fs.createReadStream(file)
+			.pipe(stripBomStream.default())
+			.pipe(saxStream);
+		/*try {
+			str = str.toString();
+			if (str.trim() === "") {
+				return true;
+			}
+			str = stripBOM(str);
+			if(saxStream.closed) {
+				saxStream.onready = function(){
+					saxStream.onready = null;
+					saxStream.write(str).close();
+				};
+			} else {
+				saxStream.write(str).close();
+			}
+		} catch (err) {
+			o.error(err);
+		}*/
 	});
 }

@@ -38,6 +38,7 @@
     "rrb-vector": "*",
     "rxjs": "^5.5.2",
     "sax": "^1.2.4",
+    "strip-bom-stream": "^3.0.0",
     "xregexp": "^3.2.0"
   },
   "license": "BSD-3-Clause",
