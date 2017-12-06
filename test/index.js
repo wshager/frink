@@ -7,11 +7,14 @@ const microtime = {
 };
 
 var s = microtime.now();
-n.parse(`<persoon id="243">
-  <voornaam>Wouter</voornaam>
-  <achternaam>Hager</achternaam>
-  <beroep>programmeur</beroep>
-</persoon>`).subscribe(handle);
+const xml = `<persoon id="243" xmlns:json="http://json.org" json:type="array">
+  <json:value>Wouter</json:value>
+  <json:value>Hager</json:value>
+  <json:value>programmeur</json:value>
+</persoon>`;
+//const parse = require("../lib/parser-l3-stream").parse;
+//console.log(__dirname+"/test.xml");
+n.fromL3Stream(n.docL3Streaming(__dirname+"/test.xml"),Infinity).first().subscribe(x => console.log(x+""));
 function handle(out){
 	var e = microtime.now();
 
