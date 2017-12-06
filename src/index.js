@@ -4,6 +4,8 @@ import { zeroOrOne, create } from "./seq";
 
 import { Parser } from "./parser";
 
+import { parse as parseStreaming } from "./parser-l3-stream";
+
 import { readdir, readFile } from "./fs";
 
 import { isNodeEnv } from "./util";
@@ -33,6 +35,19 @@ export function doc($file){
 		readFile(file.toString(),(err, res) => {
 			if(err) return o.error(err);
 			parse(res.toString()).subscribe({
+				next:x => o.next(x),
+				error: err => o.error(err),
+				complete: () => o.complete()
+			});
+		});
+	})).share();
+}
+
+export function docStreaming($file) {
+	return zeroOrOne($file).concatMap(file => create(o => {
+		readFile(file.toString(),(err, res) => {
+			if(err) return o.error(err);
+			return parseStreaming(res.toString()).subscribe({
 				next:x => o.next(x),
 				error: err => o.error(err),
 				complete: () => o.complete()
