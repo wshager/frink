@@ -204,6 +204,8 @@ export function push(inode,kv,type){
 	type = type || _inferType(inode);
 	if (type == 1 || type == 9 || type == 11) {
 		inode.$children.push(kv[1]);
+	} else if(type == 14 || type == 15) {
+		inode.$args.push(kv[1]);
 	} else if (type == 5) {
 		inode.push(kv[1]);
 	} else if (type == 6) {
