@@ -81,3 +81,7 @@ const _isNode = () => {
 };
 // Only Node.JS has a process variable that is of [[Class]] process
 export const isNodeEnv = _isNode();
+
+export function camelCase(str) {
+	return str.split(/-/g).map((_,i) => i > 0 ? _.charAt(0).toUpperCase() + _.substr(1) : _).join("");
+}

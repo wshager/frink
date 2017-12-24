@@ -1,6 +1,6 @@
 import { seq, exactlyOne } from "./seq";
 
-import { isUndef } from "./util";
+import { isUndef, camelCase } from "./util";
 
 import * as map from "./map";
 
@@ -13,10 +13,6 @@ export function loadModule($moduleUri) {
 	//if (module.uri in modules) return;
 	// let js manager handle logic
 	return exactlyOne($moduleUri).concatMap(moduleUri => map.default(require(modules[moduleUri])));
-}
-
-function camelCase(str) {
-	return str.split(/-/g).map((_,i) => i > 0 ? _.charAt(0).toUpperCase() + _.substr(1) : _).join("");
 }
 
 export function functionLookup($qname,$arity){
