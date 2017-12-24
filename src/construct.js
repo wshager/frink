@@ -16,6 +16,8 @@ function vnode(inode,type,name,value){
 }
 
 function _n(type, name, children){
+	if(typeof name == "function") name = name();
+	if(typeof children == "function") children = children();
 	children = seq(children).concatMap(c => isSeq(c) ? c : isVNode(c) ? seq(c) : x(c));
 	return vnode(function (parent, ref) {
 		var ns;
