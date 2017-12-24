@@ -81,7 +81,7 @@ export * from "./access";
 
 export * from "./l3";
 
-export { fromJS, toJS, iter as iterJS, toL3 as jsToL3, fromL3 as jsFromL3 } from "./json";
+//export { fromJS, toJS, iter as iterJS, toL3 as jsToL3, fromL3 as jsFromL3 } from "./json";
 
 export * from "./seq";
 
