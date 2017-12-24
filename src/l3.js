@@ -8,6 +8,8 @@ import { create } from "./seq";
 
 import { Step } from "./access";
 
+import { camelCase } from "./util";
+
 export function str2array(str, ar, idx){
 	for (var i=0, strLen=str.length; i<strLen; i++) {
 		//ar.push(str.codePointAt(i));
@@ -379,4 +381,66 @@ export function fromL3Stream(o,bufSize=1) {
 			}
 		});
 	});
+}
+
+const constructormap = {
+	1: "e",
+	2: "a",
+	3: "x",
+	4: "r",
+	5: "l",
+	6: "m",
+	7: "p",
+	8: "c",
+	12: "x",
+	14: "f",
+	15: "q"
+};
+
+export function toJS(o) {
+	return o.reduce((ret, node) => {
+		// this will be the new version of streaming-fromL3!
+		let type = node.type;
+		let isClose = type == 17;
+		let fn = "n."+constructormap[type];
+		if (!isClose) {
+			if (isBranch(type)) {
+				switch (type) {
+				case 1:
+				case 14:
+					{
+						let name = node.name;
+						if (type == 14) {
+							// TODO camelCasing
+							var prefix = /[$]/.test(name) ? "" : /:/.test(name) ? name.replace(/^([^:]*):.*$/, "$1") + "." : "n.";
+							name = !name ? "seq" : camelCase(name);
+							ret += prefix + name + "(";
+						}
+					}
+					break;
+				case 15:
+					{
+						//let qname = isTuple ? stack[2] : stack[1];
+						//qname = /[$:]/g.test(qname) ? qname.replace(/:/, ".") : qname;
+						ret += "n.seq($ => (";
+					}
+					break;
+				case 5:
+				case 6:
+					{
+						ret += fn + "(";
+					}
+					break;
+				}
+			} else {
+				let value = type == 12 ? node.value : "\""+node.value+"\"";
+				ret += value + ",";
+			}
+		} else {
+			ret = ret.replace(/,$/, "");
+			// call quote with params, etc using closure!
+			ret += node.node.type == 15 ? "))," : "),";
+		}
+		return ret;
+	}, "").map(ret => ret.replace(/,$/, ""));
 }
