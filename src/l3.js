@@ -8,7 +8,7 @@ import { create } from "./seq";
 
 import { Step } from "./access";
 
-import { camelCase } from "./util";
+import { isUndef, camelCase } from "./util";
 
 export function str2array(str, ar, idx){
 	for (var i=0, strLen=str.length; i<strLen; i++) {
@@ -219,12 +219,20 @@ VNodeBuffer.prototype.flush = function (sink, count = 1) {
 	}
 };
 
+function Continuation(node) {
+	this.node = node;
+	this.depth = node.depth;
+}
+Continuation.prototype.type = 18;
+
 export function fromL3Stream(o,bufSize=1) {
+	var _inode = inode.emptyINode(11);
+	var d = new VNode(inode, _inode, 11);
 	const cx = this && "vnode" in this ? this : inode;
 	let ndepth = 0,
 		stack = [],
-		open = [],
-		parents = [],
+		open = [11],
+		parents = [d],
 		openTuples = {},
 		buffered = null,
 		buf = new VNodeBuffer();
@@ -243,7 +251,10 @@ export function fromL3Stream(o,bufSize=1) {
 			buf.add(buffered);
 			buffered = null;
 		}
-		if (isClose) {
+		if(type == 18) {
+			stack = [];
+			return buf.add(new Continuation(parent));
+		} else if (isClose) {
 			open.pop();
 			parents.pop();
 			//console.log("closing",ndepth,parent.inode);
@@ -273,7 +284,7 @@ export function fromL3Stream(o,bufSize=1) {
 					open.push(type);
 					// TODO use cx.vnode()
 					let depth = parent ? parent.depth + 1 : 1;
-					let node = new VNode(cx, _inode, _inode.$type, name, key, isLeaf(type) ? _inode.valueOf() : null, parent, depth);
+					let node = new VNode(cx, _inode, _inode.$type, name, key, isLeaf(type) ? _inode.valueOf() : null, parent, depth, parent.count());
 					// buffer attributes
 					buffered = node;
 					//console.log("opening element",ndepth,name, buffered);
@@ -347,7 +358,7 @@ export function fromL3Stream(o,bufSize=1) {
 			}
 			stack = [];
 			var depth = parent ? parent.depth + 1 : type == 9 || type == 11 ? 0 : 1;
-			var node = new VNode(cx, _inode, type, name, key, isLeaf(type) ? _inode.valueOf() : null, parent, depth);
+			var node = new VNode(cx, _inode, type, name, key, isLeaf(type) ? _inode.valueOf() : null, parent, depth, parent.count());
 			if (_isBranch) {
 				parents.push(node);
 			}
@@ -397,24 +408,46 @@ const constructormap = {
 	15: "q"
 };
 
+const normalizeName = (str) => {
+	var hasPrefix = /:/.test(str);
+	var prefix = hasPrefix ? str.replace(/^([^:]*):.*$/, "$1") : "n";
+	var name = !str ? "seq" : camelCase(hasPrefix ? str.replace(/^[^:]*:(.*)$/, "$1") : str);
+	return { prefix:prefix, name:name };
+};
+
 export function toJS(o) {
 	return o.reduce((ret, node) => {
 		// this will be the new version of streaming-fromL3!
 		let type = node.type;
-		let isClose = type == 17;
 		let fn = "n."+constructormap[type];
-		if (!isClose) {
-			if (isBranch(type)) {
+		if (type != 17) {
+			if(type == 18) {
+				ret.text = ret.text.replace(/,$/, "")+")(";
+			} else if (isBranch(type)) {
 				switch (type) {
 				case 1:
 				case 14:
 					{
-						let name = node.name;
+						const depth = node.depth;
 						if (type == 14) {
-							// TODO camelCasing
-							var prefix = /[$]/.test(name) ? "" : /:/.test(name) ? name.replace(/^([^:]*):.*$/, "$1") + "." : "n.";
-							name = !name ? "seq" : camelCase(name);
-							ret += prefix + name + "(";
+							if(/^\$$/.test(node.name)) {
+								var parentCount = node.parent ? node.parent.count() : 0;
+								//if(depth == 1) console.log(node.indexInParent,node.parent.count());
+								var isDecl = depth == 1 && (ret.isModule || node.indexInParent < parentCount);
+								ret.isDecl = isDecl;
+								ret.text += isDecl ? "" : "$(";
+							} else if(/^\$\*$/.test(node.name)) {
+								ret.text += "n.module($,";
+							} else if(/^\$<$/.test(node.name)) {
+								ret.text += "n.import($,";
+							} else if(/^\$>$/.test(node.name)) {
+								ret.text += "n.export($,";
+							//} else if(/^\$\.$/.test(node.name)) {
+							//	ret.text += "n.private($,";
+							} else {
+								const { prefix, name } = normalizeName(node.name);
+								ret.text += prefix + "." + name + "(";
+							}
 						}
 					}
 					break;
@@ -422,25 +455,43 @@ export function toJS(o) {
 					{
 						//let qname = isTuple ? stack[2] : stack[1];
 						//qname = /[$:]/g.test(qname) ? qname.replace(/:/, ".") : qname;
-						ret += "n.seq($ => (";
+						ret.text += "(...a) => ($ = n.frame(a,$),";
 					}
 					break;
 				case 5:
 				case 6:
 					{
-						ret += fn + "(";
+						ret.text += fn + "(";
 					}
 					break;
 				}
 			} else {
-				let value = type == 12 ? node.value : "\""+node.value+"\"";
-				ret += value + ",";
+				var value = node.value;
+				if(type == 8) {
+					ret.text = ret.text.replace(/,$/, "");
+					value = `/*${value}*/`;
+				} else if(ret.isDecl) {
+					const { prefix, name } = normalizeName(value);
+					ret.modules[prefix] |= 0;
+					ret.modules[prefix]++;
+					value = prefix + "." + name + " = n.quoteTyped(";
+					ret.isDecl = false;
+				} else if(type == 3) {
+					value = "\"" + value + "\",";
+				} else {
+					value += ",";
+				}
+				ret.text += value;
 			}
 		} else {
-			ret = ret.replace(/,$/, "");
+			ret.text = ret.text.replace(/,$/, "");
 			// call quote with params, etc using closure!
-			ret += node.node.type == 15 ? "))," : "),";
+			ret.text += ret.isModule && node.node.depth == 1 ? ");\n" : "),";
 		}
 		return ret;
-	}, "").map(ret => ret.replace(/,$/, ""));
+	}, { text: "", isDecl: false, isModule:false,modules: {} }).map((ret) => {
+		ret.text = ret.text.replace(/,$/, "");
+		delete ret.isDecl;
+		return ret;
+	});
 }
