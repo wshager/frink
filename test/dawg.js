@@ -2,16 +2,7 @@ const util = require("util");
 const microtime = require("microtime");
 
 const ops = {
-	1:"(",
-	2:")",
-	3:"{",
-	4:"}",
-	5:";",
-	6:"&quot;",
-	7:"&apos;",
-	8:".",
-	9:"$",
-	100:",",
+	200: "satisfies",
 	201: "some",
 	202: "every",
 	203: "switch",
@@ -71,8 +62,6 @@ const ops = {
 	1400: "castable as",
 	1500: "cast as",
 	1600: "=>",
-	1701: "+",
-	1702: "-",
 	1800: "!",
 	1901: "/",
 	1902: "//",
@@ -89,38 +78,30 @@ const ops = {
 	2108: "namespace",
 	2109: "processing-instruction",
 	2110: "text",
-	2201: "array",
-	2202: "attribute",
-	2203: "comment",
 	2204: "document-node",
-	2205: "element",
 	2206: "empty-sequence",
-	2207: "function",
 	2208: "item",
-	2209: "map",
 	2210: "namespace-node",
 	2211: "node",
-	2212: "processing-instruction",
 	2213: "schema-attribute",
 	2214: "schema-element",
 	2215: "text",
 	2400: "as",
-	2501: "(:",
-	2502: ":)",
 	2600: ":"
 };
 
-function process(word,root,map,processed,op, c){
+
+function process(word,root,map,processed,key, c){
 	if(c==word.length) return;
 	let cp = word[c++];
 	processed += cp;
 	if(map[cp]) {
-		return process(word,root, map[cp], processed, op, c);
+		return process(word,root, map[cp], processed, key, c);
 	} else {
 		if(map.constructor == Array){
 			for(let i=0;i<map.length;i++){
 				if(map[i][cp]) {
-					return process(word,root, map[i][cp], processed, op, c);
+					return process(word,root, map[i][cp], processed, key, c);
 				}
 			}
 		}
@@ -132,7 +113,7 @@ function process(word,root,map,processed,op, c){
 			if(map[cp]) {
 				var newmap = {};
 				let entry = map[cp];
-				if(entry.constructor == Array){
+				if(Array.isArray(entry)){
 					map[cp].push(newmap);
 				} else {
 					map[cp] = [entry,newmap];
@@ -144,7 +125,7 @@ function process(word,root,map,processed,op, c){
 					var found = false;
 					var oldmap = map;
 					for(var i=0;i<map.parent.length;i++){
-						if(map.parent[i][cp]){
+						if(map.parent[i][cp] !== undefined){
 							let newmap = {};
 							if(map.parent[i][cp].constructor == Array){
 								map.parent[i][cp].push(newmap);
@@ -161,22 +142,20 @@ function process(word,root,map,processed,op, c){
 					if(found) cp = processed[c++];
 					if(!found) break;
 				}
-				map[cp] = {_k:word,_v:parseInt(op)};
+				map[cp] = {_k:word,_v:parseInt(key)};
 			}
 		} while(c<len);
 	}
 }
 
-function createDawg(map,order) {
+function createDawg(input,order) {
 	var root = {};
 	if(!order) {
 		order = function(a,b){
-			var sa = map[a], sb = map[b];
-			return sa > sb ? 1 : sa < sb ? -1 : 0;
+			return input[a].localeCompare(input[b]);
 		};
 	}
-	Object.keys(map).sort(order).forEach(function(k){
-		process(map[k],root,root,"",k,0);
+	Object.keys(input).sort(order).forEach(function(k){   process(input[k],root,root,"",k,0);
 	});
 	const stripObj = x => {
 		if("_k" in x) return x;
@@ -204,14 +183,15 @@ function traverse(tmp,word){
 		path = tmp[1];
 		if(!ret) return;
 	}
-	if(ret.constructor == Array){
-		let entry = ret[0];
-		if(entry._v && entry._k == b) return entry._v;
+	if(Array.isArray(ret)){
+		for(const entry of ret) {
+			if(entry._v !== undefined && entry._k === b) return entry._v;
+		}
 	} else {
-		if(ret._v && ret._k == b) return ret._v;
+		if(ret._v !== undefined && ret._k === b) return ret._v;
 	}
 	for(let entry of path) {
-		if(entry._v && entry._k == b) return entry._v;
+		if(entry._v !== undefined && entry._k === b) return entry._v;
 	}
 	return [ret,path];
 }
@@ -221,72 +201,39 @@ function filter(path,cp,pos){
 	return path.length ? path : null;
 }
 function find(entry,cp,word,path){
-	if(entry.constructor == Array){
+	if(Array.isArray(entry)){
 		let pos = word.length - 1;
 		let len = entry.length;
 		var ret;
 		for(var i = 0; i < len; i++){
 			let a = entry[i];
-			if(a._v) {
+			if("_v" in a) {
 				if(a._k[pos] == cp){
-					if(path[path.length-1] !== a) path.push(a);
+					if(path[path.length-1] !== a) {
+						path.push(a);
+					}
 					ret = a;
 				}
 			} else {
-				if(a[cp]) {
+				if(a[cp] !== undefined) {
 					return [a[cp],path];
 				}
 			}
 		}
-		//entry = ret;
-		if(ret) return [ret,path];
+		if(ret !== undefined) return [ret,path];
 		return [filter(path,cp,pos),[]];
-	} else if(!entry._v){
+	} else if(!("_v" in entry)){
 		return [entry[cp],path];
 	} else {
 		let pos = word.length - 1;
-		if(entry._k[pos] == cp) {
+		if(entry._k[pos] === cp) {
 			if(path[path.length-1] !== entry) path.push(entry);
 			return [entry,path];
 		}
 		return [filter(path,cp,pos),[]];
 	}
 }
-
-var t = microtime.now();
-var dawg = createDawg(ops);
-var e = microtime.now();
-console.log((e-t) / 1000);
-//var ret = traverse(dawg,"module",ops);
-var ret = dawg;
-var reversed = {};
-for(let x in ops) reversed[ops[x]] = x;
-
-var failed = false;
-var out = [];
-
-
-t = microtime.now();
-for(var x of Object.keys(ops)){
-	var ret = traverse([dawg],ops[x],ops);
-	if(!ret || ret+"" !== x) {
-		//console.log(ret+"",x)
-		failed = true;
-	} else {
-		out.push([ret,x]);
-	}
-}
-e = microtime.now();
-
-if(!failed) console.log(out,e-t);
-
-
-var w = "(:";
-t = microtime.now();
-var out2 = traverse([dawg], w, ops);
-e = microtime.now();
-console.log((e - t)/1000, out2);
-
-
+const dawg = createDawg(ops);
+console.log(dawg);
 var fs = require("fs");
-fs.writeFileSync(__dirname+"/dawg.json",JSON.stringify(dawg));
+fs.writeFile(__dirname+"/dawg.json",JSON.stringify(dawg),console.log);

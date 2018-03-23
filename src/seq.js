@@ -28,6 +28,7 @@ import "rxjs/add/operator/switch";
 import "rxjs/add/operator/switchMap";
 import "rxjs/add/operator/zip";
 import "rxjs/add/operator/share";
+import "rxjs/add/operator/publishReplay";
 import "rxjs/add/operator/count";
 
 import { concatMap, filter as rxFilter} from "rxjs/operators";
@@ -165,7 +166,7 @@ export const isExactlyOne = s => s.isEmpty().zip(s.skip(1).isEmpty(),(x, y) => !
  * @return {Seq|Error}     [Process Error in implementation]
  */
 export function zeroOrOne($arg) {
-	var s = seq($arg);
+	var s = seq($arg).publishReplay(2).refCount();
 	return isZeroOrOne(s).switchMap(test => test ? s : error("FORG0003"));
 }
 /**
@@ -174,7 +175,7 @@ export function zeroOrOne($arg) {
  * @return {Seq|Error}      [Process Error in implementation]
  */
 export function oneOrMore($arg) {
-	var s = seq($arg);
+	var s = seq($arg).publishReplay().refCount();
 	return isOneOrMore(s).switchMap(test => test ? s : error("FORG0004"));
 }
 /**
@@ -183,7 +184,7 @@ export function oneOrMore($arg) {
  * @return {Seq|Error}      [Process Error in implementation]
  */
 export function exactlyOne($arg) {
-	var s = seq($arg);
+	var s = seq($arg).publishReplay(2).refCount();
 	return isExactlyOne(s).switchMap(test => test ? s : error("FORG0005"));
 }
 

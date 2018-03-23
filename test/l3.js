@@ -1,48 +1,12 @@
 var n = require("../lib/index");
+var array = require("../lib/array");
+var fetch = require("node-fetch");
+var beautify = require("js-beautify").js;
+var fs = require("fs");
 
-n.frame = (args, closure) => {
-	const stack = args.slice(0);
-	stack.unshift(args[0]);
-	if(closure) {
-		for(const k in closure._stack) {
-			if(k.charCodeAt(0) < 58) continue;
-			stack[k] = closure._stack[k];
-		}
-	}
-	const f = function (...a) {
-		const l = a.length;
-		if (a == 0) return f;
-		const key = a[0];
-		if (l == 1) {
-			//console.log(key,args);
-			return stack[key];
-		} else {
-			if (l == 2) {
-				if(/\./.test(key)) {
-					const parts = key.split(".");
-					stack.$modules[parts[0]][parts[1]] = a[1];
-				} else {
-					stack[key] = a[1];
-				}
-			} else {
-				//types[key] = a[1];
-				if(/\./.test(key)) {
-					const parts = key.split(".");
-					stack.$modules[parts[0]][parts[1]] = a[1];
-				} else {
-					stack[key] = a[2];
-				}
-			}
-			//return f;
-		}
-	};
-	f._stack = stack;
-	//f._types = types;
-	return f;
-};
 
 var $ = n.frame([]);
-n.quoteTyped = ($typesig,$lambda) => {
+n.quoteTyped = ($typesig, $lambda) => {
 	// ignore type for now
 	//console.log($typesig);
 	return $lambda;
@@ -51,10 +15,77 @@ n.quoteTyped = ($typesig,$lambda) => {
 n.item = a => a;
 n.function = a => a;
 n.occurs = a => a;
+n.iff = (s, f) => s.concatMap(f);
+
 //config.$ = $;
+//n.seq().subscribe(console.log);
+//14,"if",12,"1",15,12,"1",17,15,14,"$",3,"x",12,"0",17,14,"$",3,"x",12,"1",17,14,"$",3,"x",17,17,17
+//const json = n.from();
+var query = `
+xquery version "3.1";
 
-const json = n.from([14,"fold-left",14,"to",12,"1",12,"10",17,12,"0",14,"quote-typed",14,"function",14,"",14,"item",17,14,"item",17,17,14,"item",17,17,15,14,"$",3,"acc",14,"$",12,"1",17,17,14,"$",3,"x",14,"$",12,"2",17,17,14,"add",14,"$",3,"acc",17,14,"$",3,"x",17,17,17,17,17]);
+module namespace xqc="http://raddle.org/xquery-compat";
 
-n.toJS(n.fromL3Stream(json,NaN))
-	.concatMap(x => eval(x.text))
-	.subscribe(x => console.log(x));
+declare function xqc:test($a,$x) {
+	let $x :=
+		if($a) then 1 else $x
+	return $x
+};
+`;
+var file = "array-util";
+var def = "const n = require(\"../lib/index\"), array = require(\"../lib/array\"), map = require(\"../lib/map\");\n";
+var now = new Date().getTime();
+fs.readFile(`../raddle.xq/lib/${file}.xql`, "utf8", (err,ret) => {
+	if(err) return console.log(err);
+	const query = ret.toString();
+	fetch("http://127.0.0.1:8080/exist/apps/raddle.xq/tests/eval.xql?transpile=l3",{
+		method:"POST",
+		headers:{
+			"Accept": "application/json,text/plain, */*",
+			"Content-Type": "text/plain"
+		},
+		body:query
+	})
+		.then(r => {
+			return r.json();
+		})
+		.catch(err => {
+			console.error("Error occurred",err);
+		})
+		.then(ret => {
+			var end = new Date().getTime();
+			console.log("done",(end-now)/1000);
+			const json = n.from(ret);
+			n.toJS(n.fromL3Stream(json, NaN))
+				.map(x => {
+					console.log(x.text);
+					let text = def+x.text;
+					if(x.isModule) {
+					// interop
+						const prefix = x.modulePrefix;
+						for(const k in x.module) {
+							const ars = x.module[k];
+							text += prefix + "." + k + " = (...a) => {\n";
+							text += "const len = a.length;";
+							for(var arity of ars) {
+								text += `if(len == ${arity}) return ${prefix}.${k}$${arity}.apply(null,a);\n`;
+							}
+							text += "};";
+						}
+						text += "module.exports = " + prefix;
+					}
+					fs.writeFile(`./lib/${file}.js`, beautify(text, { indent_with_tabs: true, space_in_empty_paren: false }), function(err) {
+						if(err) return console.log(err);
+						//console.log(JSON.stringify(ret));
+						console.log("file was saved");
+					});
+					try {
+						return eval(text);
+					} catch(err) {
+						console.error("Error occurred",err);
+					//return n.seq();
+					}
+				})
+				.subscribe({next:x => console.log(x),error: err => console.error(err)});
+		});
+});
