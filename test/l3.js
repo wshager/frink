@@ -28,11 +28,11 @@ module namespace xqc="http://raddle.org/xquery-compat";
 
 declare function xqc:test($a,$x) {
 	let $x :=
-		if($a) then 1 else $x
+		if($a eq 2) then 1 else $x
 	return $x
 };
 `;
-var file = "array-util";
+var file = "xq-compat-b";
 var def = "const n = require(\"../lib/index\"), array = require(\"../lib/array\"), map = require(\"../lib/map\");\n";
 var now = new Date().getTime();
 fs.readFile(`../raddle.xq/lib/${file}.xql`, "utf8", (err,ret) => {
@@ -58,17 +58,17 @@ fs.readFile(`../raddle.xq/lib/${file}.xql`, "utf8", (err,ret) => {
 			const json = n.from(ret);
 			n.toJS(n.fromL3Stream(json, NaN))
 				.map(x => {
-					console.log(x.text);
+					//console.log(x.text);
 					let text = def+x.text;
 					if(x.isModule) {
 					// interop
 						const prefix = x.modulePrefix;
 						for(const k in x.module) {
 							const ars = x.module[k];
-							text += prefix + "." + k + " = (...a) => {\n";
-							text += "const len = a.length;";
+							text += prefix + "." + k + " = (...$) => {\n";
+							text += "const $len = $.length;";
 							for(var arity of ars) {
-								text += `if(len == ${arity}) return ${prefix}.${k}$${arity}.apply(null,a);\n`;
+								text += `if($len == ${arity}) return ${prefix}.${k}$${arity}.apply(null,$);\n`;
 							}
 							text += "};";
 						}
