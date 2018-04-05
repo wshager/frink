@@ -4,19 +4,6 @@ var fetch = require("node-fetch");
 var beautify = require("js-beautify").js;
 var fs = require("fs");
 
-
-var $ = n.frame([]);
-n.quoteTyped = ($typesig, $lambda) => {
-	// ignore type for now
-	//console.log($typesig);
-	return $lambda;
-};
-
-n.item = a => a;
-n.function = a => a;
-n.occurs = a => a;
-n.iff = (s, f) => s.concatMap(f);
-
 //config.$ = $;
 //n.seq().subscribe(console.log);
 //14,"if",12,"1",15,12,"1",17,15,14,"$",3,"x",12,"0",17,14,"$",3,"x",12,"1",17,14,"$",3,"x",17,17,17
@@ -68,7 +55,7 @@ fs.readFile(`../raddle.xq/lib/${file}.xql`, "utf8", (err,ret) => {
 							text += prefix + "." + k + " = (...$) => {\n";
 							text += "const $len = $.length;";
 							for(var arity of ars) {
-								text += `if($len == ${arity}) return ${prefix}.${k}$${arity}.apply(null,$);\n`;
+								text += `if($len == ${arity}) return n.fromPromise(${prefix}.${k}$${arity}.apply(null,$));\n`;
 							}
 							text += "};";
 						}
