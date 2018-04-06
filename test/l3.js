@@ -27,7 +27,6 @@ declare function xqc:test2($a,$x) {
 
 `;
 var file = "xq-compat-b";
-var def = "const n = require(\"../lib/index\"), array = require(\"../lib/array\"), map = require(\"../lib/map\");\n";
 var now = new Date().getTime();
 fs.readFile(`../raddle.xq/lib/${file}.xql`, "utf8", (err,ret) => {
 	if(err) return console.log(err);
@@ -49,37 +48,19 @@ fs.readFile(`../raddle.xq/lib/${file}.xql`, "utf8", (err,ret) => {
 		.then(ret => {
 			var end = new Date().getTime();
 			console.log("done",(end-now)/1000);
-			n.toJS(n.fromL3Stream(n.from(ret), NaN))
-				.map(x => {
-					//console.log(x.text);
-					let text = def+x.text;
-					if(x.isModule) {
-					// interop
-						const prefix = x.modulePrefix;
-						for(const k in x.module) {
-							const ars = x.module[k];
-							text += prefix + "." + k + " = (...$) => {\n";
-							text += "const $len = $.length;";
-							for(var arity of ars) {
-								text += `if(process.env.debug) console.log("${prefix}.${k}",$len);\n`;
-								text += `if($len == ${arity}) return n.fromPromise(${prefix}.${k}$${arity}.apply(null,$));\n`;
-							}
-							text += "};";
-						}
-						text += "module.exports = " + prefix;
-					}
-					fs.writeFile(`./lib/${file}.js`, beautify(text, { indent_with_tabs: true, space_in_empty_paren: false }), function(err) {
-						if(err) return console.log(err);
-						//console.log(JSON.stringify(ret));
-						console.log("file was saved");
-					});
-					try {
-						return eval(text);
-					} catch(err) {
-						console.error("Error occurred",err);
-					//return n.seq();
-					}
-				})
+			n.toJS(n.fromL3Stream(n.from(ret), NaN)).map(text => {
+				fs.writeFile(`./lib/${file}.js`, beautify(text, { indent_with_tabs: true, space_in_empty_paren: false }), function(err) {
+					if(err) return console.log(err);
+					//console.log(JSON.stringify(ret));
+					console.log("file was saved");
+				});
+				try {
+					return eval(text);
+				} catch(err) {
+					console.error("Error occurred",err);
+				//return n.seq();
+				}
+			})
 				.subscribe({next:x => console.log(x),error: err => console.error(err)});
 		});
 });
