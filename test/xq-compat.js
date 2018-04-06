@@ -9,41 +9,43 @@ const console = require("../lib/console");
 var x = xqc.analyzeChars(n.from(`
 xquery version "3.1";
 
+module namespace xqc="http://raddle.org/xquery-compat";
+
 declare function xqc:test($a,$x) {
 	let $x :=
 		if($a eq 2) then 1 else $x
 	return $x
 };
 
-`),map.map(n.pair("$compat","xquery")));
-console.log(x)
+`),map.map({"$compat":"xquery","$transpile":"l3"}));
+console.log(n.toJS(n.fromL3Stream(x, NaN)));
 
 async function _t(...$) {
 	$ = n.frame($);
 	return $("flags", $(1)),
-		$("char", $(2)),
-		$("oldType", $("flags").call($, "type")),
-		$("buffer", $("flags").call($, "buffer")),
-			//console.log("flags",$("flags")),
+	$("char", $(2)),
+	$("oldType", $("flags").call($, "type")),
+	$("buffer", $("flags").call($, "buffer")),
+	//console.log("flags",$("flags")),
 	$("buffer",
 		(await n.when(n.and($("zero"), $("flag"))) ?
-				$("buffer") :
-				(
-					n.seq($("buffer"), $("char"))
-				)
+			$("buffer") :
+			(
+				n.seq($("buffer"), $("char"))
+			)
 		)),
 	console.log("buffer1",$("buffer")),
 	$("flags", map.put($("flags"), "buffer", $("buffer"))),
 	console.log("flags",$("flags")),
-	$("flags")
+	$("flags");
 }
 
 function t(x,s) {
-	return n.fromPromise(_t(x,s))
+	return n.fromPromise(_t(x,s));
 }
 async function _a() {
 	var $ = n.frame();
-	console.log("A called")
+	console.log("A called");
 	$("r",array.array(map.map({t:1,d:1,v:1})));
 	$("tpl",map.map({t:2,d:2,v:2}));
 	$("r", await n.when(n.exists($("tpl")),"exists-tpl") ?
@@ -58,13 +60,13 @@ async function _b() {
 	$("size",array.size($("r")));
 	return await n.when(n.gt($("size"),1)) ?
 		(console.log("true-size-0"),$("last", $("r").call("size", $("size"))),
-			//console.log("GG-LAST",$("last")),
-			await n.when(n.empty($("last"))) ?
+		//console.log("GG-LAST",$("last")),
+		await n.when(n.empty($("last"))) ?
 			(console.log("true-empty-last"),map.map()) :
 			(console.log("false-empty-last"),await n.when(n.eq($("last").call("t", "t"), 9)) ?
 				(console.log("true-last-t-9"),n.seq()) :
 				(console.log("false-last-t-9"),$("last")))) :
-		(console.log("false-size-0"),map.map())
+		(console.log("false-size-0"),map.map());
 }
 
 /*
