@@ -1,18 +1,12 @@
-import { seq, create } from "./seq";
+import { seq, forEach } from "./seq";
 
 import { error } from "./error";
 
 import { element, attribute } from "./access";
 
-import "rxjs/add/operator/skipWhile";
-import "rxjs/add/operator/takeWhile";
-
-
-//const _vnodeFromCx = (cx,node) => cx && "vnode" in cx ? cx.vnode : node.cx.vnode;
-
-export function children($node,axis) {
-	var contextNode, depth = NaN;
-	// move to first contextNode if isNaN, or the same depth
+export function children($node, axis) {
+	var parentNode, childNode, descendingNode, depth = NaN;
+	// move to first childNode if isNaN, or the same depth
 	var f = axis && axis.f ?
 		axis.f.__is_NodeTypeTest ?
 			axis.f.__Accessor ?
@@ -20,23 +14,43 @@ export function children($node,axis) {
 				axis.f :
 			axis.f :
 		n => n;
-	let start = false, end = false;
-	const test = node => {
-		if(isNaN(depth)) depth = node.depth;
-		let switchContext = false;
-		if(node.depth == depth) {
-			switchContext = true;
-			contextNode = node;
+	const _hasAncestor = (node,maybeAncestor) => {
+		while(node.parent) {
+			if(node.parent == maybeAncestor) return true;
+			node = node.parent;
 		}
-		start = start || (node.type != 17 && node.parent === contextNode && f(node));
-		const flagEnd = end;
-		end = end || (node.type == 17 && node.parent === contextNode && f(node.node));
-		return switchContext || (start && !flagEnd);
 	};
-	return $node.takeWhile(node => test(node)).filter(node => node.depth > depth);
+	const test = (node) => {
+		if (isNaN(depth)) depth = node.depth;
+		// if depth is at node, switch context
+		// TODO filter while depth > cxDepth, move cx down while nodetest true
+		const isClose = node.type == 17;
+		if(!isClose) {
+			if (node.depth == depth) {
+				parentNode = node;
+				//console.log("init",node.type,node.name);
+			} else if(node.parent == parentNode) {
+				if(f(node)) {
+					childNode = node;
+					//console.log("cx",node.type,node.name);
+				}
+			} else if(node.parent == childNode) {
+				descendingNode = node;
+				//console.log("desc",node.type,node.name);
+			}
+		}
+		// 1. never emit init
+		// 2. emit only cx nodes that pass filter
+		// 3. emit only nodes that have cx as ancestor
+		return (isClose ? node.node : node) == parentNode ? false :
+			(isClose ? node.node : node) == childNode ? true :
+				(isClose ? node.node : node) == descendingNode ? true :
+					_hasAncestor(node,childNode);
+	};
+	return $node.filter(test);
 }
 
-function Axis(g, f, type) {
+export function Axis(g, f, type) {
 	return {
 		__is_Axis: true,
 		__type: type || 1,
@@ -44,11 +58,21 @@ function Axis(g, f, type) {
 		g: g
 	};
 }
-function child($f) {
-	const cx = this;
+
+export function child($f) {
+	var cx = this;
 	return seq($f).map(f => {
-		var axis = Axis(void(0), f, 1);
-		const stepper = $node => children.bind(cx)($node,axis);
+		var axis = Axis(void 0, f, 1);
+		var stepper = $node => children.bind(cx || this)($node, axis);
+		axis.g = stepper;
+		return axis;
+	});
+}
+
+export function self($f) {
+	return seq($f).map(f => {
+		var axis = Axis(void 0, f, 1);
+		var stepper = $node => $node;
 		axis.g = stepper;
 		return axis;
 	});
@@ -77,13 +101,14 @@ export function selectStreaming($node, ...paths) {
 	var cx = this;
 	$node = seq($node).skipWhile(node => node.type != 1);
 	// make sure the root is a valid context
-	//
-	return seq(paths)
-		.concatMap(path => seq(_axify(path)))
-		// execute the axis stepping function,
-		// it should now take care of the testing / transformation function
+
+	var axes = forEach(seq(paths),_axify);
+
+	// execute the axis stepping function,
+	// it should now take care of the testing / transformation function
+	return axes
 		.map(path => $node => path.g.bind(cx)($node))
 		// update the context state
-		.reduce(($node, changeFn) => changeFn($node),$node)
+		.reduce(($node, changeFn) => changeFn($node), $node)
 		.concatAll();
 }
