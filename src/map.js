@@ -1,10 +1,10 @@
 import * as ohamt from "ohamt";
 
-import { seq, isSeq, of, isExactlyOne, exactlyOne } from "./seq";
+import { seq, isSeq, of, from, forEach, exactlyOne } from "./seq";
 
 import { isObject } from "./util";
 
-import { map } from "./access";
+//import { map } from "./access";
 
 import { error } from "./error";
 
@@ -28,13 +28,20 @@ OrderedMap.prototype["@@transducer/result"] = function(m) {
 	return m;
 };
 
+OrderedMap.prototype.call = function($,$k,$v) {
+	const len = arguments.length;
+	if(len == 2) return get(this,$k);
+	if(len == 3) return set(this,$k,$v);
+	return this;
+};
+
 export function isMap(maybe){
 	return !!(maybe && maybe.__is_Map);
 }
 
-const fromEntries = (entries, m = _create()) => {
+export const fromEntries = (entries, m = _create()) => {
 	m = m.beginMutation();
-	for(const kv of entries) m = m.set(kv[0],kv[1]);
+	for(const [k,v] of entries) m = m.set(k,v);
 	return m.endMutation();
 };
 
@@ -42,72 +49,74 @@ const _create = () => ohamt.make({
 	keyEq: (x,y) => x instanceof Object && "eq" in x ? x.eq(y) : x === y
 });
 
-export default function construct(...a){
-	const l = a.length;
-	if(l===0){
-		return seq(_create());
+export function map(...a) {
+	var l = a.length;
+	if (l === 0) {
+		return _create();
 	}
-	if(l==1){
-		const s = a[0];
+	if (l == 1) {
+		var s = a[0];
 		if (isSeq(s)) return merge(s);
-		if (isMap(s)) return of(s);
-		if (isObject(s)) return of(fromEntries(Object.entries(s)));
+		if (isMap(s)) return s;
+		if (isObject(s)) return fromEntries(Object.entries(s));
+		if(Array.isArray(s)) return fromEntries(s);
 		// TODO VNode conversion + detect tuple
-		if (map()(s)) return of(s.toMap());
-		return error("XXX","Not a map or tuple");
+		//if ((0, _access.map)()(s)) return s.toMap();
+		return error("XXX", "Not a map or tuple");
 	}
 	// expect a sequence of maps or each argument to be a map
-	return merge(seq(a.map(x => seq(x))).concatAll());
+	return merge(from(a.map(x => isSeq(x) ? x : of(x))).concatAll());
 }
 
-export const merge = $m => {
+export function merge($m) {
 	if ($m === undefined) return error("XPTY0004");
 	// assume a sequence of vectors
-	return $m.reduce(function(pre,cur){
+	return $m.reduce((pre, cur) => {
 		// TODO force persistent cx
-		if(map()(cur)) cur = cur.toMap();
-		if(!isMap(cur)) return error("XPTY0004","One of the items for map:merge is not a map.");
-		return fromEntries(cur,pre);
-	},_create());
+		//if ((0, _access.map)()(cur)) cur = cur.toMap();
+		if (!isMap(cur)) {
+			return error("XPTY0004", "One of the items for map:merge is not a map.");
+		}
+		return fromEntries(cur, pre);
+	}, _create());
+}
+
+const _checked = ($m, fn) => {
+	if ($m === undefined) return error("XPTY0004");
+	return forEach(exactlyOne($m),m => !isMap(m) ? error("XPTY0004", "The provided item is not a map.") : fn(m));
 };
 
-export function put($m,$k,$v) {
-	return exactlyOne($m).concatMap(m => {
-		$v = seq($v);
-		return exactlyOne($k)
-			.concatMap(k => isExactlyOne($v).concatMap(test => test ? $v.map(v => m.set(k, v)) : seq(m.set(k,$v))));
-	});
+export function set($m, $k, $v) {
+	return _checked($m, m => forEach(exactlyOne($k), k => m.set(k, $v)));
 }
 
 export function keys($m) {
-	return exactlyOne($m).concatMap(m => m.keys());
+	return _checked($m, m => m.keys());
 }
 
-export function contains($m,$k){
-	return exactlyOne($m).concatMap(m => exactlyOne($k).map(k => m.has(k)));
+export function contains($m, $k) {
+	return _checked($m, m => forEach(exactlyOne($k), k => m.has(k)));
 }
 
 export function size($m) {
-	return exactlyOne($m).map(m => m.count());
+	return _checked($m, m => m.count());
 }
 
-export function forEachEntry($m,$fn){
-	return exactlyOne($fn).concatMap(fn => exactlyOne($m).concatMap(m => m.entries()).concatMap(kv => fn(seq(kv[0]),seq(kv[1]))));
+export function forEachEntry($m, $fn) {
+	return _checked($m, m => forEach(exactlyOne($fn), fn => forEach(from(m.entries()),([k,v]) => fn(k, v))));
 }
 
-export function entry($k,$v){
+export function entry($k, $v) {
 	// TODO template errors
-	$v = seq($v);
-	return seq($k).concatMap(k => {
-		var m  = _create();
-		return isExactlyOne($v).concatMap(test => test ? $v.map(v => m.set(k,v)) : seq(m.set(k,$v)));
-	});
+	return forEach($k,k => _create().set(k,$v));
 }
 
-export function get($m,$k) {
-	return exactlyOne($m).concatMap(m => exactlyOne($k).map(k => m.get(k)));
+export function get($m, $k) {
+	return _checked($m, m => forEach(exactlyOne($k),k => m.has(k) ? m.get(k) : seq()));
 }
 
-export function remove($m,$k) {
-	return exactlyOne($m).concatMap(m => exactlyOne($k).map(k => m.delete(k)));
+export function remove($m, $k) {
+	return _checked($m, m => forEach(exactlyOne($k), k => m.delete(k)));
 }
+
+export { set as put, map as default };
