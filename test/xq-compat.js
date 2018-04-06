@@ -7,13 +7,14 @@ const console = require("../lib/console");
 //const Scheduler = require("rxjs/Scheduler").Scheduler;
 
 var x = xqc.analyzeChars(n.from(`
-	xquery version "4.1";
+xquery version "3.1";
 
-module namespace xqc="http://raddle.org/xquery-compat";
+declare function xqc:test($a,$x) {
+	let $x :=
+		if($a eq 2) then 1 else $x
+	return $x
+};
 
-import module namespace console="http://exist-db.org/xquery/console";
-import module namespace a="http://raddle.org/array-util" at "../lib/array-util.xql";
-import module namespace dawg="http://lagua.nl/dawg" at "../lib/dawg.xql";
 `),map.map(n.pair("$compat","xquery")));
 console.log(x)
 

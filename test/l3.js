@@ -18,6 +18,13 @@ declare function xqc:test($a,$x) {
 		if($a eq 2) then 1 else $x
 	return $x
 };
+
+declare function xqc:test2($a,$x) {
+	let $x :=
+		if($a eq 2) then 1 else $x
+	return $x
+};
+
 `;
 var file = "xq-compat-b";
 var def = "const n = require(\"../lib/index\"), array = require(\"../lib/array\"), map = require(\"../lib/map\");\n";
@@ -42,8 +49,7 @@ fs.readFile(`../raddle.xq/lib/${file}.xql`, "utf8", (err,ret) => {
 		.then(ret => {
 			var end = new Date().getTime();
 			console.log("done",(end-now)/1000);
-			const json = n.from(ret);
-			n.toJS(n.fromL3Stream(json, NaN))
+			n.toJS(n.fromL3Stream(n.from(ret), NaN))
 				.map(x => {
 					//console.log(x.text);
 					let text = def+x.text;
@@ -55,6 +61,7 @@ fs.readFile(`../raddle.xq/lib/${file}.xql`, "utf8", (err,ret) => {
 							text += prefix + "." + k + " = (...$) => {\n";
 							text += "const $len = $.length;";
 							for(var arity of ars) {
+								text += `if(process.env.debug) console.log("${prefix}.${k}",$len);\n`;
 								text += `if($len == ${arity}) return n.fromPromise(${prefix}.${k}$${arity}.apply(null,$));\n`;
 							}
 							text += "};";
