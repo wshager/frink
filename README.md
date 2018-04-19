@@ -1,6 +1,6 @@
 # Frink: everything but the kitchen sink
 
-Parse XML into a DOM level 4 compatible, persistent (AKA immutable) virtual tree. 
+Parse XML into a DOM level 4 compatible, persistent (AKA immutable) virtual tree.
 
 Traverse trees with speed-optimized functions reminiscent of XPath.
 
@@ -28,17 +28,25 @@ However, what is called virtual DOM is actually not HTML anymore, as it must obe
 
 Frink integrates with legacy XML projects that don't rely on DTD validation.
 
+## The Concept
+
+The core concept of Frink is that any document can be iterated (or streamed) as a flat sequence of nodes, be it an XML or HTML document, a piece of JSON or even a functional program (written, for example, in XQuery, RQL or RDL). The way these documents are traversed is in *document order*, just like XML is usually streamed: each node is emitted, and if it's a branch (e.g. an element) the closing of the node is emitted as well. In the browser there's a related (and rather obscure it seems) feature in javascript called "TreeWalker". This allows one to iterate HTML nodes in document order, but it doesn't include the closing of branches. To ameliorate this, a small wrapper can be used to accomplish the same behaviour that Frink is based on (uses ES6 WeakMap): https://gist.github.com/wshager/edb8aadccb6f06fa566cc3d58a098f4c.
+
+Instead of just emitting every node as-is, Frink also wraps each node in a container object. This way the same interface can be used to "real" DOM nodes as well as "virtual" ones. In addition to helper methods, the wrapper provides the depth and index of the node in the document, as well as the index of the node in the parent. Frink also provides an immutable alternative to "traditional" mutable virtual nodes. Because of this, the node wrapper also provides access to the parent node, which would not be possible to store in an immutable structure. The wrapping is read-only and ephemeral, as it gets created upon each traversal and destroyed afterwards. From an API perspective this means you shouldn't create references to wrapper nodes elsewhere, or they can't be garbage collected. Instead, you should use functions like `forEach` (AKA `map`) to transform them.
+
 ## API (WIP)
 
 ### Constructors
 
+The shorthand for constructor functions is inspired by HyperScript, which is in turn inspired by put-selector, which was inspired by JSON-query, which was inspired by XPath, which is based on XML DOM. Besides, I didn't want names like `createElement` etc. You may wish to alias the functions in your code.
+
 #### e(name, children) ⇒ <code>VNode</code>
 Creates an element node, which can contain multiple nodes of any type, except `document`.
- 
+
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
 | name  | <code>string, QName</code> | The name of the element |
-| children | <code>VNode*</code> | The children of the element (array or Sequence) |
+| children | <code>VNode*</code> | The children of the element (array, ArraySeq or Observable) |
 
 #### a(name,value) ⇒ <code>VNode</code>
 Creates an attribute node under an element, or a tuple under a map. Can contain a single node of any other type, except `document` and `attribute`. Note that when serializing to XML, attribute values are converted to a string following serializer parameters.
@@ -52,31 +60,31 @@ When the parent is not an element or map, an error will be produced.
 
 #### x(value) ⇒ <code>VNode</code>
 Creates a primitive value node, which can contain a javascript primitive (string, number, boolean or null).
- 
+
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
 | value | <code>string, number, boolean, null</code> | The value of the node |
 
 #### r(value) ⇒ <code>VNode</code>
 Creates a "reference" (or link) node, which can contain a (partial) URI-formatted string.
- 
+
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
 | value | <code>string</code> | The value of the node |
 
 #### l(children) ⇒ <code>VNode</code>
 Creates a list (AKA array) node, which can contain multiple nodes of any type, except `document` and `attribute`.
- 
+
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| children | <code>VNode*</code> | The children of the list (array or Sequence) |
+| children | <code>VNode*</code> | The children of the list (array, ArraySeq or Observable) |
 
 #### m(children) ⇒ <code>VNode</code>
-Creates a map (AKA plain object) node, which can contain multiple nodes of any type, except `document` and `attribute`.
+Creates a map (AKA plain object) node, which can contain multiple nodes of type `attribute`.
 
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| children | <code>VNode*</code> | The children of the map (array or Sequence) |
+| children | <code>VNode*</code> | The children of the map (array, ArraySeq or Observable) |
 
 #### d(children) ⇒ <code>VNode</code>
 Creates a document node, which can contain a single node of any other type, except `document` and `attribute`, in addition to multiple processing instruction nodes. In general, documents aren't constructed directly, but created by the parser.
@@ -85,7 +93,7 @@ This is a top level node, and may not be contained in other nodes.
 
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
-| children | <code>VNode*</code> | The children of the document (array or Sequence) |
+| children | <code>VNode*</code> | The children of the document (array, ArraySeq or Observable) |
 
 #### p(target,content) ⇒ <code>VNode</code>
 Creates a processing instruction node.
@@ -112,6 +120,15 @@ Creates a "function call" node, which can contain nodes of any other type, excep
 | qname | <code>string, QName</code> | The name of the function |
 | arguments | <code>Array</code> | The arguments to the function as an array |
 
+
+#### q(body) ⇒ <code>VNode</code>
+Creates a "quotation" (AKA lambda) node, which can contain nodes of any other type, except `attribute`.
+
+| Param  | Type                | Description  |
+| ------ | ------------------- | ------------ |
+| body | <code>Array</code> | The arguments to the function as an array |
+
+
 ___
 
 Notes:
@@ -120,26 +137,38 @@ Notes:
 * Once a root node is actualized, all constructor function references will be called recursively to create the actual document structure.
 * A document may also be actualized on demand, for example when accessing or modifying a temporary structure.
 * Documents can be persistent or non-persistent JSON under the hood. This can be decided when a document is actualized. The VNode interface can also be used to wrap HTML DOM nodes.
-
 ____
 
-## Faq
+### Sequences
 
-Q: Why such short function names?
+Sequences come in two flavors. The default (ArraySeq) is based on a javascript array, the other is an Observable sequence. The two are interopable, to the extend that the array-based Sequence implements a limited number of methods from RxJS and converts to an Observable when needed. To guarantee interoperability, you should use the functions provided by Frink instead of methods on objects.
 
-A: The shorthand is inspired by HyperScript, which is in turn inspired by put-selector, which was inspired by JSON-query, which was inspired by XPath, which is based on XML DOM. Besides, I didn't want names like `createElement` etc. You may wish to alias the functions in your code, but beware that `element`, `attribute`, `text`, et al. are reserved elsewhere for node type tests.
+#### seq(...) => <code>ArraySeq|Observable</code>
+
+Creates a sequence. Any sequences or iterables (except strings) in arguments are flattened. In case any argument is an Observable or a Promise, the sequence is converted to an Observable.
+
+#### zeroOrOne(seq) => <code>ArraySeq|Observable</code>
+
+Tests a sequence for cardinality. If it contains zero or one item, the sequence is returned. Else an error is thrown instead.
+
+#### exactlyOne(seq) => <code>ArraySeq|Observable</code>
+
+Tests a sequence for cardinality. If it contains exactly one item, the sequence is returned. Else an error is thrown instead.
+
+#### oneOrMore(seq) => <code>ArraySeq|Observable</code>
+
+Tests a sequence for cardinality. If it contains one or more items, the sequence is returned. Else an error is thrown instead.
+
+#### empty(seq) => <code>Boolean|Observable<Boolean></code>
 
 
-Q: What the hell is a "function call node" for?
-
-A: It can turn your HTML or JSON into a computer program. A small group of people still like to go to XSLT conferences, and I guess this would totally be their thing. Other people like to go to code generation conferences. Same thing.
 
 ____
 
 ## Examples
 
 ```javascript
-import {e, a, seq } from "frink";
+import { e, a, seq } from "frink";
 
 e("div",seq(
   a("class","greeting"),
@@ -242,4 +271,3 @@ L3N serialization rules for HTML:
 | 8 | Comment | `<!-- some-comment -->`|
 | 12 | teXt | `<l3-x>123</l3-x>` |
 | 14 | Function call | `<l3-f name="some-function"></l3-f>` |
-
