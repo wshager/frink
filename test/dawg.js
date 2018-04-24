@@ -231,7 +231,13 @@ function find(entry,cp,word,path){
 		return [filter(path,cp,pos),[]];
 	}
 }
-const dawg = createDawg(ops);
-console.log(dawg);
+//const dawg = createDawg(ops);
+//console.log(dawg);
 var fs = require("fs");
-fs.writeFile(__dirname+"/dawg.json",JSON.stringify(dawg),console.log);
+//fs.writeFile(__dirname+"/dawg.json",JSON.stringify(dawg),console.log);
+var out = {};
+for(var k in ops) {
+	out[ops[k]] = parseInt(k);
+}
+
+fs.writeFile(__dirname+"/ops.json",JSON.stringify(out),console.log);

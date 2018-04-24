@@ -30,9 +30,11 @@ Frink integrates with legacy XML projects that don't rely on DTD validation.
 
 ## The Concept
 
-The core concept of Frink is that any document can be iterated (or streamed) as a flat sequence of nodes, be it an XML or HTML document, a piece of JSON or even a functional program (written, for example, in XQuery, RQL or RDL). The way these documents are traversed is in *document order*, just like XML is usually streamed: each node is emitted, and if it's a branch (e.g. an element) the closing of the node is emitted as well. In the browser there's a related (and rather obscure it seems) feature in javascript called "TreeWalker". This allows one to iterate HTML nodes in document order, but it doesn't include the closing of branches. To ameliorate this, a small wrapper can be used to accomplish the same behaviour that Frink is based on (uses ES6 WeakMap): https://gist.github.com/wshager/edb8aadccb6f06fa566cc3d58a098f4c.
+The core concept of Frink is that any document can be iterated (or streamed) as a flat sequence of nodes, be it an XML or HTML document, a piece of JSON or even a functional program (written, for example, in XQuery, RQL or RDL). The way these documents are traversed is in *document order*, just like XML is usually streamed: each node is emitted, and if it's a branch (e.g. an element) the closing of the node is emitted as well. The browser has a related javascript feature called "TreeWalker". This allows one to iterate HTML nodes in document order, but it doesn't include the closing of branches. To ameliorate this, a small wrapper can be used to accomplish the same behaviour that Frink is based on (uses ES6 WeakMap): https://gist.github.com/wshager/edb8aadccb6f06fa566cc3d58a098f4c.
 
-Instead of just emitting every node as-is, Frink also wraps each node in a container object. This way the same interface can be used to "real" DOM nodes as well as "virtual" ones. In addition to helper methods, the wrapper provides the depth and index of the node in the document, as well as the index of the node in the parent. Frink also provides an immutable alternative to "traditional" mutable virtual nodes. Because of this, the node wrapper also provides access to the parent node, which would not be possible to store in an immutable structure. The wrapping is read-only and ephemeral, as it gets created upon each traversal and destroyed afterwards. From an API perspective this means you shouldn't create references to wrapper nodes elsewhere, or they can't be garbage collected. Instead, you should use functions like `forEach` (AKA `map`) to transform them.
+Instead of just emitting every node as-is, Frink also wraps each node in a container object. This way the same interface can be used to "real" DOM nodes as well as "virtual" ones. In addition to helper methods, the wrapper provides the depth and index of the node in the document, as well as the index of the node in the parent. Frink also provides an immutable alternative to "traditional" mutable virtual nodes. Because of this, the node wrapper also provides access to the parent node, which would not be possible to store in an immutable structure. The wrapping object is and instance of class `VNode`, and it's read-only and ephemeral, as it gets created upon each traversal and destroyed afterwards. From an API perspective this means you shouldn't create references to wrapper nodes, or they can't be garbage collected. Instead, you should use functions like `forEach` (AKA `map`) to transform them.
+
+For JSON, the treewalker also emits array and object nodes, where each object entry is emitted as a *tuple*. For this tuple, the XML `attribute` is reused, allowing the attribute's value to contain any other JSON object. For each "leaf" in a JSON tree, the node type is marked as `string` or other (e.g. `number`, `boolean` or `null`). The handling of functional programs is too elaborate for this README, and will be published as a whitepaper in due time.
 
 ## API (WIP)
 
@@ -40,13 +42,15 @@ Instead of just emitting every node as-is, Frink also wraps each node in a conta
 
 The shorthand for constructor functions is inspired by HyperScript, which is in turn inspired by put-selector, which was inspired by JSON-query, which was inspired by XPath, which is based on XML DOM. Besides, I didn't want names like `createElement` etc. You may wish to alias the functions in your code.
 
+#### class VNode
+
 #### e(name, children) ⇒ <code>VNode</code>
 Creates an element node, which can contain multiple nodes of any type, except `document`.
 
 | Param  | Type                | Description  |
 | ------ | ------------------- | ------------ |
 | name  | <code>string, QName</code> | The name of the element |
-| children | <code>VNode*</code> | The children of the element (array, ArraySeq or Observable) |
+| children | <code>aray<VNode>|ArraySeq<VNode>|Observable<VNode></code> | The children of the element |
 
 #### a(name,value) ⇒ <code>VNode</code>
 Creates an attribute node under an element, or a tuple under a map. Can contain a single node of any other type, except `document` and `attribute`. Note that when serializing to XML, attribute values are converted to a string following serializer parameters.
@@ -128,7 +132,6 @@ Creates a "quotation" (AKA lambda) node, which can contain nodes of any other ty
 | ------ | ------------------- | ------------ |
 | body | <code>Array</code> | The arguments to the function as an array |
 
-
 ___
 
 Notes:
@@ -137,6 +140,7 @@ Notes:
 * Once a root node is actualized, all constructor function references will be called recursively to create the actual document structure.
 * A document may also be actualized on demand, for example when accessing or modifying a temporary structure.
 * Documents can be persistent or non-persistent JSON under the hood. This can be decided when a document is actualized. The VNode interface can also be used to wrap HTML DOM nodes.
+
 ____
 
 ### Sequences
@@ -147,20 +151,79 @@ Sequences come in two flavors. The default (ArraySeq) is based on a javascript a
 
 Creates a sequence. Any sequences or iterables (except strings) in arguments are flattened. In case any argument is an Observable or a Promise, the sequence is converted to an Observable.
 
-#### zeroOrOne(seq) => <code>ArraySeq|Observable</code>
+#### zeroOrOne(seqOrValue) => <code>ArraySeq|Observable</code>
 
 Tests a sequence for cardinality. If it contains zero or one item, the sequence is returned. Else an error is thrown instead.
 
-#### exactlyOne(seq) => <code>ArraySeq|Observable</code>
+| Param  | Type                | Description  |
+| ------ | ------------------- | ------------ |
+| seqOrValue | <code>ArraySeq|Observable|\*</code> | The sequence or value to test |
+
+
+#### exactlyOne(seqOrValue) => <code>ArraySeq|Observable</code>
 
 Tests a sequence for cardinality. If it contains exactly one item, the sequence is returned. Else an error is thrown instead.
 
-#### oneOrMore(seq) => <code>ArraySeq|Observable</code>
+| Param  | Type                | Description  |
+| ------ | ------------------- | ------------ |
+| seqOrValue | <code>ArraySeq|Observable|\*</code> | The sequence or value to test |
+
+
+#### oneOrMore(seqOrValue) => <code>ArraySeq|Observable</code>
 
 Tests a sequence for cardinality. If it contains one or more items, the sequence is returned. Else an error is thrown instead.
 
-#### empty(seq) => <code>Boolean|Observable<Boolean></code>
+| Param  | Type                | Description  |
+| ------ | ------------------- | ------------ |
+| seqOrValue | <code>ArraySeq|Observable|\*</code> | The sequence or value to test |
 
+
+#### empty(seqOrValue) => <code>Boolean|Observable<Boolean></code>
+
+Tests is a sequence is entry. Returns a boolean (for `ArraySeq` or `null`) or an `Observable` holding a boolean value if the param is an Observable.
+
+| Param  | Type                | Description  |
+| ------ | ------------------- | ------------ |
+| seqOrValue | <code>ArraySeq|Observable|\*</code> | The sequence or value to test |
+
+
+#### exists(seqOrValue) => <code>Boolean|Observable<Boolean></code>
+
+The opposite of `empty`. Returns a boolean for `ArraySeq` or any other value that isn't a sequence. Returns an `Observable` holding a boolean value if the param is an Observable.
+
+| Param  | Type                | Description  |
+| ------ | ------------------- | ------------ |
+| seqOrValue | <code>ArraySeq|Observable|\*</code> | The sequence or value to test |
+
+
+#### forEach(seqOrValue, fn)
+
+Apply function to value or each value in sequence.
+
+| Param  | Type                | Description  |
+| ------ | ------------------- | ------------ |
+| seqOrValue | <code>ArraySeq|Observable|\*</code> | The sequence or value to test |
+| fn | <code>function</code> | Transformation |
+
+
+#### filter(seqOrValue, fn)
+
+Filter value or values in sequence based on provided function.
+
+| Param  | Type                | Description  |
+| ------ | ------------------- | ------------ |
+| seqOrValue | <code>ArraySeq|Observable|\*</code> | The sequence or value to test |
+| fn | <code>function</code> | Filter function |
+
+
+#### foldLeft(seqOrValue[, seed], fn)
+
+Reduce sequence or value to a new sequence.
+
+| Param  | Type                | Description  |
+| ------ | ------------------- | ------------ |
+| seqOrValue | <code>ArraySeq|Observable|\*</code> | The sequence or value to test |
+| fn | <code>function</code> | Transformation |
 
 
 ____

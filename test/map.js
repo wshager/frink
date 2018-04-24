@@ -5,6 +5,9 @@ const shared = require("./shared");
 const assertEq = shared.assertEq;
 const assertThrows = shared.assertThrows;
 
+map.merge(n.seq(map.map(n.pair("x",2)),map.map(n.pair("a",n.seq(1))))).subscribe(console.log);
+
+/*
 var x = map.default(map.default({"a":1}));
 
 const operatorMap = map.default(n.seq(
@@ -75,3 +78,4 @@ var m2 = map.default(map.entry("a",1),map.entry("a",2));
 assertEq("map.merge 2",toObj(m2),{"a":2});
 
 console.log("all tests passed");
+*/

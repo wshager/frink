@@ -3,7 +3,7 @@ var map = require("../lib/map");
 var array = require("../lib/array");
 var a = require("../lib/array-util");
 const xqc = require("../lib/xq-compat-b.js");
-const console = require("../lib/console");
+//const console = require("../lib/console");
 //const Scheduler = require("rxjs/Scheduler").Scheduler;
 
 var x = xqc.analyzeChars(n.from(`
@@ -185,7 +185,7 @@ var x = xqc.analyzeChars(n.from(`
 
 `),map.map({"$compat":"xquery","$transpile":"l3"}));
 //console.log(n.toJS(n.fromL3Stream(x, NaN)));
-console.log(x);
+x.mergeAll().subscribe(console.log);
 
 async function _t(...$) {
 	$ = n.frame($);
