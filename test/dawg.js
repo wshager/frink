@@ -2,6 +2,23 @@ const util = require("util");
 const microtime = require("microtime");
 
 const ops = {
+	1: "(",
+	2: ")",
+	3: "{",
+	4: "}",
+	5: ";",
+	6: "\"",
+	7: "'",
+	8: ".",
+	9: "$",
+	14: "#",
+	15: "_",
+	100: ",",
+	101: "..",
+	116: "$*",
+	117: "$>",
+	118: "$<",
+	119: "...",
 	200: "satisfies",
 	201: "some",
 	202: "every",
@@ -77,6 +94,7 @@ const ops = {
 	2107: "map",
 	2108: "namespace",
 	2109: "processing-instruction",
+	2110: "text",
 	2204: "document-node",
 	2208: "namespace-node",
 	2211: "empty-sequence",
@@ -85,6 +103,8 @@ const ops = {
 	2214: "schema-attribute",
 	2215: "schema-element",
 	2400: "as",
+	2501: "(:",
+	2502: ":)",
 	2600: ":"
 };
 
@@ -231,13 +251,13 @@ function find(entry,cp,word,path){
 		return [filter(path,cp,pos),[]];
 	}
 }
-//const dawg = createDawg(ops);
+const dawg = createDawg(ops);
 //console.log(dawg);
 var fs = require("fs");
-//fs.writeFile(__dirname+"/dawg.json",JSON.stringify(dawg),console.log);
-var out = {};
-for(var k in ops) {
-	out[ops[k]] = parseInt(k);
-}
+fs.writeFile(__dirname+"/dawg.json",JSON.stringify(dawg),console.log);
+//var out = {};
+//for(var k in ops) {
+//	out[ops[k]] = parseInt(k);
+//}
 
-fs.writeFile(__dirname+"/ops.json",JSON.stringify(out),console.log);
+//fs.writeFile(__dirname+"/ops.json",JSON.stringify(out),console.log);

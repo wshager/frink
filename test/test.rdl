@@ -1,0 +1,5 @@
+$*(test);
+
+$>(test:test,{if(gt($(1),$(2)),{add(1,2)},{subtract(1,2)})});
+
+$>(test:test,{$(x,5),$(y,add($(x),2)),$(y)});
