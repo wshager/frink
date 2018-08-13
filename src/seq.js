@@ -1,173 +1,159 @@
-import { Observable } from "rxjs/Observable";
+import { Observable, Scheduler, isObservable, of, from, range as rxRange, empty as rxEmpty, pipe } from "rxjs";
+import { first as rxFirst, subscribeOn, map, mergeMap, concatMap, switchMap as rxSwitchMap, concatAll, reduce, filter as rxFilter, skip, take, merge, zip, isEmpty, count as rxCount, pairwise, shareReplay } from "rxjs/operators";
 import { error } from "./error";
-import { isObject, isDOMNode, isUndef, isUndefOrNull, isUntypedAtomic, isList, isMap } from "./util";
-import { isVNode } from "./access";
+import { isPromise, isNull, isUndef, isUndefOrNull } from "./util";
+import { boolean } from "./boolean/value";
+import { not } from "./impl";
 
-import "rxjs/add/observable/of";
-import "rxjs/add/observable/from";
-import "rxjs/add/observable/fromPromise";
-import "rxjs/add/observable/range";
-import "rxjs/add/observable/empty";
-import "rxjs/add/observable/throw";
-
-import "rxjs/add/operator/toArray";
-import "rxjs/add/operator/isEmpty";
-import "rxjs/add/operator/take";
-import "rxjs/add/operator/skip";
-import "rxjs/add/operator/first";
-import "rxjs/add/operator/reduce";
-import "rxjs/add/operator/map";
-import "rxjs/add/operator/filter";
-import "rxjs/add/operator/buffer";
-import "rxjs/add/operator/merge";
-import "rxjs/add/operator/mergeMap";
-import "rxjs/add/operator/concat";
-import "rxjs/add/operator/concatMap";
-import "rxjs/add/operator/concatAll";
-import "rxjs/add/operator/switch";
-import "rxjs/add/operator/switchMap";
-import "rxjs/add/operator/zip";
-import "rxjs/add/operator/share";
-import "rxjs/add/operator/publishReplay";
-import "rxjs/add/operator/count";
-
-import { concatMap, filter as rxFilter} from "rxjs/operators";
-
-import { pipe } from "rxjs/util/pipe";
-
-export const fromArgs = args => seq(args.map(x => seq(x))).concatAll();
-
-export function compose(...args){
-	return fromArgs(args).toArray().map(a => pipe.apply(a,a));
-}
-
-export const forEach = ($s,$fn) => {
-	if(!isUndef($fn)) return seq($fn).concatMap(fn => seq($s).concatMap(x => seq(fn(x))));
-	return seq($s).map(fn => concatMap(x => seq(fn(x))));
-};
-export const filter = rxFilter;
-const _wrap = fn => (...args) => {
-	return seq(fn.apply(null,args.map(x => seq(x))));
-};
-
-export const foldLeft = (...args) => {
-	const len = args.length;
-	const $s = seq(args[0]);
-	const $seed = len == 2 ? undefined : seq(args[1]);
-	const $fn = exactlyOne(len == 2 ? args[1] : args[2]);
-	return $fn.concatMap(fn => seq($s.reduce(_wrap(fn),$seed))).concatAll();
-};
-
-export const from = a => Observable.from(a);
-
-export const of = a => Observable.of(a);
-
-export const fromPromise = a => Observable.fromPromise(a);
-
-export { take, skip } from "rxjs/operators";
-
-/*function _asyncIteratorToObservable(asyncIter) {
-	const forEach = (ai, fn, cb) => {
-		return ai.next().then(function (r) {
-			if (!r.done) {
-				try {
-					fn(r.value);
-				} catch(err) {
-					cb(err);
-				}
-				return forEach(ai, fn, cb);
-			} else {
-				cb();
-			}
-		}, cb);
-	};
-	return new Observable(sink => {
-		forEach(asyncIter,x => sink.next(x), err => {
-			if(err) return sink.error(err);
-			sink.complete();
+export class Maybe extends Observable {
+	toObservable() {
+		return create($o => {
+			this.subscribe($o);
 		});
-	});
-}*/
-/*
-LazySeq.prototype.toString = function(){
-	return "Seq [" + this.iterable + "]";
-};
-*/
-// resolve an observable like a promise
-export function when(s,rs,rj){
-	return s.buffer().subscribe({
-		next:buf => {
-			rs(buf);
-		},
-		error: err => {
-			rj(err);
-		}
-	});
-}
-
-export function isSeq(a){
-	return !!(a && a instanceof Observable);
-}
-
-export function seq(...a){
-	if (a.length == 0) return Observable.empty();
-	if (a.length == 1){
-		var x = a[0];
-		if(isSeq(x)) return x;
-		if(isUndefOrNull(x)) return Observable.empty();
-		if(isObject(x) && (x instanceof Promise || typeof x.then == "function")) return fromPromise(x);
-		if(Array.isArray(x) || (x[Symbol.iterator] && typeof x != "string" && !isDOMNode(x) && !isUntypedAtomic(x) && !isVNode(x) && !isList(x) && !isMap(x))) return from(x);
-		return of(x);
 	}
-	return from(a).map(a => seq(a)).concatAll();
 }
+
+export class Single extends Observable {
+	toObservable() {
+		return create($o => {
+			this.subscribe($o);
+		});
+	}
+}
+
+export const isMaybe = x => !!(x && x instanceof Maybe);
+
+export const isSingle = x => !!(x && x instanceof Single);
+
+Observable.prototype.toSingle = function() {
+	return new Single($o => {
+		rxFirst()(this).subscribe($o);
+	});
+};
+
+Observable.prototype.toMaybe = function() {
+	return new Maybe($o => {
+		rxFirst()(this).subscribe($o);
+	});
+};
+
+// TODO check each arg for Observable
+export const fromArgs = args => seq(args.map(x => seq(x))).pipe(concatAll());
+
+export const isSeq = isObservable;
+
+const wrap = fn => x => {
+	const ret = fn(x);
+	return isSeq(ret) || isPromise(ret) ? ret : subscribeOn(Scheduler.queue)(of(ret).toSingle());
+};
+
+export const forEachCurried = fn => $s => isSeq($s) ? mergeMap(wrap(fn))($s) : fn($s);
+
+export function forEach($s, fn) {
+	return !isUndef(fn) ? forEachCurried(fn)($s) : forEachCurried($s);
+}
+
+/**
+ * curried filter
+ * @param  {function} fn [description]
+ * @return {function}     [description]
+ */
+export const filterCurried = fn => $s =>
+	isSeq($s) ?
+		pipe(mergeMap(x => pairwise()(seq(boolean(fn(x)),x))),rxFilter(([t]) => t),map(([,x]) => x))($s) :
+		pipe(rxFilter(t => t),map(() => $s))(seq(fn($s)));
+
+export function filter($s, fn) {
+	return !isUndef(fn) ? filterCurried(fn)($s) : filterCurried($s);
+}
+
+export const foldLeftCurried = fn => $seed => $a =>
+	isSeq($a) ?
+		pipe(reduce((a,x) => fn(a,x),$seed),switchMap(x => x))($a) :
+		fn($seed,$a);
+
+export function foldLeft($a, $seed, fn) {
+	return !isUndef(fn) ? foldLeftCurried(fn)($seed)($a) : foldLeftCurried($seed)($a);
+}
+
+export const scanCurried = fn => $seed => $a =>
+	isSeq($a) ?
+		pipe(scan((a,x) => fn(a,x),$seed),forEach(x => x))($a) :
+		fn($seed,$a);
+
+export function scan($a,$seed,fn) {
+	return !isUndef(fn) ? scanCurried(fn)($seed)($a) : scanCurried($seed)($a);
+}
+
+function fromType(x) {
+	return isSeq(x) ? x : isUndefOrNull(x) ? rxEmpty() : of(x).toSingle();
+}
+
+export function seq(...a) {
+	const len = a.length;
+	if (len == 0) return fromType();
+	if(len == 1) return fromType(a[0]);
+	return concatMap(x => seq(x))(from(a));
+}
+
+export function just(a) {
+	return (isSeq(a) ? a : of(a)).toSingle();
+}
+
+export { take, skip, pairwise, shareReplay };
 
 export function create(o){
 	return Observable.create(o);
 }
 
-export const first = s => {
-	return seq(s).first();
-};
+export const first = s => isSeq(s) ? rxFirst()(s) : s;
 
-export function empty(s){
-	return seq(s).isEmpty();
+export const empty = s => isSeq(s) ? isEmpty()(s) : isNull(s);
+
+export const exists = s => isSeq(s) ? pipe(rxEmpty(),map(not))(s) : !isNull(s);
+
+export const count = s => isSeq(s) ? rxCount()(s) : 1;
+
+export function insertBefore($s,pos,$ins) {
+	return seq($s).pipe(take(pos - 1),merge(seq($ins),skip(pos)));
 }
 
-export function exists(s){
-	return !empty(s);
+export function range(n,s=0) {
+	return subscribeOn(Scheduler.queue)(rxRange(s,n));
 }
 
-export function count(s){
-	return seq(s).count();
+export const isZeroOrOne = s => isMaybe(s) || !isSeq(s) || pipe(skip(1),isEmpty())(s);
+
+export const isOneOrMore = s => (!isSeq(s) && !isNull(s)) || pipe(isEmpty(),map(not))(s);
+
+export const isExactlyOne = s => isSingle(s) || (!isSeq(s) && !isNull(s)) || pipe(isEmpty(),zip(pipe(skip(1),isEmpty())(s),(x, y) => !x && y))(s);
+
+export const switchMapCurried = fn => $s => isSeq($s) ? pipe(
+	rxSwitchMap(wrap(fn)),
+	subscribeOn(Scheduler.queue),
+	unsubscribeOn(Scheduler.queue))($s) : fn($s);
+
+function unsubscribeOn(scheduler) {
+	return source => create(observer => {
+		const subscription = source.subscribe(observer);
+		return () => scheduler.schedule(() => subscription.unsubscribe());
+	});
 }
+export const switchMap = ($s,fn) => !isUndef(fn) ? switchMapCurried(fn)($s) : switchMapCurried($s);
 
-export function insertBefore(s,pos,ins) {
-	s = seq(s);
-	pos = pos - 1;
-	return s.take(pos).merge(seq(ins),s.skip(pos));
+function _testCard($arg,card,err) {
+	const test = card($arg);
+	const fn = t => t ? $arg : error(err);
+	return switchMap(fn)(test);
 }
-
-export function range($n,$s=0) {
-	$n = zeroOrOne($n);
-	$s = zeroOrOne($s);
-	return $s.concatMap(s => $n.concatMap(n => Observable.range(s,n)));
-}
-
-export const isZeroOrOne = s => s.skip(1).isEmpty();
-
-export const isOneOrMore = s => s.isEmpty().map(x => !x);
-
-export const isExactlyOne = s => s.isEmpty().zip(s.skip(1).isEmpty(),(x, y) => !x && y);
 
 /**
  * [zeroOrOne returns arg OR error if arg not zero or one]
  * @param  {Seq} $arg [Sequence to test]
- * @return {Seq|Error}     [Process Error in implementation]
+ * @return {Seq|Error} [Process Error in implementation]
  */
 export function zeroOrOne($arg) {
-	var s = seq($arg).publishReplay(2).refCount();
-	return isZeroOrOne(s).switchMap(test => test ? s : error("FORG0003"));
+	return _testCard($arg,isZeroOrOne,"FORG0003");
 }
 /**
  * [oneOrMore returns arg OR error if arg not one or more]
@@ -175,8 +161,7 @@ export function zeroOrOne($arg) {
  * @return {Seq|Error}      [Process Error in implementation]
  */
 export function oneOrMore($arg) {
-	var s = seq($arg).publishReplay().refCount();
-	return isOneOrMore(s).switchMap(test => test ? s : error("FORG0004"));
+	return _testCard($arg,isOneOrMore,"FORG0004");
 }
 /**
  * [exactlyOne returns arg OR error if arg not exactly one]
@@ -184,21 +169,5 @@ export function oneOrMore($arg) {
  * @return {Seq|Error}      [Process Error in implementation]
  */
 export function exactlyOne($arg) {
-	var s = seq($arg).publishReplay(2).refCount();
-	return isExactlyOne(s).switchMap(test => test ? s : error("FORG0005"));
-}
-
-export function transform($arg, $fn) {
-	var s = seq($arg);
-	return seq($fn).concatMap(fn =>
-		isExactlyOne(s)
-			.switchMap(test => test ?
-				s.concatMap(x => x[Symbol.iterator] ?
-					from(x)
-						.pipe(fn)
-						.reduce((a,x) => a["@@transducer/step"](a,x),x["@@transducer/init"]())
-						.map(x => x["@@transducer/result"](x)) :
-					s.pipe(fn)) :
-				s.pipe(fn)
-			));
+	return _testCard($arg,isExactlyOne,"FORG0005");
 }

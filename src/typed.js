@@ -1,6 +1,6 @@
-import { seq, empty, pairwise, isSeq, create, exactlyOne, zeroOrOne, oneOrMore } from "./seq";
+import { seq, isSeq, create, exactlyOne, zeroOrOne, oneOrMore } from "./seq";
 
-import { id } from "./util";
+import { id, isUndef } from "./util";
 
 // we know typed will take a function and test it,
 // so we can use the same function here to bind the subscriber
@@ -20,17 +20,20 @@ const checked = (f,a) => {
 	} else {
 		if(a !== t) throw new TypeError("Incorrect type: expected "+t.constructor.name+", got "+a.constructor.name);
 	}
-	return a;
+	return t;
 };
 
 
-const errorMessage = (a,name,i,key) => {
+const errorMessage = (a,name,i,pos,key) => {
+	if(isUndef(a) || isUndef(name)) return "Invalid value\n";
+	const noKey = isUndef(key);
+	if(noKey) key = "argument";
 	const io = i < 0 ? "output" : key+" "+(typeof i == "string" ? `"${i}"` :  i);
-	const typePart = key === "argument" ? `for function '${name}'` : `found in ${name}`;
-	return "Invalid "+io+" "+JSON.stringify(a)+" "+typePart + "\n";
+	const typePart = noKey ? `for function '${name}' (in ${pos[0]} at line ${pos[1]}, column ${pos[2]})` : `found in ${name}`;
+	return "Invalid "+io+" *"+JSON.stringify(a)+"* "+typePart + "\n";
 };
 
-const boundObserver = (f,name,i,key) => a => create($o => {
+const boundObserver = (f,name,i,pos,key) => a => create($o => {
 	let last;
 	a.subscribe({
 		next(a) {
@@ -38,7 +41,7 @@ const boundObserver = (f,name,i,key) => a => create($o => {
 			$o.next(checked(f,a));
 		},
 		error(err) {
-			$o.error(errorMessage(last,name,i,key)+err);
+			$o.error(errorMessage(last,name,i,pos,key)+err);
 		},
 		complete(){
 			$o.complete();
@@ -47,12 +50,12 @@ const boundObserver = (f,name,i,key) => a => create($o => {
 });
 
 const card = test => f => {
-	const t = (a,name,i,key = "argument") => {
-		if(isSeq(a)) return boundObserver(f,name,i)(test(a));
+	const t = (a,name,i,pos,key) => {
+		if(isSeq(a)) return boundObserver(f,name,i,pos,key)(test(a));
 		try {
 			return checked(f, test(a));
 		} catch(err) {
-			throw new Error(errorMessage(a,name,i,key)+err);
+			throw new Error(errorMessage(a,name,i,pos,key)+err);
 		}
 	};
 	t.__card = test.name;
@@ -63,7 +66,7 @@ export const many = card(oneOrMore);
 export const maybe = card(zeroOrOne);
 export const single = card(exactlyOne);
 
-function unwrap(fn,args,s,r,name,l,i,o) {
+function unwrap(fn,args,s,r,name,pos,l,i,o) {
 	if(i === l) {
 		const ret = fn();
 		return o ? seq(ret).subscribe(o) : ret;
@@ -78,13 +81,13 @@ function unwrap(fn,args,s,r,name,l,i,o) {
 				o.error(err);
 			},
 			complete() {
-				unwrap(fn.bind(null,value),args,s,r,name,l,i+1,o);
+				unwrap(fn.bind(null,value),args,s,r,name,pos,l,i+1,o);
 			}
 		});
 	};
 	const unwrapSingle = o => a => a.subscribe({
 		next(a) {
-			unwrap(fn.bind(null,a),args,s,r,name,l,i+1,o);
+			unwrap(fn.bind(null,a),args,s,r,name,pos,l,i+1,o);
 		},
 		error(err) {
 			o.error(err);
@@ -92,7 +95,7 @@ function unwrap(fn,args,s,r,name,l,i,o) {
 	});
 	const f = s[i];
 	const c = f.__card;
-	const a = f(args[i],i,name);
+	const a = f(args[i],name,i,pos);
 	if(isSeq(a)) {
 		// when we unwrap we get back an Observable, not a function...
 		if(c === "zeroOrOne") {
@@ -113,11 +116,39 @@ function unwrap(fn,args,s,r,name,l,i,o) {
 			}
 		}
 	}
-	return unwrap(fn.bind(null,a),args,s,r,name,l,i+1,o);
+	return unwrap(fn.bind(null,a),args,s,r,name,pos,l,i+1,o);
 }
 
-export const def = (name,s,r) => fn => {
-	const f = (...args) => r(unwrap(fn,args,s,r,name,args.length,0),-1,name);
+// TODO use separate cross-browser package conditionally
+function getStack(){
+	var orig = Error.prepareStackTrace;
+	Error.prepareStackTrace = function(_, stack) {
+		return stack;
+	};
+	var err = new Error;
+	Error.captureStackTrace(err);
+	var stack = err.stack;
+	Error.prepareStackTrace = orig;
+	return stack;
+}
+
+export const def = (name,s,r,pos) => fn => {
+	if(typeof fn !== "function") throw new TypeError("Invalid argument for function 'def'\nExpected a Function, got a "+fn.constructor.name);
+	if(isUndef(pos)) {
+		var st = getStack()[2];
+		pos = [st.getFileName(),st.getLineNumber(), st.getColumnNumber()];
+	}
+	const f = (...args) => r(unwrap(fn,args,s,r,name,pos,args.length,0),-1,name);
 	f.__wraps = fn;
 	return f;
 };
+
+export const array = f => a => {
+	if(!Array.isArray(a)) return [];
+	a.forEach((a,i) => {
+		f(a,"array",i,[],"value at index");
+	});
+	return a;
+};
+
+export const item = id;

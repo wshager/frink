@@ -2,7 +2,7 @@ import * as rrb from "rrb-vector";
 
 import { error } from "./error";
 
-import { seq, isSeq, foldLeft as seqFoldLeft, forEach as seqForEach, filter as seqFilter, exactlyOne } from "./seq";
+import { seq, isSeq, foldLeft as seqFoldLeft, forEach as seqForEach, filter as seqFilter, exactlyOne, from } from "./seq";
 
 // TODO option: call ensureDoc and handle everything via VNode (i.e. persistent or not)
 //import { ensureDoc } from "./doc";
@@ -106,7 +106,7 @@ export function subarray($a, $s, $l) {
 const _insertBefore = (a, i, v) => a.slice(0, i).push(v).concat(a.slice(i));
 
 export function insertBefore($a, $i, $v) {
-	return _checked($a, a => seqForEach($i, i => _insertBefore(a, i - 1, $v)));
+	return _checked($a, a => seqForEach($i, i => seqForEach(exactlyOne($v),v =>_insertBefore(a, i - 1, v))));
 }
 
 const _remove = (a, i) => a.slice(0, i - 1).concat(a.slice(i));
@@ -116,7 +116,7 @@ export function pop($a) {
 }
 
 export function set($a,$i,$v) {
-	return _checked($a, a => seqForEach(exactlyOne($i), i => a.set(i,$v)));
+	return _checked($a, a => seqForEach(exactlyOne($i), i => seqForEach(exactlyOne($v),v => a.set(i,v))));
 }
 
 export function remove($a, $i) {
@@ -124,7 +124,7 @@ export function remove($a, $i) {
 }
 
 export function append($a, $v) {
-	return _checked($a, a => a.push($v));
+	return _checked($a, a => seqForEach(exactlyOne($v),v => a.push(v)));
 }
 
 export function reverse($a) {
@@ -132,7 +132,7 @@ export function reverse($a) {
 }
 
 export function flatten($a) {
-	return seq($a).mergeAll();
+	return seq($a).mergeMap(a => from(a));
 }
 
 export function filter($a,$fn) {

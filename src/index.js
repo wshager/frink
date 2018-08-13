@@ -1,6 +1,6 @@
-import * as inode from "./inode";
+import { inode } from "l3n";
 
-import { zeroOrOne, create } from "./seq";
+import { zeroOrOne, create, forEach, boolean } from "./seq";
 
 import { Parser } from "./parser";
 
@@ -10,7 +10,15 @@ import { readdir, readFile } from "./fs";
 
 import { isNodeEnv } from "./util";
 
-import { fromL3Stream } from "./l3";
+import { toVNodeStream } from "l3n";
+
+import { select as selectStreaming, children as childrenStreaming } from "./access-streaming";
+
+const boundSelectStreaming = selectStreaming.bind(inode);
+
+const boundChildrenStreaming = childrenStreaming.bind(inode);
+
+export { boundSelectStreaming as selectStreaming, boundChildrenStreaming as childrenStreaming };
 
 if(isNodeEnv && !global.URL) {
 	let url = require("url");
@@ -23,17 +31,17 @@ export function parseString(str, cb) {
 }
 
 export function parse($s){
-	return zeroOrOne($s).concatMap(s => create(o => {
+	return forEach(zeroOrOne($s),s => create(o => {
 		parseString(s,function(err,ret){
 			if(err) return o.error(err);
 			o.next(ret);
 			o.complete();
 		});
-	})).share();
+	}));
 }
 
 export function doc($file){
-	return zeroOrOne($file).concatMap(file => create(o => {
+	return forEach(zeroOrOne($file),file => create(o => {
 		readFile(file.toString(),(err, res) => {
 			if(err) return o.error(err);
 			parse(res.toString()).subscribe({
@@ -42,20 +50,20 @@ export function doc($file){
 				complete: () => o.complete()
 			});
 		});
-	})).share();
+	}));
 }
 
 export function docL3Streaming($file) {
-	return zeroOrOne($file).concatMap(file => parseStreaming(file.toString())).share();
+	return forEach(zeroOrOne($file),file => parseStreaming(file.toString()));
 }
 
-export function vdocStreaming($file) {
+export function docStreaming($file) {
 	// TODO streaming parsing
-	return fromL3Stream(docL3Streaming($file),2).share();
+	return toVNodeStream(docL3Streaming($file),2);
 }
 
 export function collection($uri) {
-	return zeroOrOne($uri).concatMap(uri => create(o => {
+	return forEach(zeroOrOne($uri),uri => create(o => {
 		readdir(uri,function(err,res){
 			if(err) return o.error(err);
 			res.forEach(file => {
@@ -66,12 +74,8 @@ export function collection($uri) {
 			});
 			o.complete();
 		});
-	})).share();
+	}));
 }
-
-export * from "./doc";
-
-export * from "./construct";
 
 export * from "./qname";
 
@@ -79,7 +83,7 @@ export * from "./modify";
 
 export * from "./access";
 
-export * from "./l3";
+//export * from "./l3";
 
 //export { fromJS, toJS, iter as iterJS, toL3 as jsToL3, fromL3 as jsFromL3 } from "./json";
 
@@ -96,3 +100,12 @@ export * from "./function";
 export * from "./op";
 
 export * from "./validate";
+
+const iff = (c,t,f) => forEach(boolean(c),ret => ret ? t.apply() : f.apply());
+
+export { iff as if };
+
+const _f = () => false;
+const _t = () => true;
+
+export { _f as false, _t as true} ;

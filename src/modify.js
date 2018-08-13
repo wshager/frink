@@ -1,10 +1,10 @@
 import { seq } from "./seq";
 
-import { ensureDoc } from "./doc";
+import { ensureDoc } from "l3n";
 
 import { firstChild } from "./access";
 
-import * as inode from "./inode";
+import { inode } from "l3n";
 
 import { error } from "./error";
 

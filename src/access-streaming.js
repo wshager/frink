@@ -5,7 +5,7 @@ import { error } from "./error";
 import { element, attribute } from "./access";
 
 export function children($node, axis) {
-	var parentNode, childNode, descendingNode, depth = NaN;
+	var parentNode, childNode, depth = NaN;
 	// move to first childNode if isNaN, or the same depth
 	var f = axis && axis.f ?
 		axis.f.__is_NodeTypeTest ?
@@ -34,9 +34,6 @@ export function children($node, axis) {
 					childNode = node;
 					//console.log("cx",node.type,node.name);
 				}
-			} else if(node.parent == childNode) {
-				descendingNode = node;
-				//console.log("desc",node.type,node.name);
 			}
 		}
 		// 1. never emit init
@@ -44,8 +41,7 @@ export function children($node, axis) {
 		// 3. emit only nodes that have cx as ancestor
 		return (isClose ? node.node : node) == parentNode ? false :
 			(isClose ? node.node : node) == childNode ? true :
-				(isClose ? node.node : node) == descendingNode ? true :
-					_hasAncestor(node,childNode);
+				_hasAncestor(node,childNode);
 	};
 	return $node.filter(test);
 }
@@ -97,7 +93,7 @@ function _axify($path) {
 	});
 }
 
-export function selectStreaming($node, ...paths) {
+export function select($node, ...paths) {
 	var cx = this;
 	$node = seq($node).skipWhile(node => node.type != 1);
 	// make sure the root is a valid context

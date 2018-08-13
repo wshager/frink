@@ -1,30 +1,12 @@
-import { ensureDoc } from "./doc";
+import { ensureDoc } from "l3n";
 
 import { error } from "./error";
 
-import { seq, isSeq, create, forEach, filter, foldLeft, zeroOrOne, exactlyOne } from "./seq";
+import { seq, isSeq, forEach, filter, zeroOrOne, exactlyOne } from "./seq";
 
-import { pipe } from "rxjs/util/pipe";
-
-import { prettyXML } from "./pretty";
+import { pipe } from "rxjs";
 
 import { isUndef } from "./util";
-
-export function Step(node){
-	this.node = node;
-	this.inode = node.inode;
-	this.parent = node.parent;
-	this.depth = node.depth;
-	this.indexInParent = node.indexInParent;
-}
-
-Step.prototype.type = 17;
-// mark step as vnode
-Step.prototype.__is_VNode = 17;
-
-Step.prototype.toString = function(){
-	return "Step {depth:" + this.node.depth + ", closes:" + this.node.name + "}";
-};
 
 const _vnodeFromCx = (cx,node) => cx && "vnode" in cx ? cx.vnode : node.cx.vnode;
 
@@ -36,111 +18,6 @@ export function children($node) {
 		const depth = node.depth + 1;
 		return seq(values).map((inode, idx) => vnode(inode,node,depth,idx + 1));
 	});
-}
-
-export function vdoc($node) {
-	const cx = this;
-	$node = ensureDoc.bind(cx)($node);
-	return create(o => $node.subscribe({
-		next:function(node){
-			while(node){
-				o.next(node);
-				node = nextNode(node);
-			}
-			o.complete();
-		},
-		error:o.error
-	}));
-}
-
-// FIXME nextNode is never eligable for seqs, so it shouldn't be exposed
-// TODO write nextNode function: create observable for current node, subscribe and call nextNode
-export function nextNode(node /* VNode */) {
-	var type = node.type,
-		inode = node.inode,
-		parent = node.parent,
-		indexInParent = node.indexInParent || 0;
-	var depth = node.depth || 0;
-	// FIXME improve check
-	if(type != 17 && (type == 1 || type == 5  || type == 6 || type == 14) && node.count() === 0) {
-		return new Step(node);
-	}
-	if(type != 17 && node.count() > 0) {
-		// if we can still go down, return firstChild
-		depth++;
-		indexInParent = 0;
-		parent = node;
-		inode = node.first();
-		// TODO handle arrays
-		node = parent.vnode(inode, parent, depth, indexInParent);
-		//console.log("found first", node.type, depth,indexInParent);
-		return node;
-	} else {
-		// emergency exit
-		if(!parent) return;
-		indexInParent++;
-		// if there are no more children, return a 'Step' to indicate a close
-		// it means we have to continue one or more steps up the path
-		if (parent.count() == indexInParent) {
-			//inode = parent;
-			depth--;
-			node = node.parent;
-			if (depth === 0 || !node) return;
-			inode = node.inode;
-			node = new Step(node);
-			//console.log("found step", node.type, depth, indexInParent);
-			return node;
-		} else {
-			// return the next child
-			inode = parent.next(node);
-			if (inode !== undefined) {
-				node = parent.vnode(inode, parent, depth, indexInParent);
-				//console.log("found next", node.type, depth, indexInParent);
-				return node;
-			}
-		}
-	}
-}
-/*
-export function* prevNode(node){
-	//var depth = node.depth;
-	while(node){
-		if(!node.size) {
-			//depth--;
-			node = node.parent;
-			if(!node) break;
-			yield node;
-		} else{
-			if(!("indexInParent" in node)) node.indexInParent = node.parent.size;
-			node.indexInParent--;
-			node = node.getByIndex(node.indexInParent);
-		}
-	}
-}
-*/
-export function stringify($input){
-	const attrFunc = (z, kv) => {
-		return z += " " + kv[0] + "=\"" + kv[1] + "\"";
-	};
-	const docAttrFunc = (z, kv) => {
-		return z += kv[0] == "DOCTYPE" ? "<!" + kv[0] + " " + kv[1] + ">" : "<?" + kv[0] + " " + kv[1] + "?>";
-	};
-	return vdoc($input).reduce((str,node) => {
-		let type = node.type;
-		if (type == 1) {
-			str += "<" + node.name;
-			str = foldLeft(node.attrEntries(),str,attrFunc);
-			if (!node.count()) str += "/";
-			str += ">";
-		} else if (type == 3) {
-			str += node.toString();
-		} else if (type == 9) {
-			str += foldLeft(node.attrEntries(),str,docAttrFunc);
-		} else if (type == 17) {
-			str += "</" + node.name + ">";
-		}
-		return str;
-	},"").map(str => prettyXML(str));
 }
 
 export function firstChild($node) {
@@ -200,22 +77,6 @@ export function self($f) {
 		if(f.name !== "forEach" && f.name !== "filter") f = forEach(f);
 		return Axis(node => node, f, 3);
 	});
-}
-
-export function iter(node, f, cb) {
-	// FIXME pass doc?
-	var i=0, prev=node;
-	if(!f) f = () => {};
-	node = ensureDoc.bind(this)(node);
-	f(node,i++);
-	while (node) {
-		node = nextNode(node);
-		if(node) {
-			f(node,i++);
-		}
-	}
-	if(cb) cb();
-	return prev;
 }
 
 export const isVNode = n => !!n && n.__is_VNode;
@@ -312,7 +173,7 @@ function _attrGet(key,$node){
 			entries = node.attrEntries();
 		}
 		return seq(entries).map(function (kv) {
-			return node.vnode(node.ituple(kv[0], kv[1]), node.parent, node.depth + 1, node.indexInParent);
+			return node.vnode(node.pair(kv[0], kv[1]), node.parent, node.depth + 1, node.indexInParent);
 		});
 	});
 }
@@ -372,7 +233,7 @@ function Axis(g,f,type){
 }
 export function child($f) {
 	const cx = this;
-	return zeroOrOne($f).map(f => {
+	return forEach(zeroOrOne($f),f => {
 		if(f.__is_NodeTypeTest){
 			// this means it's a predicate, and the actual function should become a filter
 			if(f.__Accessor) {
@@ -392,8 +253,8 @@ export function siblingsOrSelf($node){
 export function select($node, ...paths) {
 	var cx = this;
 	var boundEnsureDoc = ensureDoc.bind(cx);
-	return seq(paths)
-		.concatMap(path => seq(_axify(path)))
+	return seq(forEach(paths,
+		path => _axify(path)))
 		// we're passing $node here, because we want to update it every iteration
 		.map(path => $node => {
 			// make sure all paths are funcs

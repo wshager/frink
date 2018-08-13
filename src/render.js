@@ -1,22 +1,9 @@
-import { iter, nextNode } from "./access";
-import { ensureDoc } from "./doc";
-import * as dom from "./dom";
+import { ensureDoc, dom } from "l3n";
 
-import { Observable } from "rxjs/Observable";
-import { Subject } from "rxjs/Subject";
+import { Observable, Subject } from "rxjs";
 
-import "rxjs/add/observable/from";
-import "rxjs/add/observable/of";
-import "rxjs/add/observable/empty";
-import "rxjs/add/observable/never";
-import "rxjs/add/observable/merge";
-
-import "rxjs/add/operator/switchMap";
-import "rxjs/add/operator/merge";
-import "rxjs/add/operator/buffer";
-import "rxjs/add/operator/do";
-import "rxjs/add/operator/distinctUntilChanged";
-
+// TODO
+const iter = x => x, nextNode = x => x;
 
 function same(cur,nxt){
 	if(nxt === cur) return true;

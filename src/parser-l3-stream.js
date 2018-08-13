@@ -4,7 +4,7 @@ import * as fs from "fs";
 
 import { create } from "./seq";
 
-import * as stripBomStream from "strip-bom-stream";
+import stripBomStream from "strip-bom-stream";
 
 const hasProp = {}.hasOwnProperty;
 
@@ -116,9 +116,12 @@ export function parse(file) {
 		saxStream.on("comment", function(value) {
 			ontext(value, 8);
 		});
-		fs.createReadStream(file)
-			.pipe(stripBomStream.default())
-			.pipe(saxStream);
+		if(/^https?:\/\//.test(file)) {
+			const fetch = require("node-fetch");
+			fetch(file).then(res => res.body.pipe(stripBomStream).pipe(saxStream));
+		} else {
+			fs.createReadStream(file).pipe(stripBomStream).pipe(saxStream);
+		}
 		/*try {
 			str = str.toString();
 			if (str.trim() === "") {

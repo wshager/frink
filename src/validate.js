@@ -1,6 +1,6 @@
 import { exactlyOne, zeroOrOne } from "./seq";
 
-import { ensureDoc } from "./doc";
+import { ensureDoc } from "l3n";
 
 import { parent, nextNode } from "./access";
 

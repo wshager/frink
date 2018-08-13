@@ -1,4 +1,4 @@
-import { seq, isSeq, die, first, empty, filter, compose, skip, take } from "./seq";
+import { seq, skip, take } from "./seq";
 import { error } from "./error";
 import { isUndef } from "./util";
 

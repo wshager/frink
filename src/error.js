@@ -1,5 +1,4 @@
-import { Observable } from "rxjs/Observable";
-import "rxjs/add/observable/throw";
+import { throwError } from "rxjs";
 import * as codes from "../errors.json";
 
 export function error(qname,message){
@@ -7,7 +6,7 @@ export function error(qname,message){
 	var code = typeof qname == "string" ? qname.replace(/^[^:]*:/,"") : qname;//.getLocalPart();
 	if(!message) message = codes[code];
 	var err = new Error(message);
-	console.trace();
+	//console.trace();
 	err.name = code;
-	return Observable.throw(err);
+	return throwError(err);
 }

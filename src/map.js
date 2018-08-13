@@ -65,7 +65,7 @@ export function map(...a) {
 		return error("XXX", "Not a map or tuple");
 	}
 	// expect a sequence of maps or each argument to be a map
-	return merge(from(a.map(x => isSeq(x) ? x : of(x))).concatAll());
+	return merge(from(a).mergeAll());
 }
 
 export function merge($m) {
@@ -87,7 +87,7 @@ const _checked = ($m, fn) => {
 };
 
 export function set($m, $k, $v) {
-	return _checked($m, m => forEach(exactlyOne($k), k => m.set(k, $v)));
+	return _checked($m, m => forEach(exactlyOne($k), k => forEach(exactlyOne($v), v => m.set(k,$v))));
 }
 
 export function keys($m) {
@@ -108,7 +108,7 @@ export function forEachEntry($m, $fn) {
 
 export function entry($k, $v) {
 	// TODO template errors
-	return forEach($k,k => _create().set(k,$v));
+	return forEach(exactlyOne($k),k => forEach(exactlyOne($v), v => fromEntries([[k,v]])));
 }
 
 export function get($m, $k) {

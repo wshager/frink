@@ -6,7 +6,7 @@
 import { isVNode } from "./access";
 import { create, exactlyOne, oneOrMore } from "./seq";
 import { fromEvent } from "rxjs/observable/fromEvent";
-import { error } from "./error";
+//import { error } from "./error";
 
 function domify(){
 }

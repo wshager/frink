@@ -2,7 +2,7 @@ import * as sax from "sax";
 
 import { EventEmitter } from "events";
 
-import * as inode from "./inode";
+import { inode } from "l3n";
 
 import { stripBOM } from "./bom";
 
@@ -91,7 +91,7 @@ export class Parser extends EventEmitter {
 		var ontext = function(val, type=3) {
 			if (/\S/.test(val)) {
 				let name = cx.count(last) + 1;
-				let n = cx.ivalue(type,val);
+				let n = cx.set(type,null,val);
 				last = cx.push(last,[name,n]);
 			}
 		};

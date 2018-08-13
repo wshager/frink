@@ -4,12 +4,12 @@ export function isQName(maybe){
 
 export function QName(uri, name) {
 	var prefix = /:/.test(name) ? name.replace(/:.+$/,"") : null;
-    return {
-        __is_QName: true,
+	return {
+		__is_QName: true,
 		name: name,
 		prefix,
-        uri: uri
-    };
+		uri: uri
+	};
 }
 
 export const q = QName;

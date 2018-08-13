@@ -1,5 +1,9 @@
 // helpers
+
+export const id = a => a;
+
 export const toString = Object.prototype.toString;
+
 export const isArray = typeof Array.isArray === "function" ? Array.isArray : function(obj) {
 	return toString.call(obj) == "[object Array]";
 };
@@ -11,6 +15,10 @@ export function isFunction(x) {
 export function isObject(x) {
 	return x instanceof Object &&
 		Object.getPrototypeOf(x) === Object.getPrototypeOf({});
+}
+
+export function isPromise(x) {
+	return !!x && x instanceof Promise;
 }
 
 export function isNumber(x) {
