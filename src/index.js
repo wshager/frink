@@ -1,6 +1,8 @@
 import { inode } from "l3n";
 
-import { zeroOrOne, create, forEach, boolean } from "./seq";
+import { create, forEach, boolean } from "./seq";
+
+import { zeroOrOne } from "./seq/card";
 
 import { Parser } from "./parser";
 

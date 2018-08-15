@@ -1,4 +1,6 @@
-import { seq, exactlyOne } from "./seq";
+import { seq } from "./seq";
+
+import { exactlyOne } from "./seq/card";
 
 import { isUndef, camelCase } from "./util";
 

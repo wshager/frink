@@ -1,31 +1,14 @@
-import { isUndefOrNull } from "./util";
-
-import UntypedAtomic from "./untyped-atomic";
-
-const emptyUntypedAtomic = () => new UntypedAtomic("");
-
 export const and = (a,b) => a && b;
 
 export const or = (a,b) => a || b;
 
 export const not = a => !a;
 
-export function cast(a, b, emptyType = null) {
-	if(isUndefOrNull(a) && emptyType) return emptyType();
-	if (a.constructor !== b) a = new b(a.toString());
-	return a;
-}
-
-export function nodeData(node, castToType = UntypedAtomic, emptyType = emptyUntypedAtomic) {
-	var type = node.type;
+export function nodeData(node) {
+	const type = node.type;
 	// type 2 will only appear in traversal when node is an attr
 	if (type == 2 || type == 3) {
-		var val = node.value;
-		// if string, cast
-		if (typeof val == "string" && castToType != String) {
-			val = !val ? undefined : cast(val, castToType, emptyType);
-		}
-		return val;
+		return node.value;
 	}
 }
 

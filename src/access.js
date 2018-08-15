@@ -2,9 +2,9 @@ import { ensureDoc } from "l3n";
 
 import { error } from "./error";
 
-import { seq, isSeq, forEach, filter, zeroOrOne, exactlyOne } from "./seq";
+import { seq, isSeq, forEach, filter, pipe } from "./seq";
 
-import { pipe } from "rxjs";
+import { zeroOrOne, exactlyOne } from "./seq/card";
 
 import { isUndef } from "./util";
 

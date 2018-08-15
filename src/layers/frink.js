@@ -36,7 +36,7 @@ export function parseString(str, cb) {
 }
 
 export function parse($a){
-	var xml = first($a);
+	var xml = first()($a);
 	var result;
 	parseString(xml,function(err,ret){
 		if(err) console.log(err);
