@@ -1,6 +1,6 @@
 import * as ohamt from "ohamt";
 
-import { seq, isSeq, of, from, forEach, exactlyOne } from "./seq";
+import { isSeq, from, forEach } from "./seq";
 
 import { isObject } from "./util";
 
@@ -81,42 +81,37 @@ export function merge($m) {
 	}, _create());
 }
 
-const _checked = ($m, fn) => {
-	if ($m === undefined) return error("XPTY0004");
-	return forEach(exactlyOne($m),m => !isMap(m) ? error("XPTY0004", "The provided item is not a map.") : fn(m));
-};
-
-export function set($m, $k, $v) {
-	return _checked($m, m => forEach(exactlyOne($k), k => forEach(exactlyOne($v), v => m.set(k,$v))));
+export function set(m, k, v) {
+	return m.set(k,v);
 }
 
-export function keys($m) {
-	return _checked($m, m => m.keys());
+export function keys(m) {
+	return m.keys();
 }
 
-export function contains($m, $k) {
-	return _checked($m, m => forEach(exactlyOne($k), k => m.has(k)));
+export function contains(m, k) {
+	return m => m.has(k);
 }
 
-export function size($m) {
-	return _checked($m, m => m.count());
+export function size(m) {
+	return m.count();
 }
 
-export function forEachEntry($m, $fn) {
-	return _checked($m, m => forEach(exactlyOne($fn), fn => forEach(from(m.entries()),([k,v]) => fn(k, v))));
+export function forEachEntry(m, fn) {
+	return forEach(from(m.entries()),([k,v]) => fn(k, v));
 }
 
-export function entry($k, $v) {
+export function entry(k, v) {
 	// TODO template errors
-	return forEach(exactlyOne($k),k => forEach(exactlyOne($v), v => fromEntries([[k,v]])));
+	return fromEntries([[k,v]]);
 }
 
-export function get($m, $k) {
-	return _checked($m, m => forEach(exactlyOne($k),k => m.has(k) ? m.get(k) : seq()));
+export function get(m, k) {
+	return m.has(k) ? m.get(k) : null;
 }
 
-export function remove($m, $k) {
-	return _checked($m, m => forEach(exactlyOne($k), k => m.delete(k)));
+export function remove(m, k) {
+	return m.delete(k);
 }
 
 export { set as put, map as default };
