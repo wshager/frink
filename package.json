@@ -1,13 +1,14 @@
 {
   "name": "frink",
-  "description": "Parses XML to VTree",
+  "description": "Very liberal implementation of W3C XPath and XQuery functions 3.1",
   "keywords": [
     "xml",
-    "vtree",
-    "vnode",
-    "virtual dom",
     "json",
-    "immutable"
+    "xquery",
+    "xpath",
+    "W3C",
+    "standards",
+    "recommendation"
   ],
   "version": "0.3.1",
   "author": "Wouter Hager <wshager@gmail.com> (https://lagua.nl)",
@@ -20,12 +21,11 @@
     "lib": "./lib"
   },
   "scripts": {
-    "build": "babel src --out-dir lib --ignore layers",
+    "build": "babel --no-babelrc --plugins @babel/plugin-transform-modules-commonjs src --out-dir lib -s --ignore layers",
+    "watch": "babel --watch --no-babelrc --plugins @babel/plugin-transform-modules-commonjs src --out-dir lib -s --ignore layers",
     "client-build": "browserify src/layers/frink.js -s amd -o dist/frink.js -t [ babelify ]",
     "client-min": "uglifyjs --compress --mangle --verbose dist/frink.js -o dist/frink.min.js",
-    "form-build": "browserify src/layers/frinkiform.js -s amd -o dist/frinkiform.js -t [ babelify ]",
-    "form-min": "uglifyjs --compress --mangle --verbose dist/frinkiform.js -o dist/frinkiform.min.js",
-    "test": ""
+    "test": "node test/index"
   },
   "repository": {
     "type": "git",
@@ -33,13 +33,10 @@
   },
   "dependencies": {
     "big.js": "^5.0.3",
-    "events": "^1.1.1",
-    "node-fetch": "^2.1.1",
-    "ohamt": "*",
-    "rrb-vector": "*",
-    "rxjs": "^5.5.2",
-    "sax": "^1.2.4",
-    "strip-bom-stream": "^3.0.0",
+    "l3n": "0.0.6",
+    "ohamt": "0.0.9",
+    "rrb-vector": "0.0.7",
+    "rxjs": "^6.2.2",
     "xregexp": "^3.2.0"
   },
   "license": "BSD-3-Clause",
@@ -48,15 +45,9 @@
   },
   "homepage": "https://github.com/wshager/frink#readme",
   "devDependencies": {
-    "babel-cli": "^6.26.0",
-    "babel-core": "^6.26.0",
-    "babel-preset-env": "^1.6.1",
-    "babelify": "^8.0.0",
-    "browserify": "^14.5.0",
-    "express": "^4.16.2",
-    "js-beautify": "^1.7.5",
-    "microtime": "^2.1.6",
-    "node-fetch": "^2.0.0",
-    "uglify-js": "^3.1.10"
+    "@babel/cli": "^7.0.0-beta.54",
+    "@babel/core": "^7.0.0-beta.53",
+    "@babel/plugin-transform-modules-commonjs": "^7.0.0-beta.53",
+    "express": "^4.16.2"
   }
 }
