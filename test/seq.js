@@ -1,5 +1,10 @@
-const n = require("../lib/index");
+const n = require("../lib/seq");
 const shared = require("./shared");
+const op = require("../lib/op");
+const t = require("../lib/typed");
+const rx = require("rxjs");
+const xo = require("rxjs/operators");
+const bv = require("../lib/boolean/value");
 
 const assertEq = shared.assertEq;
 const assertThrows = shared.assertThrows;
@@ -18,9 +23,13 @@ const assertThrows = shared.assertThrows;
 //assertThrows("zeroOrOne",$ => n.zeroOrOne(s));
 
 //console.log("All tests passed");
-var $a = 0;
-var $b = n.seq(6,7);
-var ret = n.geq($a,$b);
+var $a = n.seq(3);
+var $b = n.range(5,1);
+//var ret = n.geq($a,$b);
+const add = t.def("add",[t.maybe(Number),t.maybe(Number)],t.maybe(Number))(op.add);
 
+n.foldLeft($b,0,add).subscribe(console.log);
 
-ret.subscribe(console.log);
+//rx.pipe(xo.mergeMap(x => xo.pairwise()(n.seq(bv.boolean(fn(x)),x))),rxFilter(([t]) => t),map(([,x]) => x))
+//rx.pipe(xo.switchMap(a => xo.map(b => op.eq(a,b))($b)),xo.first(x => x,false))($a).subscribe(console.log);
+n.seq(op.geq(1,1)).subscribe(console.log);

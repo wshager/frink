@@ -1,7 +1,7 @@
 const assert = require("assert");
 const n = require("../lib/index");
 
-require("rxjs/add/operator/zip");
+const zip = require("rxjs/operators").zip;
 
 exports.assertEq = function assertEq(name,$a,$b){
 	n.seq($a).zip(n.seq($b)).subscribe(ab => {
