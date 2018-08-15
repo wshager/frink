@@ -1,16 +1,26 @@
 import Decimal from "big.js";
 
-import UntypedAtomic from "./untyped-atomic";
+import Integer from "./types/integer";
+
+import Float from "./types/float";
+
+import UntypedAtomic from "./types/untyped-atomic";
+
+import opProto from "./types/op-proto";
+
+import compProto from "./types/comp-proto";
+
+import { stringJoin } from "./string/value";
 
 import { error } from "./error";
 
-import { seq, isSeq, exists, forEach, filter, empty, range, zeroOrOne, exactlyOne, unwrap } from "./seq";
+import { forEach, filter, range, switchMap, pipe, first } from "./seq";
 
 import { isArray, get as aGet } from "./array";
 
 import { isMap, get as mGet } from "./map";
 
-import { isUndef } from "./util";
+import { isUndef, isNull, id } from "./util";
 
 import { isVNode, traverse } from "l3n";
 
@@ -48,64 +58,6 @@ export const generalOperatorMap = {
 	"!=": "eq"
 };
 
-class Integer extends Decimal {
-	constructor(a) {
-		super(a);
-		this.constructor = Integer;
-	}
-}
-
-class Float extends Number {
-	constructor(a) {
-		var temp = new Float32Array(1);
-		temp[0] = +a;
-		super(temp[0]);
-		this._f = temp[0];
-		this._d = a;
-	}
-	toString() {
-		var temp = new Float64Array(1);
-		temp[0] = +this._d;
-		return temp[0].toString();
-	}
-	valueOf() {
-		return this._f;
-	}
-}
-
-const compProto = {
-	eq(other) {
-		return this.valueOf() === other.valueOf();
-	},
-	gt(other) {
-		return this.valueOf() > other.valueOf();
-	},
-	lt(other) {
-		return this.valueOf() < other.valueOf();
-	},
-	gte(other) {
-		return this.valueOf() >= other.valueOf();
-	},
-	lte(other) {
-		return this.valueOf() <= other.valueOf();
-	}
-};
-
-const opProto = {
-	plus(other) {
-		return this + other;
-	},
-	minus(other) {
-		return this - other;
-	},
-	times(other) {
-		return this * other;
-	},
-	div(other) {
-		return this / other;
-	}
-};
-
 // mixin comparators
 Object.assign(String.prototype, compProto);
 
@@ -116,68 +68,39 @@ Object.assign(Number.prototype, compProto, opProto);
 Object.assign(Boolean.prototype, compProto);
 
 // TODO decimal opt-in/out
-const zeroInt = () => new Decimal(0);
-const zero = () => Number(0);
-const emptyString = () => String();
+
+const asType = (cc,ifEmpty,prep = id) => a => isUndef(a) ? cc : isNull(a) ? ifEmpty : cc(prep(a));
 
 // TODO create from Type classes
-export function decimal($a) {
-	// type test
-	return seq($a).concatMap(a => cast(a, Decimal, zeroInt));
-}
+export const decimal = asType(Decimal,null);
 
-export function integer($a) {
-	return seq($a).concatMap(a => cast(Math.floor(a), Integer, zeroInt));
-}
+export const integer = asType(Integer,null);
 
-export function string($a, card = zeroOrOne) {
-	// type test
-	const cc = String;
-	if(isUndef($a)) return seq(cc);
-	//if(empty($a)) return seq(emptyString());
-	// NOTE allow overriding cardinality
-	return card($a).concatMap(a => isVNode(a) ? data(a, cc, emptyString) : cast(a, cc, emptyString));
-}
+export const string = asType(String,String(),a => isVNode(a) ? data(a) : a);
 
-export function number($a) {
-	// type test
-	const cc = Number;
-	if(isUndef($a)) return seq(cc);
-	return zeroOrOne($a).concatMap(a => cast(a, cc, zero));
-}
+export const number = asType(Number,NaN);
 
-export function float($a) {
-	// type test
-	const cc = Number;
-	if(isUndef($a)) return seq(cc);
-	return zeroOrOne($a).concatMap(a => cast(a, cc, zero));
-}
+// 32-bits float
+export const float = asType(Float,NaN);
 
 export const double = number;
 
-export function cast($a, $b, emptyType = null) {
-	$a = seq($a);
-	$b = exactlyOne($b);
-	return empty($a).concatMap(test => test ? emptyType ? seq(emptyType()) : seq() : unwrap(impl.cast,$a,$b));
+export function castAs(a, b) {
+	return a.constructor !== b ? new b(a.toString()) : a;
 }
-
 
 export function to($a, $b) {
 	return range($b, $a);
 }
 
-export function indexOf($a, $b) {
-	return unwrap(b => filter(forEach($a,(x,i) => b === x ? i + 1 : 0),x => x),$b);
-}
-
-export function call(...a) {
-	seq(a[0]).concatMap(f => {
+export function call($f,...a) {
+	switchMap($f, f => {
 		if (isArray(f)) {
-			return aGet(f,a[1]);
+			return aGet(f,a[0]);
 		} else if (isMap(f)) {
-			return mGet(f,a[1]);
+			return mGet(f,a[0]);
 		} else {
-			return f.apply(this, a.slice(1));
+			return f.apply(this, a);
 		}
 	});
 }
@@ -241,21 +164,11 @@ function _promote(a, b) {
 			d = String;
 		}
 	}
-	//if (c != d) {
-	//throw new Error("Cannot compare operands: " + c.name + " and " + d.name);
-	//	return error("err:XPTY0004", "Cannot compare operands: " + c.name + " and " + d.name);
-	//}
 	return [a, b];
 }
 
-function _unwrapGeneral(opfn, $a, $b) {
-	const aIsSeq = isSeq($a);
-	const bIsSeq = isSeq($b);
-	//console.trace($a,$b);
-	if(!aIsSeq && !bIsSeq) {
-		return opfn($a,$b);
-	}
-	return exists(filter($a,a => filter($b, b => opfn(a,b))));
+function generalComp(opfn, $a, $b) {
+	return pipe(switchMap(a => forEach(b => opfn(a,b))($b)),first(x => x,false))($a);
 }
 
 
@@ -263,11 +176,11 @@ function _unwrapGeneral(opfn, $a, $b) {
  *
  */
 export function and($a, $b) {
-	return unwrap(impl.and, boolean($a), boolean($b));
+	return switchMap(boolean($a()), a => a ? switchMap(boolean($b()),impl.and) : false);
 }
 
 export function or($a, $b) {
-	return unwrap(impl.or, boolean($a), boolean($b));
+	return switchMap(boolean($a()), a => a ? true : switchMap(boolean($b()),impl.or));
 }
 
 const logic = {
@@ -280,6 +193,8 @@ const opinv = {
 	ne: true,
 	"!=": true
 };
+
+// NOTE cardinality tests should be taken care of by VM
 export function op($a, operator, $b) {
 	var invert = false,
 		comp = false,
@@ -304,23 +219,24 @@ export function op($a, operator, $b) {
 			opfn = _op.bind(null, operatorName, invert);
 		}
 		if (comp) {
-			$a = data($a);
-			$b = data($b);
+			const md = forEach(data);
+			$a = md($a);
+			$b = md($b);
 		}
-		// NOTE cardinality tests should be taken care of by VM
 	} else if (typeof operator == "function") {
 		opfn = operator;
 	} else {
 		return error("XPST0017", "Unknown operator: "+operator);
 	}
-	if(general) return _unwrapGeneral(opfn, $a, $b);
-	return unwrap(opfn, $a, $b);
+	if(general) return generalComp(opfn, $a, $b);
+	if(isNull($a) || isNull($b)) return null;
+	return opfn($a, $b);
 }
 
 function data($a) {
-	return forEach($a, a => {
+	return switchMap($a, a => {
 		if(isVNode(a)) {
-			return traverse(a).pipe(filter(node => node.type == 2 || node.type == 3),forEach(node => impl.nodeData(node)));
+			return new UntypedAtomic(stringJoin(pipe(filter(node => node.type == 2 || node.type == 3),forEach(node => impl.nodeData(node)))(traverse(a))));
 		} else {
 			return a;
 		}
