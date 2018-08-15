@@ -139,4 +139,9 @@ function unsubscribeOn(scheduler) {
 
 export const switchMap = ($s,fn) => !isUndef(fn) ? switchMapCurried(fn)($s) : switchMapCurried($s);
 
+// FIXME
+export function sort($s,fn){
+	return switchMap(seq($s).toArray(),a => seq(isUndef(fn) ? a.sort() : a.sort(fn)));
+}
+
 export { pipe };
