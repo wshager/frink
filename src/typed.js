@@ -1,6 +1,11 @@
-import { seq, isSeq, create, exactlyOne, zeroOrOne, oneOrMore } from "./seq";
+import { seq, isSeq, create, forEach } from "./seq";
+
+import { exactlyOne, zeroOrOne, oneOrMore } from "./seq/card";
 
 import { id, isUndef } from "./util";
+
+// TODO make configurable
+const check = true;
 
 // we know typed will take a function and test it,
 // so we can use the same function here to bind the subscriber
@@ -33,38 +38,21 @@ const errorMessage = (a,name,i,pos,key) => {
 	return "Invalid "+io+" *"+JSON.stringify(a)+"* "+typePart + "\n";
 };
 
-const boundObserver = (f,name,i,pos,key) => a => create($o => {
-	let last;
-	a.subscribe({
-		next(a) {
-			last = a;
-			$o.next(checked(f,a));
-		},
-		error(err) {
-			$o.error(errorMessage(last,name,i,pos,key)+err);
-		},
-		complete(){
-			$o.complete();
-		}
-	});
-});
-
-const card = test => f => {
-	const t = (a,name,i,pos,key) => {
-		if(isSeq(a)) return boundObserver(f,name,i,pos,key)(test(a));
+export const occurrence = (test,occ) => f => {
+	const t = (a,name,i,pos,key) => forEach(a,a => {
 		try {
 			return checked(f, test(a));
 		} catch(err) {
 			throw new Error(errorMessage(a,name,i,pos,key)+err);
 		}
-	};
-	t.__card = test.name;
+	});
+	t.__occurrence = occ;
 	return t;
 };
-export const any = card(id);
-export const many = card(oneOrMore);
-export const maybe = card(zeroOrOne);
-export const single = card(exactlyOne);
+export const any = occurrence(id,1);
+export const many = occurrence(oneOrMore,2);
+export const maybe = occurrence(zeroOrOne,3);
+export const single = occurrence(exactlyOne,4);
 
 function unwrap(fn,args,s,r,name,pos,l,i,o) {
 	if(i === l) {
@@ -94,11 +82,11 @@ function unwrap(fn,args,s,r,name,pos,l,i,o) {
 		}
 	});
 	const f = s[i];
-	const c = f.__card;
-	const a = f(args[i],name,i,pos);
+	const c = f.__occurrence;
+	const a = check ? f(args[i],name,i,pos) : a;
 	if(isSeq(a)) {
 		// when we unwrap we get back an Observable, not a function...
-		if(c === "zeroOrOne") {
+		if(c === 3) {
 			if(!o) {
 				return create(o => {
 					unwrapMaybe(o)(a);
@@ -106,7 +94,7 @@ function unwrap(fn,args,s,r,name,pos,l,i,o) {
 			} else {
 				return unwrapMaybe(o)(a);
 			}
-		} else if(c === "exactlyOne") {
+		} else if(c === 4) {
 			if(!o) {
 				return create(o => {
 					unwrapSingle(o)(a);
@@ -138,7 +126,10 @@ export const def = (name,s,r,pos) => fn => {
 		var st = getStack()[2];
 		pos = [st.getFileName(),st.getLineNumber(), st.getColumnNumber()];
 	}
-	const f = (...args) => r(unwrap(fn,args,s,r,name,pos,args.length,0),-1,name);
+	const f = (...args) => {
+		const ret = unwrap(fn,args,s,r,name,pos,args.length,0);
+		return check ? r(ret,-1,name) : ret;
+	};
 	f.__wraps = fn;
 	return f;
 };
