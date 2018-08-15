@@ -1,4 +1,8 @@
-import { isSeq, switchMap, isZeroOrOne, skip } from "../seq";
+import { isSeq, switchMap } from "../seq";
+
+import { isZeroOrOne } from "../seq/card";
+
+import { skip } from "rxjs/operators";
 
 import { isNull } from "../util";
 
