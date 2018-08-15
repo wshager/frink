@@ -2,9 +2,7 @@ import { ensureDoc } from "l3n";
 
 import { error } from "./error";
 
-import { seq, isSeq, forEach, filter, pipe } from "./seq";
-
-import { zeroOrOne, exactlyOne } from "./seq/card";
+import { seq, isSeq, forEach, filter, pipe, switchMap, foldLeft } from "./seq";
 
 import { isUndef } from "./util";
 
@@ -12,18 +10,18 @@ const _vnodeFromCx = (cx,node) => cx && "vnode" in cx ? cx.vnode : node.cx.vnode
 
 export function children($node) {
 	const cx = this;
-	return ensureDoc.bind(cx)($node).concatMap(node => {
+	return switchMap(ensureDoc.bind(cx)($node),node => {
 		const vnode = _vnodeFromCx(cx,node);
 		const values = node.type == 2 ? [node.inode] : node.values();
 		const depth = node.depth + 1;
-		return seq(values).map((inode, idx) => vnode(inode,node,depth,idx + 1));
+		return forEach(values,(inode, idx) => vnode(inode,node,depth,idx + 1));
 	});
 }
 
 export function firstChild($node) {
 	const cx = this;
 	// assume ensureDoc returns the correct node
-	return ensureDoc.bind(cx)($node).concatMap(node => {
+	return switchMap(ensureDoc.bind(cx)($node),node => {
 		const vnode = _vnodeFromCx(cx,node);
 		let next = node.first();
 		return next ? seq(vnode(next,node,node.depth + 1, 0)) : seq();
@@ -31,7 +29,7 @@ export function firstChild($node) {
 }
 
 const _nextOrPrev = (cx,$node,dir) => {
-	return ensureDoc.bind(cx)($node).concatMap(node => {
+	return switchMap(ensureDoc.bind(cx)($node),node => {
 		const vnode = _vnodeFromCx(cx,node);
 		var parent = node.parent;
 		const sib = parent && parent[dir > 0 ? "next" : "previous"](node);
@@ -49,7 +47,7 @@ export function previousSibling($node){
 
 export function getDoc($node) {
 	var cx = this;
-	return ensureDoc.bind(cx)($node).concatMap(node => {
+	return switchMap(ensureDoc.bind(cx)($node),node => {
 		do {
 			node = node.parent;
 		} while(node.parent);
@@ -59,7 +57,7 @@ export function getDoc($node) {
 
 export function lastChild($node){
 	var cx = this;
-	return ensureDoc.bind(cx)($node).concatMap(node => {
+	return switchMap(ensureDoc.bind(cx)($node),node => {
 		const last = node.last();
 		const vnode = cx.vnode || node.cx.vnode;
 		return last ? seq(vnode(last, node, node.depth, node.count() - 1)) : seq();
@@ -69,14 +67,12 @@ export function lastChild($node){
 export function parent($node) {
 	if(!arguments.length) return Axis(parent);
 	var cx = this;
-	return ensureDoc.bind(cx)($node).concatMap(node => seq(node.parent));
+	return switchMap(ensureDoc.bind(cx)($node),node => seq(node.parent));
 }
 
-export function self($f) {
-	return zeroOrOne($f).map(f => {
-		if(f.name !== "forEach" && f.name !== "filter") f = forEach(f);
-		return Axis(node => node, f, 3);
-	});
+export function self(f) {
+	if(f.name !== "forEach" && f.name !== "filter") f = forEach(f);
+	return Axis(node => node, f, 3);
 }
 
 export const isVNode = n => !!n && n.__is_VNode;
@@ -163,7 +159,7 @@ export function comment() {
 }
 
 function _attrGet(key,$node){
-	return seq($node).concatMap(node => {
+	return switchMap($node,node => {
 		var entries;
 		if (key !== null) {
 			var val = node.attr(key);
@@ -172,7 +168,7 @@ function _attrGet(key,$node){
 		} else {
 			entries = node.attrEntries();
 		}
-		return seq(entries).map(function (kv) {
+		return forEach(entries,function (kv) {
 			return node.vnode(node.pair(kv[0], kv[1]), node.parent, node.depth + 1, node.indexInParent);
 		});
 	});
@@ -182,7 +178,7 @@ function _attrGet(key,$node){
 // TODO maybe have Axis receive post-process func/seq
 export function attribute($qname) {
 	if(isUndef($qname)) $qname = "*";
-	return exactlyOne($qname).map(qname => {
+	return switchMap($qname,qname => {
 		var hasWildcard = /\*/.test(qname);
 		// getter of attributes / pre-processor of attributes
 		// TODO iterator!
@@ -205,7 +201,7 @@ export function attribute($qname) {
 export function text() {
 	var f = n => _isText(n) && !!n.value;
 	f.__is_NodeTypeTest = true;
-	return seq(f);
+	return f;
 }
 
 export function node() {
@@ -231,32 +227,30 @@ function Axis(g,f,type){
 		g:g
 	};
 }
-export function child($f) {
+export function child(f) {
 	const cx = this;
-	return forEach(zeroOrOne($f),f => {
-		if(f.__is_NodeTypeTest){
-			// this means it's a predicate, and the actual function should become a filter
-			if(f.__Accessor) {
-				// TODO this means we can try direct access on a node
-			}
-			f = filter(f);
+	if(f.__is_NodeTypeTest){
+		// this means it's a predicate, and the actual function should become a filter
+		if(f.__Accessor) {
+			// TODO this means we can try direct access on a node
 		}
-		return Axis(node => children.bind(cx)(node),f);
-	});
+		f = filter(f);
+	}
+	return Axis(node => children.bind(cx)(node),f);
 }
 
 export function siblingsOrSelf($node){
 	var cx = this;
-	return ensureDoc.bind(cx)($node).concatMap(node => children.bind(cx)(node.parent));
+	return switchMap(ensureDoc.bind(cx)($node),node => children.bind(cx)(node.parent));
 }
 
 export function select($node, ...paths) {
 	var cx = this;
 	var boundEnsureDoc = ensureDoc.bind(cx);
-	return seq(forEach(paths,
-		path => _axify(path)))
+	return foldLeft(forEach(
+		forEach(paths,path => _axify(path)),
 		// we're passing $node here, because we want to update it every iteration
-		.map(path => $node => {
+		path => $node => {
 			// make sure all paths are funcs
 			// TODO skip self
 			var skipCompare = path.__type == 2 || path.__type == 3;
@@ -266,10 +260,8 @@ export function select($node, ...paths) {
 				return path.g(boundEnsureDoc(n));
 			};
 			if (!skipCompare) f = pipe(f, filter(_comparer()));
-			return seq($node).concatMap(node => f(bound(node)));
-		})
-		.reduce(($node, changeFn) => changeFn($node),boundEnsureDoc($node))
-		.concatAll();
+			return switchMap($node,node => f(bound(node)));
+		}),boundEnsureDoc($node),($node, changeFn) => changeFn($node));
 }
 
 function _comparer() {
@@ -283,43 +275,8 @@ function _comparer() {
 	return f;
 }
 
-/*
-export function* select2(node,...paths) {
-	// TODO
-	// 1: node (or seq) is iterable, so get first as current context
-	// 2: each function is a filter (either a node is returned or the process stops)
-	// 3: pass each single result to a filter function, yielding a result for each
-	var bed = ensureDoc.bind(this);
-	var next = bed(node);
-	var cx = next;
-	if(next) {
-		next = nextNode(next);
-		while(next){
-			for(var i=0,l=paths.length,path=paths[i]; i<l; i++){
-				if(!isSeq(path)) path = seq(path);
-				// process strings (can this be combined?)
-				path = transform(path,compose(forEach(function(path){
-					if(typeof path == "string") {
-						var at = /^@/.test(path);
-						if(at) path = path.substring(1);
-						return at ? attribute(path) : element(path);
-					}
-					return [path];
-				}),cat));
-				var composed = compose.apply(null,path.toArray());
-				let ret = composed.call(cx,next);
-				if(node) {
-					yield ret;
-				} else {
-					break;
-				}
-			}
-		}
-	}
-}
-*/
 function _axify($path){
-	return seq($path).concatMap(path => {
+	return switchMap($path,path => {
 		if(!path.__is_Axis){
 			// process strings (can this be combined?)
 			if (typeof path == "string") {
@@ -346,11 +303,11 @@ export function isEmptyNode(node){
 
 export function name($a) {
 	if(!arguments.length) return name;
-	return seq($a).concatMap(a => {
+	return switchMap($a,a => {
 		if (!isVNode(a)) {
 			return error("XXX","This is not a node");
 		}
-		if(a.type != 1) return seq();
-		return seq(a.name);
+		if(a.type != 1) return null;
+		return a.name;
 	});
 }
