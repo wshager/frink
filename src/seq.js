@@ -1,9 +1,21 @@
 import { Observable, Scheduler, isObservable, of, from, range as rxRange, empty as rxEmpty, pipe } from "rxjs";
-import { first as rxFirst, subscribeOn, map, mergeMap, concatMap, switchMap as rxSwitchMap, concatAll, reduce, filter as rxFilter, skip, take, merge, zip, isEmpty, count as rxCount, pairwise, shareReplay } from "rxjs/operators";
-import { error } from "./error";
-import { isPromise, isNull, isUndef, isUndefOrNull } from "./util";
+import {
+	first as rxFirst,
+	subscribeOn,
+	map,
+	mergeMap,
+	concatMap,
+	switchMap as rxSwitchMap,
+	concatAll,
+	reduce,
+	filter as rxFilter,
+	count as rxCount,
+	pairwise
+} from "rxjs/operators";
+
+import { isPromise, isUndef, isUndefOrNull, isNull, id } from "./util";
 import { boolean } from "./boolean/value";
-import { not } from "./impl";
+
 
 export class Maybe extends Observable {
 	toObservable() {
@@ -69,7 +81,7 @@ export function filter($s, fn) {
 
 export const foldLeftCurried = fn => $seed => $a =>
 	isSeq($a) ?
-		pipe(reduce((a,x) => fn(a,x),$seed),switchMap(x => x))($a) :
+		pipe(reduce((a,x) => fn(a,x),$seed),switchMap(id))($a) :
 		fn($seed,$a);
 
 export function foldLeft($a, $seed, fn) {
@@ -78,7 +90,7 @@ export function foldLeft($a, $seed, fn) {
 
 export const scanCurried = fn => $seed => $a =>
 	isSeq($a) ?
-		pipe(scan((a,x) => fn(a,x),$seed),forEach(x => x))($a) :
+		pipe(scan((a,x) => fn(a,x),$seed),switchMap(x => x))($a) :
 		fn($seed,$a);
 
 export function scan($a,$seed,fn) {
@@ -100,33 +112,18 @@ export function just(a) {
 	return (isSeq(a) ? a : of(a)).toSingle();
 }
 
-export { take, skip, pairwise, shareReplay };
-
 export function create(o){
 	return Observable.create(o);
 }
 
-export const first = s => isSeq(s) ? rxFirst()(s) : s;
-
-export const empty = s => isSeq(s) ? isEmpty()(s) : isNull(s);
-
-export const exists = s => isSeq(s) ? pipe(rxEmpty(),map(not))(s) : !isNull(s);
+// TODO how to use f when not a seq?
+export const first = (f,d) => s => isSeq(s) ? rxFirst(f,d)(s) : isNull(s) ? d : s;
 
 export const count = s => isSeq(s) ? rxCount()(s) : 1;
-
-export function insertBefore($s,pos,$ins) {
-	return seq($s).pipe(take(pos - 1),merge(seq($ins),skip(pos)));
-}
 
 export function range(n,s=0) {
 	return subscribeOn(Scheduler.queue)(rxRange(s,n));
 }
-
-export const isZeroOrOne = s => isMaybe(s) || !isSeq(s) || pipe(skip(1),isEmpty())(s);
-
-export const isOneOrMore = s => (!isSeq(s) && !isNull(s)) || pipe(isEmpty(),map(not))(s);
-
-export const isExactlyOne = s => isSingle(s) || (!isSeq(s) && !isNull(s)) || pipe(isEmpty(),zip(pipe(skip(1),isEmpty())(s),(x, y) => !x && y))(s);
 
 export const switchMapCurried = fn => $s => isSeq($s) ? pipe(
 	rxSwitchMap(wrap(fn)),
@@ -139,35 +136,7 @@ function unsubscribeOn(scheduler) {
 		return () => scheduler.schedule(() => subscription.unsubscribe());
 	});
 }
+
 export const switchMap = ($s,fn) => !isUndef(fn) ? switchMapCurried(fn)($s) : switchMapCurried($s);
 
-function _testCard($arg,card,err) {
-	const test = card($arg);
-	const fn = t => t ? $arg : error(err);
-	return switchMap(fn)(test);
-}
-
-/**
- * [zeroOrOne returns arg OR error if arg not zero or one]
- * @param  {Seq} $arg [Sequence to test]
- * @return {Seq|Error} [Process Error in implementation]
- */
-export function zeroOrOne($arg) {
-	return _testCard($arg,isZeroOrOne,"FORG0003");
-}
-/**
- * [oneOrMore returns arg OR error if arg not one or more]
- * @param  {Seq} $arg [Sequence to test]
- * @return {Seq|Error}      [Process Error in implementation]
- */
-export function oneOrMore($arg) {
-	return _testCard($arg,isOneOrMore,"FORG0004");
-}
-/**
- * [exactlyOne returns arg OR error if arg not exactly one]
- * @param  {Seq} $arg [Sequence to test]
- * @return {Seq|Error}      [Process Error in implementation]
- */
-export function exactlyOne($arg) {
-	return _testCard($arg,isExactlyOne,"FORG0005");
-}
+export { pipe };
