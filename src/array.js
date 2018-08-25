@@ -2,7 +2,11 @@ import * as rrb from "rrb-vector";
 
 import { error } from "./error";
 
-import { isSeq, foldLeft as seqFoldLeft, forEach as seqForEach, filter as seqFilter, from } from "./seq";
+import { from } from "rxjs";
+
+import { isSeq, foldLeft as seqFoldLeft, forEach as seqForEach, filter as seqFilter } from "./seq";
+
+import { foldLeft as iterFoldLeft } from "./iter-util";
 
 // TODO option: call ensureDoc and handle everything via VNode (i.e. persistent or not)
 //import { ensureDoc } from "./doc";
@@ -56,7 +60,8 @@ export function array(...a) {
 	}
 	if(l == 1) {
 		a = a[0];
-		return isSeq(a) ? a.reduce((acc,a) => acc.push(a),rrb.empty) : rrb.empty.push(a);
+		const f = isSeq(a) ? seqFoldLeft : iterFoldLeft;
+		return f(rrb.empty,(acc,a) => acc.push(a))(a);
 	}
 	return a.reduce((acc,a) => acc.push(a),rrb.empty);
 }
@@ -64,12 +69,12 @@ export function array(...a) {
 export function join($a) {
 	if ($a === undefined) return error("XPTY0004");
 	// assume a sequence of vectors
-	return seqFoldLeft((pre, cur) => {
+	return seqFoldLeft(rrb.empty,(pre, cur) => {
 		// TODO force persistent cx
 		//if (list()(cur)) cur = cur.toArray();
 		//if (!isList(cur)) return error("XPTY0004", "One of the items for array:join is not an array.");
 		return rrb.concat(pre, cur);
-	}, rrb.empty)($a);
+	})($a);
 }
 
 // TODO iterator to Observable using transducer protocol
@@ -89,13 +94,14 @@ export function size(a) {
 }
 
 export function subarray(a, s, l) {
-	s = s.valueOf() - 1;
+	s = s - 1;
 	return isUndef(l) ?
 		rrb.slice(a, s) :
-		l => rrb.slice(a, s, Math.max(s + Number(l), 0));
+		rrb.slice(a, s, Math.max(s + Number(l), 0));
 }
 
 export function insertBefore(a, i, v) {
+	i = i - 1;
 	return a.slice(0, i).push(v).concat(a.slice(i));
 }
 
