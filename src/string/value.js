@@ -1,14 +1,14 @@
-import { foldLeft as reduce, fromArgs } from "../seq";
+import { foldLeft } from "../seq";
 
 import { isUndef, ucs2length } from "../util";
 
 export function stringJoin(a, sep = "") {
-	return reduce(a,(acc, x) => acc + sep + x);
+	return foldLeft("",(acc, x) => acc + sep + x)(a);
 }
 
 // TODO: use fromArgs function to flatten array of possible observables (maybe's)
 export function concat(...args) {
-	return stringJoin(fromArgs(args));
+	return args.join("");
 }
 
 export function substring(str,s,l) {
