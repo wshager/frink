@@ -85,7 +85,7 @@ const _isText = n => isVNode(n) && n.type == 3;
 
 const _isList = n => isVNode(n) && n.type == 5;
 
-const _isMap = n => isVNode(n) && n.type == 6;
+//const _isMap = n => isVNode(n) && n.type == 6;
 
 const _isPI = n => isVNode(n) && n.type == 7;
 
@@ -146,9 +146,9 @@ export function list(keyOrIndex) {
 	return _nodeTest(_isList,keyOrIndex);
 }
 
-export function map() {
+/*export function map() {
 	return _nodeTest(_isMap);
-}
+}*/
 
 export function processingInstruction() {
 	return _nodeTest(_isPI);
