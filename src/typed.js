@@ -2,7 +2,11 @@ import { seq, isSeq, create, forEach } from "./seq";
 
 import { exactlyOne, zeroOrOne, oneOrMore } from "./seq/card";
 
-import { id, isUndef } from "./util";
+import { id, isUndef, isList, isMap } from "./util";
+
+import { array as makeArray } from "./array";
+
+import { map as makeMap } from "./map";
 
 // TODO make configurable
 const check = true;
@@ -34,7 +38,7 @@ const errorMessage = (a,name,i,pos,key) => {
 	const noKey = isUndef(key);
 	if(noKey) key = "argument";
 	const io = i < 0 ? "output" : key+" "+(typeof i == "string" ? `"${i}"` :  i);
-	const typePart = noKey ? `for function '${name}' (in ${pos[0]} at line ${pos[1]}, column ${pos[2]})` : `found in ${name}`;
+	const typePart = noKey ? `for function '${name}'\n    at ${pos[0]} (${pos[1]}:${pos[2]}:${pos[3]})` : `found in ${name}`;
 	return "Invalid "+io+" *"+JSON.stringify(a)+"* "+typePart + "\n";
 };
 
@@ -81,9 +85,10 @@ function unwrap(fn,args,s,r,name,pos,l,i,o) {
 			o.error(err);
 		}
 	});
-	const f = s[i];
+	let f = s[i];
 	const c = f.__occurrence;
-	const a = check ? f(args[i],name,i,pos) : a;
+	if(isUndef(c)) f = single(f);
+	const a = check ? f(args[i],name,i,pos) : args[i];
 	if(isSeq(a)) {
 		// when we unwrap we get back an Observable, not a function...
 		if(c === 3) {
@@ -120,26 +125,78 @@ function getStack(){
 	return stack;
 }
 
+function checkArgLength(name,s,al) {
+	let sl = s.length;
+	while(sl > al) {
+		if(!s[--sl].__optional) break;
+	}
+	if(al !== sl) {
+		throw new Error(`Invalid number of arguments for function ${name}. Expected ${sl} got ${al}`);
+	}
+}
+
 export const def = (name,s,r,pos) => fn => {
 	if(typeof fn !== "function") throw new TypeError("Invalid argument for function 'def'\nExpected a Function, got a "+fn.constructor.name);
 	if(isUndef(pos)) {
 		var st = getStack()[2];
-		pos = [st.getFileName(),st.getLineNumber(), st.getColumnNumber()];
+		pos = [st.getFunctionName(),st.getFileName(),st.getLineNumber(),st.getColumnNumber()];
 	}
 	const f = (...args) => {
-		const ret = unwrap(fn,args,s,r,name,pos,args.length,0);
-		return check ? r(ret,-1,name) : ret;
+		const al = args.length;
+		checkArgLength(name,s,al);
+		const ret = unwrap(fn,args,s,r,name,pos,al,0);
+		return check ? r(ret,name,-1,pos) : ret;
 	};
 	f.__wraps = fn;
 	return f;
 };
 
 export const array = f => a => {
-	if(!Array.isArray(a)) return [];
-	a.forEach((a,i) => {
-		f(a,"array",i,[],"value at index");
-	});
+	if(!isList(a)) return makeArray();
+	let i = 0;
+	for(let x of a) {
+		f(x,"array",i++,[],"value at index");
+	}
 	return a;
 };
 
-export const item = id;
+export const map = f => a => {
+	if(!isMap(a)) return makeMap();
+	let i = 0;
+	for(let x of a) {
+		f(x,"map",i++,[],"value at key");
+	}
+	return a;
+};
+
+export const item = () => id;
+
+export const opt = arg => {
+	arg.__optional = true;
+	return arg;
+};
+
+export const atomic = () => a => {
+	// boolean / string / numeric
+	let t = typeof a;
+	if(t === "string" || t === "number" || t === "boolean") return a;
+	const b = a.constructor;
+	return isNumeric(a,b) ? a : new b();
+};
+
+const isNumeric = (a,b) => {
+	switch(b.name) {
+	case "Integer":
+	case "Number":
+	case "Float":
+	case "Decimal":
+		return true;
+	default:
+		return false;
+	}
+};
+
+export const numeric = () => a => {
+	const b = a.constructor;
+	return isNumeric(a,b) ? a : new b();
+};
