@@ -4,8 +4,9 @@ const n = require("../lib/index");
 const zip = require("rxjs/operators").zip;
 
 exports.assertEq = function assertEq(name,$a,$b){
-	n.seq($a).zip(n.seq($b)).subscribe(ab => {
-		let [a,b] = ab;
+	zip(n.seq($b))(n.seq($a)).subscribe(([a,b]) => {
+		a = a.toJS ? a.toJS() : a;
+		b = b.toJS ? b.toJS() : b;
 		a = JSON.stringify(a);
 		b = JSON.stringify(b);
 		assert.equal(a,b,`Error in test ${name}, expected ${b} got ${a}`);
