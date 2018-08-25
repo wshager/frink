@@ -1,6 +1,8 @@
 import { inode } from "l3n";
 
-import { forEach, boolean } from "./seq";
+import { forEach } from "./seq";
+
+import { boolean, not } from "./boolean/value";
 
 import { isNodeEnv } from "./util";
 
@@ -31,6 +33,8 @@ export * from "./seq/value";
 
 export * from "./type";
 
+export * from "./typed";
+
 export * from "./string";
 
 export * from "./function";
@@ -44,4 +48,4 @@ export { iff as if };
 const _f = () => false;
 const _t = () => true;
 
-export { _f as false, _t as true} ;
+export { boolean, not, _f as false, _t as true};
