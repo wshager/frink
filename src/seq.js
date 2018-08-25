@@ -1,4 +1,4 @@
-import { Observable, Scheduler, isObservable, of, from, range as rxRange, empty as rxEmpty, pipe } from "rxjs";
+import { Observable, Scheduler, isObservable, of, from, range as rxRange, empty as rxEmpty, pipe, interval } from "rxjs";
 import {
 	first as rxFirst,
 	subscribeOn,
@@ -9,6 +9,7 @@ import {
 	concatAll,
 	reduce,
 	filter as rxFilter,
+	scan as rxScan,
 	count as rxCount,
 	pairwise
 } from "rxjs/operators";
@@ -81,7 +82,7 @@ export function filter($s, fn) {
 
 export const foldLeftCurried = fn => $seed => $a =>
 	isSeq($a) ?
-		pipe(reduce((a,x) => fn(a,x),$seed),switchMap(id))($a) :
+		pipe(reduce((a,x) => fn(a,x),$seed),switchMapCurried(id))($a) :
 		fn($seed,$a);
 
 export function foldLeft($a, $seed, fn) {
@@ -90,7 +91,7 @@ export function foldLeft($a, $seed, fn) {
 
 export const scanCurried = fn => $seed => $a =>
 	isSeq($a) ?
-		pipe(scan((a,x) => fn(a,x),$seed),switchMap(x => x))($a) :
+		pipe(rxScan((a,x) => fn(a,x),$seed),forEachCurried(x => x))($a) :
 		fn($seed,$a);
 
 export function scan($a,$seed,fn) {
@@ -144,4 +145,4 @@ export function sort($s,fn){
 	return switchMap(seq($s).toArray(),a => seq(isUndef(fn) ? a.sort() : a.sort(fn)));
 }
 
-export { pipe };
+export { pipe, interval };
