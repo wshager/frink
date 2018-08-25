@@ -4,7 +4,7 @@ import { isZeroOrOne } from "../seq/card";
 
 import { skip } from "rxjs/operators";
 
-import { isNull } from "../util";
+import { isUndef, isNull } from "../util";
 
 import { isVNode } from "l3n";
 
@@ -14,7 +14,7 @@ import * as impl from "../impl";
 
 export function boolean($a) {
 	// type test
-	return !isSeq($a) ? isNull($a) ? false : !!$a.valueOf() :
+	return isUndef($a) ? Boolean : !isSeq($a) ? isNull($a) ? false : !!$a.valueOf() :
 		switchMap(isZeroOrOne($a), t => t ?
 			switchMap($a, a => isVNode(a) ? true : !!a.valueOf()) :
 			switchMap(skip(1)($a), a => isVNode(a) ? true : error("err:FORG0006","Second item is not a node"))
