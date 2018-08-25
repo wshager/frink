@@ -60,10 +60,14 @@ export function multiply($a,$b){
 	return op($a,"*",$b);
 }
 
-export function div($a,$b){
+export function divide($a,$b){
 	return op($a,"/",$b);
 }
 
-export function idiv($a,$b){
+export function integerDivide($a,$b){
 	return op($a,"idiv",$b);
+}
+
+export function mod($a,$b) {
+	return op($a,"mod",$b);
 }
