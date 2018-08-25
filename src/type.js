@@ -16,11 +16,11 @@ import { error } from "./error";
 
 import { forEach, filter, range, switchMap, pipe, first } from "./seq";
 
-import { isArray, get as aGet } from "./array";
+import { get as aGet } from "./array";
 
-import { isMap, get as mGet } from "./map";
+import { get as mGet } from "./map";
 
-import { isUndef, isNull, id } from "./util";
+import { isUndef, isNull, isList, isMap, id } from "./util";
 
 import { isVNode, traverse } from "l3n";
 
@@ -86,33 +86,23 @@ export const float = asType(Float,NaN);
 export const double = number;
 
 export function castAs(a, b) {
-	return a.constructor !== b ? new b(a.toString()) : a;
+	return b(a);
 }
 
 export function to($a, $b) {
 	return range($b, $a);
 }
 
-export function call($f,...a) {
-	switchMap($f, f => {
-		if (isArray(f)) {
-			return aGet(f,a[0]);
-		} else if (isMap(f)) {
-			return mGet(f,a[0]);
-		} else {
-			return f.apply(this, a);
-		}
-	});
+export function call(f,...a) {
+	if (isList(f)) {
+		return aGet(f,a[0]);
+	} else if (isMap(f)) {
+		return mGet(f,a[0]);
+	} else {
+		return f(...a);
+	}
 }
 
-// TODO move to VM
-/*
-function numbertest(a) {
-	var c = a.constructor;
-	if (c == String || c == Boolean) return;
-	return true;
-}
-*/
 function _op(op, invert, a, b) {
 	var ret;
 	if (a === undefined || b === undefined) {
@@ -128,7 +118,7 @@ function _op(op, invert, a, b) {
 }
 
 function _promote(a, b) {
-	// TODO FIXME use JS type casting! 1 == "1"
+	// TODO use JS type casting: 1 == "1"
 	//If each operand is an instance of one of the types xs:string or xs:anyURI, then both operands are cast to type xs:string.
 	//If each operand is an instance of one of the types xs:decimal or xs:float, then both operands are cast to type xs:float.
 	//If each operand is an instance of one of the types xs:decimal, xs:float, or xs:double, then both operands are cast to type xs:double.
@@ -173,14 +163,14 @@ function generalComp(opfn, $a, $b) {
 
 
 /**
- *
+ * expect functions
  */
 export function and($a, $b) {
-	return switchMap(boolean($a()), a => a ? switchMap(boolean($b()),impl.and) : false);
+	return switchMap(boolean($a()), a => a ? switchMap(boolean($b()),impl.and(a)) : false);
 }
 
 export function or($a, $b) {
-	return switchMap(boolean($a()), a => a ? true : switchMap(boolean($b()),impl.or));
+	return switchMap(boolean($a()), a => a ? true : switchMap(boolean($b()),impl.or(a)));
 }
 
 const logic = {
