@@ -71,3 +71,7 @@ export function integerDivide($a,$b){
 export function mod($a,$b) {
 	return op($a,"mod",$b);
 }
+
+export function minus($a) {
+	return op($a,"-");
+}
