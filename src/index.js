@@ -31,6 +31,8 @@ export * from "./seq/card";
 
 export * from "./seq/value";
 
+export * from "./seq/aggregate";
+
 export * from "./type";
 
 export * from "./typed";
