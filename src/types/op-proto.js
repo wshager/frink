@@ -10,6 +10,9 @@ export const opProto = {
 	},
 	div(other) {
 		return this / other;
+	},
+	neg() {
+		return -this;
 	}
 };
 
