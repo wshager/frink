@@ -20,7 +20,7 @@ import { get as aGet } from "./array";
 
 import { get as mGet } from "./map";
 
-import { isUndef, isNull, isList, isMap, id } from "./util";
+import { isUndef, isNull, isList, isMap } from "./util";
 
 import { isVNode, traverse } from "l3n";
 
@@ -49,6 +49,10 @@ export const operatorMap = {
 	"!": "not"
 };
 
+const unaryOperatorMap = {
+	"-": "neg"
+};
+
 export const generalOperatorMap = {
 	">": "gt",
 	"<": "lt",
@@ -69,16 +73,18 @@ Object.assign(Boolean.prototype, compProto);
 
 // TODO decimal opt-in/out
 
-const asType = (cc,ifEmpty,prep = id) => a => isUndef(a) ? cc : isNull(a) ? ifEmpty : cc(prep(a));
+const ap10 = (a,b) => b(a);
+
+const asType = (cc,ifEmpty = null,prep = ap10) => a => isUndef(a) ? cc : isNull(a) ? ifEmpty : prep(a,cc);
 
 // TODO create from Type classes
-export const decimal = asType(Decimal,null);
+export const decimal = asType(Decimal);
 
-export const integer = asType(Integer,null);
+export const integer = asType(Integer);
 
-export const string = asType(String,String(),a => isVNode(a) ? data(a) : a);
+export const string = asType(String,"",a => isVNode(a) ? data(a).toString() : a.toString());
 
-export const number = asType(Number,NaN);
+export const number = asType(Number,NaN,a => +a);
 
 // 32-bits float
 export const float = asType(Float,NaN);
@@ -89,8 +95,8 @@ export function castAs(a, b) {
 	return b(a);
 }
 
-export function to($a, $b) {
-	return range($b, $a);
+export function to(a, b) {
+	return range(b, a);
 }
 
 export function call(f,...a) {
@@ -103,7 +109,7 @@ export function call(f,...a) {
 	}
 }
 
-function _op(op, invert, a, b) {
+function _binOp(op, invert, a, b) {
 	var ret;
 	if (a === undefined || b === undefined) {
 		return error("A value may never be undefined");
@@ -111,6 +117,20 @@ function _op(op, invert, a, b) {
 	if (typeof a[op] == "function") {
 		[a,b] = _promote(a, b);
 		ret = a[op](b);
+	} else {
+		return error("XPST0017","Operator " + op + " not implemented");
+	}
+	return invert ? !ret : ret;
+}
+
+
+function _unaOp(op, invert, a) {
+	var ret;
+	if (a === undefined) {
+		return error("A value may never be undefined");
+	}
+	if (typeof a[op] == "function") {
+		ret = a[op]();
 	} else {
 		return error("XPST0017","Operator " + op + " not implemented");
 	}
@@ -189,24 +209,26 @@ export function op($a, operator, $b) {
 	var invert = false,
 		comp = false,
 		general = false,
-		hasOp = false,
 		operatorName;
 	var opfn;
 	if (typeof operator == "string") {
 		invert = opinv[operator];
-		hasOp = operator in operatorMap;
+		const hasUnaOp = isUndef($b) && unaryOperatorMap.hasOwnProperty(operator);
+		const hasOp = hasUnaOp || operatorMap.hasOwnProperty(operator);
 		if(!hasOp){
 			general = operator in generalOperatorMap;
 			if(!general) return error("xxx", "No such operator");
 			operatorName = generalOperatorMap[operator];
 		} else {
-			operatorName = operatorMap[operator];
+			operatorName = hasUnaOp ? unaryOperatorMap[operator] : operatorMap[operator];
 		}
 		if (logic[operatorName]) {
 			return logic[operatorName]($a, $b);
+		} else if(hasUnaOp) {
+			opfn = _unaOp.bind(null, operatorName, invert);
 		} else {
 			comp = compProto.hasOwnProperty(operatorName);
-			opfn = _op.bind(null, operatorName, invert);
+			opfn = _binOp.bind(null, operatorName, invert);
 		}
 		if (comp) {
 			const md = forEach(data);
@@ -223,7 +245,7 @@ export function op($a, operator, $b) {
 	return opfn($a, $b);
 }
 
-function data($a) {
+export function data($a) {
 	return switchMap($a, a => {
 		if(isVNode(a)) {
 			return new UntypedAtomic(stringJoin(pipe(filter(node => node.type == 2 || node.type == 3),forEach(node => impl.nodeData(node)))(traverse(a))));
@@ -232,3 +254,31 @@ function data($a) {
 		}
 	});
 }
+
+/*
+ * Pojo L3 constructors
+ */
+const has = (obj,prop) => obj.hasOwnProperty(prop);
+export const m = (...a) => a.reduce((o,{$key,$value}) => {
+	o[$key] = $value;
+	return o;
+},{});
+export const l = (...a) => a;
+export const e = (qname,...a) => {
+	// check if first arg is attrMap
+	const len = a.length;
+	const node = {};
+	node.$name = qname;
+	node.$children = [];
+	for(let i = 0; i < len; i++) {
+		let c = a[i];
+		if(typeof c == "function") c = c();
+		if(has(c,"$key")) {
+			node[c.$key] = c.$value;
+		} else {
+			node.$children.push(c);
+		}
+	}
+	return node;
+};
+export const a = (key,val) => ({$key:key,$value:val});
