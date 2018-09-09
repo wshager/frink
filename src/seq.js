@@ -10,7 +10,6 @@ import {
 	reduce,
 	filter as rxFilter,
 	scan as rxScan,
-	count as rxCount,
 	pairwise
 } from "rxjs/operators";
 
@@ -120,8 +119,6 @@ export function create(o){
 // TODO how to use f when not a seq?
 export const first = (f,d) => s => isSeq(s) ? rxFirst(f,d)(s) : isNull(s) ? d : s;
 
-export const count = s => isSeq(s) ? rxCount()(s) : 1;
-
 export function range(n,s=0) {
 	return subscribeOn(Scheduler.queue)(rxRange(s,n));
 }
@@ -145,4 +142,4 @@ export function sort($s,fn){
 	return switchMap(seq($s).toArray(),a => seq(isUndef(fn) ? a.sort() : a.sort(fn)));
 }
 
-export { pipe, interval };
+export { pipe, interval, from };
