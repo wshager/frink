@@ -58,8 +58,12 @@ export const many = occurrence(oneOrMore,2);
 export const maybe = occurrence(zeroOrOne,3);
 export const single = occurrence(exactlyOne,4);
 
-function unwrap(fn,args,s,r,name,pos,l,i,o) {
-	if(i === l) {
+function unwrap(fn,args,s,r,name,pos,sl,al,hasRestParam,i,o) {
+	if(i === al) {
+		if(hasRestParam) sl--;
+		if(sl > i) {
+			throw argLengthError(name,sl,al,hasRestParam);
+		}
 		const ret = fn();
 		return o ? seq(ret).subscribe(o) : ret;
 	}
@@ -73,19 +77,28 @@ function unwrap(fn,args,s,r,name,pos,l,i,o) {
 				o.error(err);
 			},
 			complete() {
-				unwrap(fn.bind(null,value),args,s,r,name,pos,l,i+1,o);
+				unwrap(fn.bind(null,value),args,s,r,name,pos,sl,al,hasRestParam,i+1,o);
 			}
 		});
 	};
 	const unwrapSingle = o => a => a.subscribe({
 		next(a) {
-			unwrap(fn.bind(null,a),args,s,r,name,pos,l,i+1,o);
+			unwrap(fn.bind(null,a),args,s,r,name,pos,sl,al,hasRestParam,i+1,o);
 		},
 		error(err) {
 			o.error(err);
 		}
 	});
 	let f = s[i];
+	// TODO check optional and adapt length
+	if(isUndef(f) || f.__rest_param) {
+		// try last
+		if(hasRestParam) {
+			f = sl > 1 ? s[sl - 2] : any(item());
+		} else {
+			throw argLengthError(name,sl,al,hasRestParam);
+		}
+	}
 	const c = f.__occurrence;
 	if(isUndef(c)) f = single(f);
 	const a = check ? f(args[i],name,i,pos) : args[i];
@@ -109,7 +122,7 @@ function unwrap(fn,args,s,r,name,pos,l,i,o) {
 			}
 		}
 	}
-	return unwrap(fn.bind(null,a),args,s,r,name,pos,l,i+1,o);
+	return unwrap(fn.bind(null,a),args,s,r,name,pos,sl,al,hasRestParam,i+1,o);
 }
 
 // TODO use separate cross-browser package conditionally
@@ -125,29 +138,32 @@ function getStack(){
 	return stack;
 }
 
-function checkArgLength(name,s,al) {
-	let sl = s.length;
-	while(sl > al) {
-		if(!s[--sl].__optional) break;
-	}
-	if(al !== sl) {
-		throw new Error(`Invalid number of arguments for function ${name}. Expected ${sl} got ${al}`);
-	}
+function argLengthError(name,sl,al,hasRestParam) {
+	return new Error(`Invalid number of arguments for function ${name}. Expected ${hasRestParam ? "at least" : ""} ${sl} got ${al}`);
 }
 
-export const def = (name,s,r,pos) => fn => {
-	if(typeof fn !== "function") throw new TypeError("Invalid argument for function 'def'\nExpected a Function, got a "+fn.constructor.name);
-	if(isUndef(pos)) {
-		var st = getStack()[2];
-		pos = [st.getFunctionName(),st.getFileName(),st.getLineNumber(),st.getColumnNumber()];
+export const def = (name,s,r,pos) => {
+	const sl = s ? s.length : -1;
+	if(r) {
+		const c = r.__occurrence;
+		if(isUndef(c)) r = single(r);
 	}
-	const f = (...args) => {
-		const al = args.length;
-		checkArgLength(name,s,al);
-		const ret = unwrap(fn,args,s,r,name,pos,al,0);
-		return check ? r(ret,name,-1,pos) : ret;
+	const hasRestParam = sl > 0 && s[sl - 1].__rest_param;
+	const f = fn => {
+		if(typeof fn !== "function") throw new TypeError("Invalid argument for function 'def'\nExpected a Function, got a "+fn.constructor.name);
+		if(isUndef(pos)) {
+			var st = getStack()[2];
+			pos = [st.getFunctionName(),st.getFileName(),st.getLineNumber(),st.getColumnNumber()];
+		}
+		const f = (...args) => {
+			const al = args.length;
+			const ret = unwrap(fn,args,s,r,name,pos,sl,al,hasRestParam,0);
+			return check ? forEach(ret, a => r(a,name,-1,pos)) : ret;
+		};
+		f.__wraps = fn;
+		return f;
 	};
-	f.__wraps = fn;
+	f.__length = hasRestParam ? -1 : sl;
 	return f;
 };
 
@@ -170,11 +186,6 @@ export const map = f => a => {
 };
 
 export const item = () => id;
-
-export const opt = arg => {
-	arg.__optional = true;
-	return arg;
-};
 
 export const atomic = () => a => {
 	// boolean / string / numeric
@@ -199,4 +210,8 @@ const isNumeric = (a,b) => {
 export const numeric = () => a => {
 	const b = a.constructor;
 	return isNumeric(a,b) ? a : new b();
+};
+
+export const restParams = () => {
+	return {__rest_param:true};
 };
