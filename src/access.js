@@ -2,7 +2,7 @@ import { ensureDoc } from "l3n";
 
 import { error } from "./error";
 
-import { seq, isSeq, forEach, filter, pipe, switchMap, foldLeft } from "./seq";
+import { seq, isSeq, from, forEach, filter, pipe, switchMap, foldLeft } from "./seq";
 
 import { isUndef } from "./util";
 
@@ -166,10 +166,10 @@ function _attrGet(key,$node){
 			if (!val) return [];
 			entries = [[key, val]];
 		} else {
-			entries = node.attrEntries();
+			entries = node.entries();
 		}
-		return forEach(entries,function (kv) {
-			return node.vnode(node.pair(kv[0], kv[1]), node.parent, node.depth + 1, node.indexInParent);
+		return forEach(from(entries),function ([k,v]) {
+			return node.vnode(node.attr(k, v), node.parent, node.depth + 1, node.indexInParent);
 		});
 	});
 }
@@ -248,7 +248,7 @@ export function select($node, ...paths) {
 	var cx = this;
 	var boundEnsureDoc = ensureDoc.bind(cx);
 	return foldLeft(forEach(
-		forEach(paths,path => _axify(path)),
+		forEach(from(paths),path => _axify(path)),
 		// we're passing $node here, because we want to update it every iteration
 		path => $node => {
 			// make sure all paths are funcs
