@@ -10,7 +10,7 @@
     "standards",
     "recommendation"
   ],
-  "version": "0.5.1",
+  "version": "0.5.2",
   "author": "Wouter Hager",
   "contributors": [],
   "main": "./lib/index",
