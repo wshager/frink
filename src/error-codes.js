@@ -1,4 +1,4 @@
-{
+export const codes = {
 	"FOER0000":"Unidentified error.",
 	"FOAP0001":"",
 	"FOAR0001":"Division by zero.",
@@ -74,7 +74,6 @@
 	"XTDE0044":"",
 	"XTDE0045":"",
 	"XTDE0040":"",
-	"XTDE0047":"",
 	"XTDE0041":"",
 	"XTDE0047":"",
 	"XTSE0090":"",
@@ -384,7 +383,6 @@
 	"SEDE0044":"",
 	"SEDE0045":"",
 	"SEDE0040":"",
-	"SEDE0047":"",
 	"SEDE0041":"",
 	"SEDE0047":"",
 	"SESE0090":"",
@@ -590,4 +588,6 @@
 	"SESE1650":"",
 	"SESE1660":"",
 	"SEDE1665":""
-}
+};
+
+export default codes;
