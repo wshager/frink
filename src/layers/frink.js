@@ -1,46 +1,53 @@
-import { first } from "../seq";
+import { inode } from "l3n";
 
-import { Observable } from "rxjs/Observable";
+import { forEach } from "../seq";
 
-import * as inode from "../inode";
+import { boolean, not } from "../boolean/value";
 
-import * as dom from "../dom";
+import { isNodeEnv } from "../util";
 
-export * from "../construct";
+import { select as selectStreaming, children as childrenStreaming } from "../access-streaming";
 
-export * from "../modify";
+const boundSelectStreaming = selectStreaming.bind(inode);
+
+const boundChildrenStreaming = childrenStreaming.bind(inode);
+
+export { boundSelectStreaming as selectStreaming, boundChildrenStreaming as childrenStreaming };
+
+if(isNodeEnv && !global.URL) {
+	let url = require("url");
+	global.URL = url.URL;
+}
+
+export * from "../qname";
 
 export * from "../access";
 
-export * from "../l3";
-
-export * from "../validate";
-
-export * from "../render";
-
 export * from "../seq";
 
-export * from "../doc";
+export * from "../seq/op";
 
-export { dom };
+export * from "../seq/card";
 
-export const toObservable = x => Observable.from(x);
+export * from "../seq/value";
 
-//export * from "../dom-util";
+export * from "../seq/aggregate";
 
-import { Parser } from "../parser";
+export * from "../type";
 
-export function parseString(str, cb) {
-	var parser = new Parser(inode);
-	return parser.parseString(str, cb);
-}
+export * from "../typed";
 
-export function parse($a){
-	var xml = first()($a);
-	var result;
-	parseString(xml,function(err,ret){
-		if(err) console.log(err);
-		result = ret;
-	});
-	return result;
-}
+export * from "../string";
+
+export * from "../function";
+
+export * from "../op";
+
+const iff = (c,t,f) => forEach(boolean(c),ret => ret ? t.apply() : f.apply());
+
+export { iff as if };
+
+const _f = () => false;
+const _t = () => true;
+
+export { boolean, not, _f as false, _t as true};
