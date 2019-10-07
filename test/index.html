@@ -3,45 +3,256 @@
 <head>
     <script src="../dist/frink.js"></script>
     <style>
-        form[name='core'] label {
+        form[name='core'] label, form[name='main'] label {
             display: block;
         }
-        form[name='main'] input {
-            display: block;
+        .label-text {
+            padding: 0 1em;
         }
-        input:focus, fieldset:focus {
+        form[name='main'] {
+            padding: 2em;
+            border: thin ridge lightslategray;
+        }
+        form[name='main']:focus, input:focus, fieldset:focus {
             /* FIXME create custom component styles leaving default focus outline as-is */
             outline: normal ridge -webkit-focus-ring-color;
         }
+        body {
+            display: flex;
+        }
+        section {
+            flex: 1 1 50%;
+        }
+        .result {
+            flex: 1 1 auto;
+        }
+        #result {
+            width: 100%;
+            height: 100%;
+        }
     </style>
     <script>
-        class XForm extends HTMLFormElement {
+        // TODO create custom form + controls
+        // This is a *very* crude prototype of the core form
+        const KEY_BACKSLASH = 220;
+        const KEY_ENTER = 13;
+        const KEY_DELETE = 46;
+        const KEY_TAB = 9;
+        const KEY_ESCAPE = 27;
+        const mapKeyRE = /\.(\w+)$/;
+        const listKeyRE = /\[([0-9]+)\]$/;
+        const callKeyRE = /\(([0-9]+)\)$/;
+        const quotationKeyRE = /{([0-9]+)}$/;
+        const elementKeyRE = /<([0-9]+)>$/;
+        const typeMap = {
+            s: 'String',
+            n: 'Number',
+            b: 'Boolean',
+            l: 'List',
+            m: 'Map',
+            c: 'Call function',
+            q: 'Quotation',
+            e: 'Element',
+            '-': 'Delete',
+            ',': 'Add',
+        }
+        const atomicInputTypeMap = {
+            s: 'text',
+            n: 'number',
+            b: 'checkbox',
+        }
+        const customExtensionTypeMap = {
+            l: 'x-list',
+            m: 'x-map',
+            e: 'x-element',
+            c: 'x-call',
+            q: 'x-quotation'
+        }
+        const wrapLogger = (fn, name) => (...args) => {
+            const ret = fn(...args);
+            console.log('calling', fn.name || name, 'args', args, 'ret', ret);
+            return ret;
+        };
+        const set = (obj, value, key) => ({...obj, [key]: value});
+        //const append = (arr, value) => [...arr, value];
+        const insert = (arr, value, index) => [...arr.slice(0, index), value, ...arr.slice(index + 1)];
+        const identity = x => x;
+        const formValueNormalizer = ({ name, type, value, checked }, valueContainer) => (
+            type === 'checkbox'
+                ? checked
+                : type === 'radio'
+                    ? checked ? value : valueContainer[name]
+                    : value
+        );
+        function createLabel(name, field) {
+            const label = document.createElement('label');
+            const text = document.createElement('span');
+            text.contentEditable = true;
+            text.className = 'label-text';
+            text.textContent = name;
+            label.appendChild(text);
+            label.appendChild(field);
+            return label;
+        }
+        function createAtomicControl(type, name, parentType) {
+            const control = document.createElement('input');
+            control.name = name;
+            control.type = atomicInputTypeMap[type];
+            control.dataset.type = type;
+            control.setAttribute('placeholder', name);
+            //control.setAttribute('autocomplete', 'off');
+            return control;
+        }
+        const listKeyFormatter = (name, childKey) => `${name}[${childKey}]`;
+        const mapKeyFormatter = (name, childKey) => `${name}.${childKey}`;
+        const elementKeyFormatter = (name, childKey) => `${name}<${childKey}>`;
+        const callKeyFormatter = (name, childKey) => `${name}(${childKey})`;
+        const quotationKeyFormatter = (name, childKey) => `${name}{${childKey}}`;
+        const keyFormatterMap = {
+            l: listKeyFormatter,
+            m: mapKeyFormatter,
+            e: elementKeyFormatter,
+            c: callKeyFormatter,
+            q: quotationKeyFormatter
+        };
+        const listPostCreateField = (name, field) => {
+            return field;
+        };
+        const mapPostCreateField = (name, field) => {
+            const label = createLabel(name, field);
+            label.firstElementChild.addEventListener('click', evt => {
+                evt.preventDefault();
+            });
+            label.firstElementChild.addEventListener('input', evt => {
+                field.name = mapKeyFormatter(name, evt.target.textContent);
+            });
+            return label;
+        };
+        const callPostCreateField = (name, field, control) => {
+            field.addEventListener('input', function() {
+                const option = Array.from(this.list.options).find(option => option.value === this.value);
+                if(!option) {
+                    //this.value = '';
+                } else {
+                    this.value = option.value;
+                }
+            });
+            return field;
+        }
+        const quotationPostCreateField = callPostCreateField;
+        const elementPostCreateField = (name, field) => {
+            return field;
+        }
+        const postCreateFieldMap = {
+            l: listPostCreateField,
+            m: mapPostCreateField,
+            e: elementKeyRE,
+            c: callPostCreateField,
+            q: quotationPostCreateField
+        };
+        function createStructuredControl(type, name, parentType) {
+            const customExtensionType = customExtensionTypeMap[type];
+            const control = !parentType // root
+                ? document.createElement('form', { is: 'x-form' })
+                : document.createElement('fieldset', { is: customExtensionType });
+            control.name = name;
+            control.tabIndex = 0;
+            control.autocomplete = 'off';
+            control.dataset.type = type;
+            if(type === 'm') {
+                this.controlCount = 0;
+            }
+            const defaultChildKey = type === 'm'
+                ? 'field' + (++this.controlCount)
+                : 0;
+            const key = !parentType
+                ? defaultChildKey
+                : keyFormatterMap[type](name, defaultChildKey);
+            const field = createControlByType('s', key);
+            const child = postCreateFieldMap[type](defaultChildKey, field);
+            control.appendChild(child);
+            return control;
+        }
+        function createControlByType(type, name, parentType) {
+            switch(type) {
+                case 's':
+                case 'n':
+                case 'b': {
+                    return createAtomicControl(type, name, parentType);
+                }
+                case 'l': 
+                case 'm': 
+                case 'c': 
+                case 'e':
+                case 'q': {
+                    return createStructuredControl(type, name, parentType);
+                }
+            }
+        }
+        const mapKeyNormalizer = name => {
+            if(!mapKeyRE.test(name)) {
+                throw new Error(`Incorrectly named property ${name} found in map`);
+            }
+            return name.match(mapKeyRE)[1];
+        };
+        const listKeyNormalizer = name => {
+            if(!listKeyRE.test(name)) {
+                throw new Error(`Incorrectly named item ${name} found in list`);
+            }
+            return parseInt(name.match(listKeyRE)[1]);
+        }
+        const callKeyNormalizer = name => {
+            if(!callKeyRE.test(name)) {
+                throw new Error(`Incorrectly named item ${name} found in argument list`);
+            }
+            return parseInt(name.match(callKeyRE)[1], 10);
+        };
+        const elementKeyNormalizer = name => {
+            if(!elementKeyRE.test(name)) {
+                throw new Error(`Incorrectly named item ${name} found in element list`);
+            }
+            return parseInt(name.match(elementKeyRE)[1], 10);
+        };
+        const callAppender = ({ $name, $args }, value, key) => (
+            key === 0
+                ? { $name: value, $args }
+                : { $name, $args: insert($args, value, key - 1) }
+        );
+        const elementAppender = ({ $name, $children }, value, key) => (
+            key === 0
+                ? { $name: value, $children }
+                : { $name, $children: insert($children, value, key - 1) }
+        );
+        const XBase = (SomeHTMLElement, {
+            valueContainer = {},
+            valueNormalizer = formValueNormalizer,
+            keyNormalizer = identity,
+            appender = set
+        } = {}) => class extends SomeHTMLElement {
             constructor() {
                 super();
             }
-
             static get observedAttributes() { return ["value"]; }
 
             attributeChangedCallback(name, oldValue, newValue) {
                 // TODO
             }
 
+            isParentOf(control) {
+                const { parentElement } = control;
+                return parentElement.isSameNode(this) || (parentElement.nodeName === 'LABEL' && parentElement.parentElement.isSameNode(this));
+            }
+
+            get controls() {
+                return Array.from(this.elements)
+                    .filter(control => control.type !== 'submit' && this.isParentOf(control));
+            }
+
             get value() {
-                return Array.from(this.elements).reduce((acc, control) => {
-                    const { name, type, value, checked, parentElement } = control;
-                    const isParent = parentElement.isSameNode(this) || (parentElement.nodeName === 'LABEL' && parentElement.parentElement.isSameNode(this));
-                    if(type === 'submit' || !isParent) {
-                        console.log(control)
-                        return acc;
-                    }
-                    const normalizedValue = type === 'checkbox'
-                        ? checked
-                        : type === 'radio'
-                            ? checked ? value : acc[name]
-                            : value;
-                    acc[name] = normalizedValue;
-                    return acc;
-                }, {});
+                return this.controls.reduce(
+                    (acc, control) => appender(acc, valueNormalizer(control, acc), keyNormalizer(control.name)),
+                    valueContainer
+                );
             }
             set value(v) {
                 Object.entries(v).forEach(([k, v]) => {
@@ -55,159 +266,91 @@
                 return v;
             }
         }
+        
+        class XForm extends XBase(HTMLFormElement) {}
         customElements.define("x-form", XForm, { extends: 'form' });
-        class XList extends HTMLFieldSetElement {
-            constructor() {
-                super();
-                this._listKeyRE = /(\[[0-9]*\])+$/;
-            }
-
-            static get observedAttributes() { return ["value"]; }
-
-            attributeChangedCallback(name, oldValue, newValue) {
-                // TODO
-            }
-
-            get value() {
-                return Array.from(this.elements).reduce((acc, control) => {
-                    const { name, type, value, checked } = control;
-                    if(type === 'submit' || !control.parentElement.isSameNode(this)) {
-                        return acc;
-                    }
-                    const normalizedValue = type === 'checkbox'
-                        ? checked
-                        : type === 'radio'
-                            ? checked ? value : acc[name]
-                            : value;
-                    if(this._listKeyRE.test(name)) {
-                        const key = name.replace(this._listKeyRE, '');
-                        acc.push(normalizedValue);
-                    } else {
-                        throw new Error('Incorrectly named item found in list');
-                    }
-                    return acc;
-                }, []);
-            }
-            set value(v) {
-                // TODO
-            }
-        }
+        class XList extends XBase(HTMLFieldSetElement, {
+            valueContainer: [],
+            keyNormalizer: listKeyNormalizer,
+            appender: insert,
+        }) {}
         customElements.define("x-list", XList, { extends: 'fieldset' });
-        class XMap extends HTMLFieldSetElement {
-            constructor() {
-                super();
-                this._mapKeyRE = /\[(\w+)\]$/;
-            }
-
-            static get observedAttributes() { return ["value"]; }
-
-            attributeChangedCallback(name, oldValue, newValue) {
-                // TODO
-            }
-
-            get value() {
-                return Array.from(this.elements).reduce((acc, control) => {
-                    const { name, type, value, checked } = control;
-                    if(type === 'submit' || !control.parentElement.isSameNode(this)) {
-                        return acc;
-                    }
-                    const normalizedValue = type === 'checkbox'
-                        ? checked
-                        : type === 'radio'
-                            ? checked ? value : acc[name]
-                            : value;
-                    if(this._mapKeyRE.test(name)) {
-                        const key = name.match(this._mapKeyRE)[1];
-                        acc[key] = normalizedValue;
-                    } else {
-                        throw new Error('Incorrectly named property found in map');
-                    }
-                    return acc;
-                }, {});
-            }
-            set value(v) {
-                // TODO
-            }
-        }
+        class XMap extends XBase(HTMLFieldSetElement, {
+            keyNormalizer: mapKeyNormalizer,
+        }) {}
         customElements.define("x-map", XMap, { extends: 'fieldset' });
-        /*
-        class XBoolean extends HTMLElement {
-            static get formAssociated() { return true; }
-
-            constructor() {
-                super();
-                this._internals = this.attachInternals();
-                this._checked = false;
-                this.addEventListener('click', this._onClick.bind(this));
-            }
-
-            get form() { return this._internals.form; }
-            get name() { return this.getAttribute('name'); }
-            get type() { return this.localName; }
-
-            get checked() { return this._checked; }
-            set checked(flag) {
-                this._checked = !!flag;
-                this._internals.setFormValue(this._checked);
-            }
-
-            _onClick(event) {
-                this.checked = !this._checked;
-            }
+        class XCall extends XBase(HTMLFieldSetElement, {
+            valueContainer: {
+                $name: void 0,
+                $args: [],
+            },
+            keyNormalizer: callKeyNormalizer,
+            appender: callAppender,
+        }) {}
+        customElements.define("x-call", XCall, { extends: 'fieldset' });
+        class XElement extends XBase(HTMLFieldSetElement, {
+            valueContainer: {
+                $name: void 0,
+                $children: [],
+            },
+            keyNormalizer: elementKeyNormalizer,
+            appender: elementAppender,
+        }) {}
+        customElements.define("x-element", XElement, { extends: 'fieldset' });
+        // control appearences
+        function radiogroup({ options }) {
+            const group = document.createElement('div');
+            options.forEach(([k, v]) => {
+                const input = document.createElement('input');
+                const label = document.createElement('label');
+                input.type = 'radio';
+                input.name = 'type';
+                input.value = k;
+                input.dataset.key = k;
+                const text = document.createTextNode(`[${k}] ${v}`);
+                label.appendChild(input);
+                label.appendChild(text);
+                group.appendChild(label);
+            });
+            return group;
         }
-        customElements.define('x-boolean', XBoolean);
-        */
     </script>
 </head>
 
 <body>
-    <form data-type="m" is="x-form" name="main">
-        <input data-type="s" name="field1">
-        <input data-type="s" name="field2">
-    </form>
-    <form is="x-form" name="core">
-        <input type="checkbox" name="active">
-    </form>
+    <section>
+        <form is="x-form" name="core">
+            <input type="checkbox" name="active">
+        </form>
+    </section>
+    <section class="result">
+        <pre id="result"/>
+    </section>
+    <datalist id="calls">
+        <option value="equals">
+        <option value="not">
+        <option value="greater-than">
+        <option value="less-then">
+        <option value="and">
+    </datalist>
     <script>
-        // TODO create custom form + controls
-        // This is a *very* crude prototype of the core form
-        var main = document.forms.main;
+        // TODO use L3 DOM
+        // The intent is NOT to use web components, but only the 'is' attribute
+        // so that this form can be rendered on a server *and still work* (numbers and booleans should still be cast)
+        // The interactive tree will be translated, and simply contains l3 elements
+        // Any attributes may be provided as any data structure, so it would be possible to
+        // e.g. provide a enum constraint of an element as a list
+        const core = document.forms.core;
+        core.appendChild(radiogroup({ options: Object.entries(typeMap) }));
+        const main = createStructuredControl('m', 'main');
+        const target = core.parentElement;
+        target.insertBefore(main, core);
+
         main.addEventListener('input', function (evt) {
             console.log(this.value);
+            document.getElementById('result').textContent = JSON.stringify(this.value, null, 4);
         });
-        const typeMap = {
-            s: 'String',
-            n: 'Number',
-            b: 'Boolean',
-            l: 'List',
-            m: 'Map',
-            '-': 'Delete',
-            ',': 'Add',
-        }
-        const atomicInputTypeMap = {
-            s: 'text',
-            n: 'number',
-            b: 'checkbox',
-        }
-        const core = document.forms.core;
-        // TODO use L3 DOM
-        Object.entries(typeMap).forEach(([k, v]) => {
-            const input = document.createElement('input');
-            const label = document.createElement('label');
-            input.type = 'radio';
-            input.name = 'type';
-            input.value = k;
-            input.dataset.key = k;
-            const text = document.createTextNode(`[${k}] ${v}`);
-            label.appendChild(input);
-            label.appendChild(text);
-            core.appendChild(label);
-        });
-        const KEY_BACKSLASH = 220;
-        const KEY_ENTER = 13;
-        const KEY_DELETE = 46;
-        const KEY_TAB = 9;
-        const KEY_ESCAPE = 27;
+        
         const captureBackSlash = (code, state) => {
             const isBackSlash = code === KEY_BACKSLASH;
             if (isBackSlash) {
@@ -215,40 +358,6 @@
             }
             return state;
         };
-        function createControlByType(type, name, parentType) {
-            switch(type) {
-                case 's':
-                case 'n':
-                case 'b': {
-                    const control = document.createElement('input');
-                    control.name = name;
-                    control.type = atomicInputTypeMap[type];
-                    control.dataset.type = type;
-                    return control;
-                }
-                case 'l': {
-                    const control = document.createElement('fieldset', { is: 'x-list' });
-                    control.name = name;
-                    control.tabIndex = 0;
-                    control.dataset.type = type;
-                    // FIXME is this nesting correct?
-                    const field = createControlByType('s', `${name}[0]`);
-                    control.appendChild(field);
-                    return control;
-                }
-                case 'm': {
-                    const control = document.createElement('fieldset', { is: 'x-map' });
-                    control.name = name;
-                    control.tabIndex = 0;
-                    control.dataset.type = type;
-                    control.controlCount = 1;
-                    // FIXME is this nesting correct?
-                    const field = createControlByType('s', `${name}[field1]`);
-                    control.appendChild(field);
-                    return control;
-                }
-            }
-        }
         const jumpState = {selected: void 0};
         function coreChangeHandler(evt) {
             if(evt.target.name === 'active') {
@@ -267,9 +376,26 @@
                 emitCoreChange(core.value, selected);
             }
         }
-        function emitCoreChange({type}, selected) {
-            const parent = selected.parentElement;
+        function insertChildControl(type, parent) {
             const parentType = parent.dataset.type;
+            const key = parentType === 'm'
+                ? 'field' + (++parent.controlCount)
+                : parent.controls.length; // FIXME rename all children
+            const name = parent.isSameNode(selected.form) ? key : keyFormatterMap[type](parent.name, key);
+            const control = createControlByType(type, name, parentType);
+            if(type === 'm') {
+                const label = createLabel(key, control);
+                parent.insertBefore(label, label.nextSibling);
+            } else {
+                parent.insertBefore(control, selected.nextSibling);
+            }
+            control.focus();
+        }
+        function emitCoreChange({type}, selected) {
+            let parent = selected.parentElement;
+            if(parent.nodeName === 'LABEL') {
+                parent = parent.parentElement;
+            }
             const state = parent.value;
             if(type === '-') {
                 if(Object.keys(state).length === 1) {
@@ -280,40 +406,35 @@
                 selected.remove();
             } else if(type === ',') {
                 // append new parent control
-                let name;
-                if(parentType === 'm') {
-                    if(!parent.controlCount) parent.controlCount = parent.elements.length;
-                    parent.controlCount++;
-                    const key = 'field' + parent.controlCount;
-                    name = parent.isSameNode(selected.form) ? key : `${parent.name}[${key}]`;
-                } else if(parentType === 'l') {
-                    // FIXME rename all children
-                    const index = Array.from(parent.elements).filter(c => c.parentElement.isSameNode(parent)).length;
-                    name = parent.isSameNode(selected.form) ? key : `${parent.name}[${index}]`;
-                }
-                const control = createControlByType('s', name, parentType);
-                parent.insertBefore(control, selected.nextSibling);
-                control.focus();
+                insertChildControl('s', parent);
             } else {
+                if(selected.dataset.type === type) {
+                    return;
+                }
+                const parentType = parent.dataset.type;
+                if(parentType === 'c' || parentType === 'e') {
+                    const keyNormalizer = parentType === 'c' ? callKeyNormalizer : elementKeyNormalizer;
+                    const index = keyNormalizer(selected.name);
+                    if(index === 0) {
+                        return alert('Can not change type of the $name control for '+typeMap[parentType]);
+                    }
+                }
                 if(selected.value && !confirm('Are you sure want to change the type of this control? The value will be discarded')) {
                     return;
                 }
                 console.log(`change type from ${selected.type} to ${type} in parent ${parentType}`);
-                //if(parentType === 'm') {
-                    const control = createControlByType(type, selected.name, parentType);
-                    parent.insertBefore(control, selected);
-                    selected.remove();
-                    if(type === 'l') {
-                        console.log(control.elements)
-                        control.elements[0].focus();
-                    } else {
-                        control.focus();
-                    }
-                //}
+                const control = createControlByType(type, selected.name, parentType);
+                const refNode = parentType === 'm' ? selected.parentElement : selected;
+                // FIXME selected.name is the path
+                const node = postCreateFieldMap[parentType](selected.name, control);
+                parent.insertBefore(node, refNode);
+                refNode.remove();
+                if(type === 'l' || type === 'm' || type === 'c' || type === 'e') {
+                    control.controls[0].focus();
+                } else {
+                    control.focus();
+                }
             }
-        }
-        function coreSubmitHandler(evt) {
-            
         }
         function cleanCore() {
             core.removeEventListener("keydown", coreKeyDownHandler);
@@ -331,8 +452,8 @@
             cleanCore();
         }
         function coreKeyDownHandler(evt) {
-            const code = evt.which;
-            const controls = Array.from(this.elements);
+            const code = evt.keyCode;
+            const controls = this.controls;
             const isEnter = code === KEY_ENTER;
             const isCancelKey = code === KEY_ESCAPE || code === KEY_TAB || code === KEY_BACKSLASH;
             if(isCancelKey || isEnter) {
@@ -354,14 +475,14 @@
             }
         }
         function mainKeyDownHandler(evt) {
-            const state = captureBackSlash(evt.which, core.value);
+            const state = captureBackSlash(evt.keyCode, core.value);
             const selected = document.activeElement;
             if (state.active) {
                 evt.preventDefault();
                 jumpState.selected = selected;
                 // TODO infer type from control (until we have custom controls)
                 const type = selected.dataset.type;
-                const typeControl = Array.from(core.elements).find(elm => elm.name === 'type' && elm.value === type);
+                const typeControl = Array.from(core.controls).find(elm => elm.name === 'type' && elm.value === type);
                 if(!typeControl) {
                     throw new TypeError('Could not find control for type ' + type);
                 }
@@ -378,6 +499,7 @@
             }
         }
         main.addEventListener("keydown", mainKeyDownHandler);
+        main.controls[0].focus();
     </script>
 </body>
 
