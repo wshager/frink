@@ -100,6 +100,9 @@
             control.type = atomicInputTypeMap[type];
             control.dataset.type = type;
             control.setAttribute('placeholder', name);
+            if(type === 'b') {
+                control.value = 'true';
+            }
             //control.setAttribute('autocomplete', 'off');
             return control;
         }
@@ -159,11 +162,8 @@
             control.tabIndex = 0;
             control.autocomplete = 'off';
             control.dataset.type = type;
-            if(type === 'm') {
-                this.controlCount = 0;
-            }
             const defaultChildKey = type === 'm'
-                ? 'field' + (++this.controlCount)
+                ? 'field1'
                 : 0;
             const key = !parentType
                 ? defaultChildKey
@@ -203,15 +203,28 @@
         }
         const callKeyNormalizer = name => {
             if(!callKeyRE.test(name)) {
-                throw new Error(`Incorrectly named item ${name} found in argument list`);
+                throw new Error(`Incorrectly named item ${name} found in call argument list`);
             }
             return parseInt(name.match(callKeyRE)[1], 10);
+        };
+        const quotationKeyNormalizer = name => {
+            if(!elementKeyRE.test(name)) {
+                throw new Error(`Incorrectly named item ${name} found in quotation argument list`);
+            }
+            return parseInt(name.match(quotationKeyRE)[1], 10);
         };
         const elementKeyNormalizer = name => {
             if(!elementKeyRE.test(name)) {
                 throw new Error(`Incorrectly named item ${name} found in element list`);
             }
             return parseInt(name.match(elementKeyRE)[1], 10);
+        };
+        const keyNormalizerMap = {
+            l: listKeyNormalizer,
+            m: mapKeyNormalizer,
+            e: elementKeyNormalizer,
+            c: callKeyNormalizer,
+            q: quotationKeyNormalizer
         };
         const callAppender = ({ $name, $args }, value, key) => (
             key === 0
@@ -239,8 +252,10 @@
             }
 
             isParentOf(control) {
-                const { parentElement } = control;
-                return parentElement.isSameNode(this) || (parentElement.nodeName === 'LABEL' && parentElement.parentElement.isSameNode(this));
+                // search for the closest ancestor
+                const ancestor = control.closest('fieldset, form', this);
+                // return true when it's the parent, or when the control itself was found
+                return ancestor.isSameNode(this) || ancestor.isSameNode(control);
             }
 
             get controls() {
@@ -376,14 +391,17 @@
                 emitCoreChange(core.value, selected);
             }
         }
-        function insertChildControl(type, parent) {
+        function insertChildControl(type, selected, parent) {
             const parentType = parent.dataset.type;
+            if(parentType === 'm') {
+                parent.controlCount = parent.controls.length;
+            }
             const key = parentType === 'm'
                 ? 'field' + (++parent.controlCount)
                 : parent.controls.length; // FIXME rename all children
-            const name = parent.isSameNode(selected.form) ? key : keyFormatterMap[type](parent.name, key);
+            const name = parent.isSameNode(selected.form) ? key : keyFormatterMap[parentType](parent.name, key);
             const control = createControlByType(type, name, parentType);
-            if(type === 'm') {
+            if(parentType === 'm') {
                 const label = createLabel(key, control);
                 parent.insertBefore(label, label.nextSibling);
             } else {
@@ -392,10 +410,11 @@
             control.focus();
         }
         function emitCoreChange({type}, selected) {
-            let parent = selected.parentElement;
-            if(parent.nodeName === 'LABEL') {
-                parent = parent.parentElement;
+            const form = selected.form;
+            if(!form) {
+                return;
             }
+            let parent = selected.closest('fieldset, form', form);
             const state = parent.value;
             if(type === '-') {
                 if(Object.keys(state).length === 1) {
@@ -406,14 +425,14 @@
                 selected.remove();
             } else if(type === ',') {
                 // append new parent control
-                insertChildControl('s', parent);
+                insertChildControl('s', selected, parent);
             } else {
                 if(selected.dataset.type === type) {
                     return;
                 }
                 const parentType = parent.dataset.type;
                 if(parentType === 'c' || parentType === 'e') {
-                    const keyNormalizer = parentType === 'c' ? callKeyNormalizer : elementKeyNormalizer;
+                    const keyNormalizer = keyNormalizerMap[parentType];
                     const index = keyNormalizer(selected.name);
                     if(index === 0) {
                         return alert('Can not change type of the $name control for '+typeMap[parentType]);
@@ -426,7 +445,11 @@
                 const control = createControlByType(type, selected.name, parentType);
                 const refNode = parentType === 'm' ? selected.parentElement : selected;
                 // FIXME selected.name is the path
-                const node = postCreateFieldMap[parentType](selected.name, control);
+                const { name } = selected;
+                const key = parent.isSameNode(form)
+                    ? name
+                    : keyNormalizerMap[parentType](name);
+                const node = postCreateFieldMap[parentType](key, control);
                 parent.insertBefore(node, refNode);
                 refNode.remove();
                 if(type === 'l' || type === 'm' || type === 'c' || type === 'e') {
