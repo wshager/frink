@@ -9,6 +9,9 @@
         .label-text {
             padding: 0 1em;
         }
+        .label-invalid {
+            outline: thin normal red;
+        }
         form[name='main'] {
             padding: 2em;
             border: thin ridge lightslategray;
@@ -77,12 +80,14 @@
         //const append = (arr, value) => [...arr, value];
         const insert = (arr, value, index) => [...arr.slice(0, index), value, ...arr.slice(index + 1)];
         const identity = x => x;
-        const formValueNormalizer = ({ name, type, value, checked }, valueContainer) => (
+        const formValueNormalizer = ({ name, type, value, checked, dataset }, valueContainer) => (
             type === 'checkbox'
                 ? checked
                 : type === 'radio'
                     ? checked ? value : valueContainer[name]
-                    : value
+                    : dataset.type === 'n'
+                        ? parseFloat(value)
+                        : value 
         );
         function createLabel(name, field) {
             const label = document.createElement('label');
@@ -94,7 +99,7 @@
             label.appendChild(field);
             return label;
         }
-        function createAtomicControl(type, name, parentType) {
+        function createAtomicControl(type, name) {
             const control = document.createElement('input');
             control.name = name;
             control.type = atomicInputTypeMap[type];
@@ -106,8 +111,18 @@
             //control.setAttribute('autocomplete', 'off');
             return control;
         }
-        const listKeyFormatter = (name, childKey) => `${name}[${childKey}]`;
-        const mapKeyFormatter = (name, childKey) => `${name}.${childKey}`;
+        const listKeyFormatter = (name, childKey) => {
+            if(!/^[0-9]+$/.test(childKey)) {
+                throw new Error('Invalid list key');
+            }
+            return `${name}[${childKey}]`;
+        }
+        const mapKeyFormatter = (name, childKey) => {
+            if(!childKey) {
+                throw new Error('Invalid map key');
+            }
+            return `${name}.${childKey}`;
+        }
         const elementKeyFormatter = (name, childKey) => `${name}<${childKey}>`;
         const callKeyFormatter = (name, childKey) => `${name}(${childKey})`;
         const quotationKeyFormatter = (name, childKey) => `${name}{${childKey}}`;
@@ -127,19 +142,17 @@
                 evt.preventDefault();
             });
             label.firstElementChild.addEventListener('input', evt => {
-                field.name = mapKeyFormatter(name, evt.target.textContent);
+                try {
+                    field.name = mapKeyFormatter(name, evt.target.textContent);
+                    evt.target.classList.remove('label-invalid');
+                } catch(err) {
+                    console.log(err);
+                    evt.target.classList.add('label-invalid');
+                }
             });
             return label;
         };
         const callPostCreateField = (name, field, control) => {
-            field.addEventListener('input', function() {
-                const option = Array.from(this.list.options).find(option => option.value === this.value);
-                if(!option) {
-                    //this.value = '';
-                } else {
-                    this.value = option.value;
-                }
-            });
             return field;
         }
         const quotationPostCreateField = callPostCreateField;
@@ -153,39 +166,43 @@
             c: callPostCreateField,
             q: quotationPostCreateField
         };
-        function createStructuredControl(type, name, parentType) {
+        function _createFormOrStructuredControl(typeOrNull, name, defaultChild) {
+            const isForm = typeOrNull === null;
+            const type = isForm ? 'm' : typeOrNull;
             const customExtensionType = customExtensionTypeMap[type];
-            const control = !parentType // root
+            const control = isForm
                 ? document.createElement('form', { is: 'x-form' })
                 : document.createElement('fieldset', { is: customExtensionType });
             control.name = name;
             control.tabIndex = 0;
             control.autocomplete = 'off';
             control.dataset.type = type;
-            const defaultChildKey = type === 'm'
-                ? 'field1'
+            const defaultChildName = type === 'm'
+                ? defaultChild.name || 'field1'
                 : 0;
-            const key = !parentType
-                ? defaultChildKey
-                : keyFormatterMap[type](name, defaultChildKey);
-            const field = createControlByType('s', key);
-            const child = postCreateFieldMap[type](defaultChildKey, field);
+            const key = isForm
+                ? defaultChildName
+                : keyFormatterMap[type](name, defaultChildName);
+            const field = createControlByType(defaultChild.type, key);
+            const child = postCreateFieldMap[type](defaultChildName, field);
             control.appendChild(child);
             return control;
         }
+        const createForm = _createFormOrStructuredControl.bind(null, null);
+        const createStructuredControl = _createFormOrStructuredControl;
         function createControlByType(type, name, parentType) {
             switch(type) {
                 case 's':
                 case 'n':
                 case 'b': {
-                    return createAtomicControl(type, name, parentType);
+                    return createAtomicControl(type, name);
                 }
                 case 'l': 
                 case 'm': 
                 case 'c': 
                 case 'e':
                 case 'q': {
-                    return createStructuredControl(type, name, parentType);
+                    return createStructuredControl(type, name, { type: 's' });
                 }
             }
         }
@@ -252,10 +269,14 @@
             }
 
             isParentOf(control) {
-                // search for the closest ancestor
-                const ancestor = control.closest('fieldset, form', this);
-                // return true when it's the parent, or when the control itself was found
-                return ancestor.isSameNode(this) || ancestor.isSameNode(control);
+                const { parentElement } = control;
+                // return true when it's the parent
+                if (parentElement.isSameNode(this)) {
+                    return true;
+                }
+                // search for the closest ancestor of the control's parent
+                const ancestor = parentElement.closest('fieldset, form', this);
+                return ancestor.isSameNode(this);
             }
 
             get controls() {
@@ -333,10 +354,7 @@
 </head>
 
 <body>
-    <section>
-        <form is="x-form" name="core">
-            <input type="checkbox" name="active">
-        </form>
+    <section id="mountpoint">
     </section>
     <section class="result">
         <pre id="result"/>
@@ -355,12 +373,12 @@
         // The interactive tree will be translated, and simply contains l3 elements
         // Any attributes may be provided as any data structure, so it would be possible to
         // e.g. provide a enum constraint of an element as a list
-        const core = document.forms.core;
+        const main = createForm('main', { type: 's' });
+        const core = createForm('core', {type: 'b', name: 'active'});
         core.appendChild(radiogroup({ options: Object.entries(typeMap) }));
-        const main = createStructuredControl('m', 'main');
-        const target = core.parentElement;
-        target.insertBefore(main, core);
-
+        const mountpoint = document.getElementById('mountpoint');
+        mountpoint.appendChild(main);
+        mountpoint.appendChild(core);
         main.addEventListener('input', function (evt) {
             console.log(this.value);
             document.getElementById('result').textContent = JSON.stringify(this.value, null, 4);
@@ -401,12 +419,8 @@
                 : parent.controls.length; // FIXME rename all children
             const name = parent.isSameNode(selected.form) ? key : keyFormatterMap[parentType](parent.name, key);
             const control = createControlByType(type, name, parentType);
-            if(parentType === 'm') {
-                const label = createLabel(key, control);
-                parent.insertBefore(label, label.nextSibling);
-            } else {
-                parent.insertBefore(control, selected.nextSibling);
-            }
+            const child = postCreateFieldMap[parentType](key, control);
+            parent.insertBefore(child, selected.nextSibling);
             control.focus();
         }
         function emitCoreChange({type}, selected) {
