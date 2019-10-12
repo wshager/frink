@@ -10,15 +10,11 @@
             padding: 0 1em;
         }
         .label-invalid {
-            outline: thin normal red;
+            outline: medium solid red;
         }
         form[name='main'] {
             padding: 2em;
             border: thin ridge lightslategray;
-        }
-        form[name='main']:focus, input:focus, fieldset:focus {
-            /* FIXME create custom component styles leaving default focus outline as-is */
-            outline: normal ridge -webkit-focus-ring-color;
         }
         body {
             display: flex;
@@ -68,6 +64,7 @@
             l: 'x-list',
             m: 'x-map',
             e: 'x-element',
+            a: 'x-attribute',
             c: 'x-call',
             q: 'x-quotation'
         }
@@ -81,13 +78,7 @@
         const insert = (arr, value, index) => [...arr.slice(0, index), value, ...arr.slice(index + 1)];
         const identity = x => x;
         const formValueNormalizer = ({ name, type, value, checked, dataset }, valueContainer) => (
-            type === 'checkbox'
-                ? checked
-                : type === 'radio'
-                    ? checked ? value : valueContainer[name]
-                    : dataset.type === 'n'
-                        ? parseFloat(value)
-                        : value 
+            value
         );
         function createLabel(name, field) {
             const label = document.createElement('label');
@@ -103,7 +94,6 @@
             const control = document.createElement('input');
             control.name = name;
             control.type = atomicInputTypeMap[type];
-            control.dataset.type = type;
             control.setAttribute('placeholder', name);
             if(type === 'b') {
                 control.value = 'true';
@@ -166,9 +156,51 @@
             c: callPostCreateField,
             q: quotationPostCreateField
         };
-        function _createFormOrStructuredControl(typeOrNull, name, defaultChild) {
-            const isForm = typeOrNull === null;
-            const type = isForm ? 'm' : typeOrNull;
+        const x = (name, type, appearance = plain, props = {}) => {
+            const node = document.createElement('l3-x');
+            node.name = name;
+            node.type = type;
+            node.props = props;
+            node.appearance = appearance;
+            return node;
+        }
+        /*const _l3Structure = l3Type => (name, children, appearance = plain, props = {}) => {
+            const node = document.createElement('l3-' + l3Type);
+            node.name = name;
+            node.props = props;
+            node.appearance = appearance;
+            children.forEach(child => {
+                node.appendChild(child);
+            })
+            return node;
+        };*/
+        const _l3Structure = l3Type => (name, children) => {
+            const node = _createFormOrStructuredControl(l3Type, name);
+            children.forEach(child => {
+                node.appendChild(child);
+            });
+            return node;
+        }
+        const f = _l3Structure();
+        const l = _l3Structure('l');
+        const m = _l3Structure('m');
+        const c = _l3Structure('c');
+        const q = _l3Structure('q');
+        const e = _l3Structure('e');
+        const a = _l3Structure('a');
+        const l3Constructors = {
+            f,
+            x,
+            l,
+            m,
+            c,
+            q,
+            e,
+            a,
+        };
+        function _createFormOrStructuredControl(l3Type, name) {
+            const isForm = !l3Type;
+            const type = isForm ? 'm' : l3Type;
             const customExtensionType = customExtensionTypeMap[type];
             const control = isForm
                 ? document.createElement('form', { is: 'x-form' })
@@ -176,35 +208,14 @@
             control.name = name;
             control.tabIndex = 0;
             control.autocomplete = 'off';
-            control.dataset.type = type;
-            const defaultChildName = type === 'm'
-                ? defaultChild.name || 'field1'
-                : 0;
-            const key = isForm
-                ? defaultChildName
-                : keyFormatterMap[type](name, defaultChildName);
-            const field = createControlByType(defaultChild.type, key);
-            const child = postCreateFieldMap[type](defaultChildName, field);
-            control.appendChild(child);
             return control;
         }
-        const createForm = _createFormOrStructuredControl.bind(null, null);
         const createStructuredControl = _createFormOrStructuredControl;
-        function createControlByType(type, name, parentType) {
-            switch(type) {
-                case 's':
-                case 'n':
-                case 'b': {
-                    return createAtomicControl(type, name);
-                }
-                case 'l': 
-                case 'm': 
-                case 'c': 
-                case 'e':
-                case 'q': {
-                    return createStructuredControl(type, name, { type: 's' });
-                }
+        function createControlByType(l3Type, name, dataType) {
+            if(l3Type === 'x') {
+                return createAtomicControl(dataType, name);
             }
+            return createStructuredControl(l3Type, name, { type: 's' });
         }
         const mapKeyNormalizer = name => {
             if(!mapKeyRE.test(name)) {
@@ -293,16 +304,57 @@
             set value(v) {
                 Object.entries(v).forEach(([k, v]) => {
                     const elm = this.elements[k];
-                    if(elm.type === 'checkbox') {
-                        elm.checked = v;
-                    } else {
-                        elm.value = v;
-                    }
+                    elm.value = v;
                 });
                 return v;
             }
         }
-        
+        class RadioGroup extends HTMLElement {
+            constructor() {
+                super()
+                this._internals = this.attachInternals();
+                this._shadowRoot = this.attachShadow({mode: 'open'});
+                this._options = [];
+            }
+            get value() {
+                const ret = Array.from(this._shadowRoot.children).find(elm => elm.control.checked);
+                return ret.control.value;
+            }
+            set value(val) {
+                const ret = Array.from(this._shadowRoot.children).find(elm => elm.control.value === val);
+                ret.control.checked = true;
+                return val;
+            }
+            get options() {
+                return this._options;
+            }
+            set options(val) {
+                this._options = val;
+                this.render();
+            }
+            render() {
+                if (!this.hasAttribute('tabindex')) {
+                    this.tabIndex = 0;
+                }
+                const root = this._shadowRoot;
+                while (root.firstChild) {
+                    root.removeChild(root.firstChild);
+                }
+                this._options.forEach(([k, v]) => {
+                    const input = document.createElement('input');
+                    const label = document.createElement('label');
+                    input.type = 'radio';
+                    input.name = 'type';
+                    input.value = k;
+                    input.dataset.key = k;
+                    const text = document.createTextNode(`[${k}] ${v}`);
+                    label.appendChild(input);
+                    label.appendChild(text);
+                    root.appendChild(label);
+                });
+            }
+        }
+        customElements.define("radio-group", RadioGroup);
         class XForm extends XBase(HTMLFormElement) {}
         customElements.define("x-form", XForm, { extends: 'form' });
         class XList extends XBase(HTMLFieldSetElement, {
@@ -334,21 +386,221 @@
         }) {}
         customElements.define("x-element", XElement, { extends: 'fieldset' });
         // control appearences
-        function radiogroup({ options }) {
-            const group = document.createElement('div');
-            options.forEach(([k, v]) => {
-                const input = document.createElement('input');
-                const label = document.createElement('label');
-                input.type = 'radio';
-                input.name = 'type';
-                input.value = k;
-                input.dataset.key = k;
-                const text = document.createTextNode(`[${k}] ${v}`);
-                label.appendChild(input);
-                label.appendChild(text);
-                group.appendChild(label);
+        const plain = ({l3Type, name, type, ...props}) => root => {
+            console.log(props)
+            const node = l3Type === 'x'
+                ? createAtomicControl(type, name)
+                : createStructuredControl(l3Type, name);
+            Object.entries(props).forEach(([key, val]) => {
+                node[key] = val;
             });
-            return group;
+            root.appendChild(node);
+        };
+        class L3Base extends HTMLElement {
+            static get formAssociated() { return true; }
+
+            constructor() {
+                super();
+                this._internals = this.attachInternals();
+                this._shadowRoot = this.attachShadow({mode: 'open'});
+                this._appearance = void 0;
+                this._props = void 0;
+            }
+
+            get form() { return this._internals.form; }
+
+            static get observedAttributes() {
+                return ['name', 'type', 'value'];
+            }
+            connectedCallback() {
+            }
+            focus() {
+                let child = this._shadowRoot;
+                while(child && !child.focus) {
+                    child = child.firstElementChild;
+                }
+                child && child.focus();
+            }
+            render() {
+                const root = this._shadowRoot;
+                while (root.firstChild) {
+                    root.removeChild(root.firstChild);
+                }
+                this._appearance({
+                    l3Type: this._l3Type,
+                    ...Array.from(this.attributes).reduce((acc, v) => {
+                        if(['appearance', 'props'].includes(v.name)) {
+                            return acc;
+                        }
+                        acc[v.name] = v.textContent;
+                        return acc;
+                    }, {}),
+                    ...this._props
+                })(this._shadowRoot);
+            }
+            attributeChangedCallback(name, oldval, newval) {
+                console.log('L3Base', name, oldval, newval);
+            }
+            get l3Type() {
+                return this._l3Type;
+            }
+            get type() {
+                return this.getAttribute('type');
+            }
+            set type(val) {
+                return this.setAttribute('type', val);
+            }
+            get appearance() {
+                return this._appearance;
+            }
+
+            set appearance(val) {
+                // TODO sanitize #+qname
+                this.setAttribute('appearance', '#'+val.name);
+                this._appearance = val;
+                this.render();
+                return val;
+            }
+
+            get props() {
+                return this._props;
+            }
+
+            set props(val) {
+                this.setAttribute('props', JSON.stringify(val));
+                return this._props = val;
+            }
+
+            get name() {
+                return this.getAttribute('name');
+            }
+
+            set name(val) {
+                return this.setAttribute('name', val);
+            }
+
+            get value() {
+                return this._shadowRoot.firstElementChild.value;
+            }
+
+            set value(val) {
+                return this._shadowRoot.firstElementChild.value = val;
+            }
+        }
+        // TODO validation
+        class L3Form extends L3Base {
+            constructor() {
+                super();
+            }
+        }
+        customElements.define('l3-form', L3Form);
+        class L3Text extends L3Base {
+            constructor() {
+                super();
+                this._l3Type = 'x';
+            }
+            _coerce(val) {
+                const typeMap = {
+                    n: Number,
+                };
+                const type = this.getAttribute("type");
+                const coercion = typeMap[type] || String;
+                return coercion(val);
+            }
+            get value() {
+                const node = this._shadowRoot.firstElementChild;
+                if(this.getAttribute('appearance') === '#plain' && this.type === 'b') {
+                    return node.checked;
+                }
+                return this._coerce(node.value);
+            }
+            set value(val) {
+                const node = this._shadowRoot.firstElementChild;
+                if(this.getAttribute('appearance') === '#plain') {
+                    if(this.type === 'b') {
+                        return node.checked = val;
+                    }
+                }
+                return node.value = String(val);
+            }
+        }
+        customElements.define('l3-text', L3Text);
+        class L3List extends L3Base {
+            constructor() {
+                super();
+                this._l3Type = 'l';
+            }
+        }
+        customElements.define('l3-list', L3List);
+        class L3Map extends L3Base {
+            constructor() {
+                super();
+                this._l3Type = 'm';
+            }
+        }
+        customElements.define('l3-map', L3Map);
+        
+        class L3Call extends L3Base {
+            constructor() {
+                super();
+                this._l3Type = 'c';
+            }
+        }
+        customElements.define('l3-call', L3Call);
+        
+        class L3Element extends L3Base {
+            constructor() {
+                super();
+                this._l3Type = 'e';
+            }
+        }
+        customElements.define('l3-element', L3Element);
+        
+        class L3Attribute extends L3Base {
+            constructor() {
+                super();
+                this._l3Type = 'a';
+            }
+        }
+        customElements.define('l3-attribute', L3Attribute);
+        
+        class L3Quotation extends L3Base {
+            constructor() {
+                super();
+                this._l3Type = 'q';
+            }
+        }
+        customElements.define('l3-quotation', L3Quotation);
+        
+        class L3X extends L3Text {}
+        customElements.define('l3-x', L3X);
+        class L3L extends L3List {}
+        customElements.define('l3-l', L3L);
+        class L3M extends L3Map {}
+        customElements.define('l3-m', L3M);
+        class L3C extends L3Call {}
+        customElements.define('l3-c', L3C);
+        class L3E extends L3Element {}
+        customElements.define('l3-e', L3E);
+        class L3A extends L3Attribute {}
+        customElements.define('l3-a', L3A);
+        class L3Q extends L3Quotation {}
+        customElements.define('l3-q', L3Q);
+        const radioGroup = ({options, value}) => mountpoint => {
+            const node = document.createElement('radio-group');
+            node.options = options;
+            node.value = value;
+            mountpoint.appendChild(node);
+        }
+        function getL3TypeOrDataType(elm) {
+            const l3Type = elm.l3Type;
+            if(!l3Type) {
+                return 'm';
+            }
+            if(l3Type !== 'x') {
+                return l3Type;
+            }
+            return elm.type;
         }
     </script>
 </head>
@@ -373,9 +625,11 @@
         // The interactive tree will be translated, and simply contains l3 elements
         // Any attributes may be provided as any data structure, so it would be possible to
         // e.g. provide a enum constraint of an element as a list
-        const main = createForm('main', { type: 's' });
-        const core = createForm('core', {type: 'b', name: 'active'});
-        core.appendChild(radiogroup({ options: Object.entries(typeMap) }));
+        const main = f('main', [x('field1', 's')]);
+        const core = f('core', [
+            x('active', 'b'),
+            x('type', 's', radioGroup, { options: Object.entries(typeMap), value: 's' })
+        ]);
         const mountpoint = document.getElementById('mountpoint');
         mountpoint.appendChild(main);
         mountpoint.appendChild(core);
@@ -410,7 +664,7 @@
             }
         }
         function insertChildControl(type, selected, parent) {
-            const parentType = parent.dataset.type;
+            const parentType = getL3TypeOrDataType(parent);
             if(parentType === 'm') {
                 parent.controlCount = parent.controls.length;
             }
@@ -424,10 +678,12 @@
             control.focus();
         }
         function emitCoreChange({type}, selected) {
+            console.log('emitCoreChange', type);
             const form = selected.form;
             if(!form) {
                 return;
             }
+            const l3Type = atomicInputTypeMap[type] ? 'x' : type;
             let parent = selected.closest('fieldset, form', form);
             const state = parent.value;
             if(type === '-') {
@@ -441,10 +697,10 @@
                 // append new parent control
                 insertChildControl('s', selected, parent);
             } else {
-                if(selected.dataset.type === type) {
+                if(getL3TypeOrDataType(selected) === type) {
                     return;
                 }
-                const parentType = parent.dataset.type;
+                const parentType = getL3TypeOrDataType(parent);
                 if(parentType === 'c' || parentType === 'e') {
                     const keyNormalizer = keyNormalizerMap[parentType];
                     const index = keyNormalizer(selected.name);
@@ -456,16 +712,21 @@
                     return;
                 }
                 console.log(`change type from ${selected.type} to ${type} in parent ${parentType}`);
-                const control = createControlByType(type, selected.name, parentType);
-                const refNode = parentType === 'm' ? selected.parentElement : selected;
                 // FIXME selected.name is the path
                 const { name } = selected;
-                const key = parent.isSameNode(form)
-                    ? name
-                    : keyNormalizerMap[parentType](name);
-                const node = postCreateFieldMap[parentType](key, control);
-                parent.insertBefore(node, refNode);
-                refNode.remove();
+                const defaultChildName = type === 'm'
+                    ? defaultChild.name || 'field1'
+                    : 0;
+                const defaultChildKey = keyFormatterMap[type](name, defaultChildName);
+                console.log(defaultChildKey);
+                const field = x(defaultChildKey, 's');
+                // TODO move to appearance
+                //const child = postCreateFieldMap[type](defaultChildName, field);
+                const control = l3Constructors[l3Type](name, l3Type === 'x' ? type : [field]);
+                //const node = postCreateFieldMap[parentType](key, control);
+                const node = control;
+                parent.insertBefore(node, selected);
+                selected.remove();
                 if(type === 'l' || type === 'm' || type === 'c' || type === 'e') {
                     control.controls[0].focus();
                 } else {
@@ -483,13 +744,14 @@
         }
         function coreBlurHandler(evt) {
             core.value = {
-                type: jumpState.selected.dataset.type,
+                type: getL3TypeOrDataType(jumpState.selected),
                 active: false
             };
             cleanCore();
         }
         function coreKeyDownHandler(evt) {
             const code = evt.keyCode;
+            console.log('coreKeyDownHandler', code)
             const controls = this.controls;
             const isEnter = code === KEY_ENTER;
             const isCancelKey = code === KEY_ESCAPE || code === KEY_TAB || code === KEY_BACKSLASH;
@@ -502,10 +764,9 @@
             } else {
                 const isDelete = code === KEY_DELETE;
                 const key = isDelete ? '-' : evt.key;
-                const keyBound = controls.find(c => c.dataset.key === key);
-                if(keyBound) {
-                    keyBound.checked = true;
-                    keyBound.focus();
+                const typeControl = controls.find(c => c.name === 'type');
+                if(typeMap[key]) {
+                    typeControl.value = key;
                     // update immediately
                     coreChangeHandler(evt);
                 }
@@ -518,11 +779,10 @@
                 evt.preventDefault();
                 jumpState.selected = selected;
                 // TODO infer type from control (until we have custom controls)
-                const type = selected.dataset.type;
-                const typeControl = Array.from(core.controls).find(elm => elm.name === 'type' && elm.value === type);
-                if(!typeControl) {
-                    throw new TypeError('Could not find control for type ' + type);
-                }
+                const type = getL3TypeOrDataType(selected);
+                const typeControl = Array.from(core.controls).find(elm => {
+                    return elm.name === 'type';
+                });
                 core.value = {
                     active: true,
                     type,
