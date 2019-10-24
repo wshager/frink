@@ -2,6 +2,15 @@
 
 <head>
     <script src="../dist/frink.js"></script>
+    <script>
+        const frink = amd;
+        const { pipe, seq, isSeq } = frink;
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/rxjs/6.5.3/rxjs.umd.js"></script>
+    <script src="./dom-constr.js"></script>
+    <script src="./radio-group.js"></script>
+    <script src="./number-input.js"></script>
+    <script src="./boolean-input.js"></script>
     <style>
         form[name='core'] label, form[name='main'] label {
             display: block;
@@ -11,6 +20,9 @@
         }
         .label-invalid {
             outline: medium solid red;
+        }
+        l3-x {
+            display: block;
         }
         form[name='main'] {
             padding: 2em;
@@ -31,6 +43,7 @@
         }
     </style>
     <script>
+        const { ReplaySubject } = rxjs;
         // TODO create custom form + controls
         // This is a *very* crude prototype of the core form
         const KEY_BACKSLASH = 220;
@@ -80,26 +93,14 @@
         const formValueNormalizer = ({ name, type, value, checked, dataset }, valueContainer) => (
             value
         );
-        function createLabel(name, field) {
-            const label = document.createElement('label');
-            const text = document.createElement('span');
-            text.contentEditable = true;
-            text.className = 'label-text';
-            text.textContent = name;
-            label.appendChild(text);
-            label.appendChild(field);
-            return label;
-        }
         function createAtomicControl(type, name) {
-            const control = document.createElement('input');
-            control.name = name;
-            control.type = atomicInputTypeMap[type];
-            control.setAttribute('placeholder', name);
-            if(type === 'b') {
-                control.value = 'true';
-            }
-            //control.setAttribute('autocomplete', 'off');
-            return control;
+            return elem({
+                $name: 'input',
+                is: type === 'b' ? 'boolean-input' : type === 'n' ? 'number-input' : null,
+                name,
+                type,
+                placeholder: name, 
+            })
         }
         const listKeyFormatter = (name, childKey) => {
             if(!/^[0-9]+$/.test(childKey)) {
@@ -123,72 +124,112 @@
             c: callKeyFormatter,
             q: quotationKeyFormatter
         };
-        const listPostCreateField = (name, field) => {
-            return field;
-        };
-        const mapPostCreateField = (name, field) => {
-            const label = createLabel(name, field);
-            label.firstElementChild.addEventListener('click', evt => {
-                evt.preventDefault();
-            });
-            label.firstElementChild.addEventListener('input', evt => {
-                try {
-                    field.name = mapKeyFormatter(name, evt.target.textContent);
-                    evt.target.classList.remove('label-invalid');
-                } catch(err) {
-                    console.log(err);
-                    evt.target.classList.add('label-invalid');
-                }
-            });
-            return label;
-        };
-        const callPostCreateField = (name, field, control) => {
-            return field;
-        }
-        const quotationPostCreateField = callPostCreateField;
-        const elementPostCreateField = (name, field) => {
-            return field;
-        }
-        const postCreateFieldMap = {
-            l: listPostCreateField,
-            m: mapPostCreateField,
-            e: elementKeyRE,
-            c: callPostCreateField,
-            q: quotationPostCreateField
-        };
         const x = (name, type, appearance = plain, props = {}) => {
-            const node = document.createElement('l3-x');
-            node.name = name;
-            node.type = type;
-            node.props = props;
-            node.appearance = appearance;
-            return node;
+            return elem({
+                $name: 'l3-type',
+                dataset: {
+                    name,
+                    type
+                },
+                $children: [
+                    appearance({
+                        $name: name,
+                        type,
+                        ...props
+                    })
+                ]
+            });
         }
-        /*const _l3Structure = l3Type => (name, children, appearance = plain, props = {}) => {
-            const node = document.createElement('l3-' + l3Type);
-            node.name = name;
-            node.props = props;
-            node.appearance = appearance;
-            children.forEach(child => {
-                node.appendChild(child);
+        const _getAttributeObserver = (target, name, subject) => {
+            const config = { attributes: true, childList: false, subtree: false };
+            const callback = function(mutationsList, observer) {
+                for(let mutation of mutationsList) {
+                    if (mutation.type === 'attributes' && mutation.attributeName === name) {
+                        console.log(mutation)
+                        subject.next(mutation.target.getAttribute(name));
+                    }
+                }
+            };
+            const observer = new MutationObserver(callback);
+            return {
+                subject,
+                observe: () => {
+                    observer.observe(target, config);
+                }
+            };
+        };
+        const bindAttribute = (target, name, subject = new ReplaySubject(1)) => {
+            //const value = target.getAttribute(name);
+            // TODO detect bindable attributes
+            const { subject: boundSubject, observe } = _getAttributeObserver(target, name, subject);
+            target.setAttributeNode(attr({$name: name, $value: subject}));
+            //subject.next(value);
+            observe();
+            return target;
+        }
+        const on = (target, evtName, tx = identity, s = new ReplaySubject(1)) => {
+            target.addEventListener(evtName, evt => {
+                s.next(tx(evt));
             })
-            return node;
-        };*/
-        const _l3Structure = l3Type => (name, children) => {
-            const node = _createFormOrStructuredControl(l3Type, name);
-            children.forEach(child => {
+            return s;
+        };
+        const label = target => {
+            const name = target.name;
+            const labelText = elem({
+                $name: 'span',
+                className: 'label-text',
+                $children: [text(mapKeyNormalizer(name))],
+            });
+            return elem({
+                $name: 'label',
+                $children: seq(labelText, target)
+            });
+        };
+        const labelEditable = target => {
+            const $name = new ReplaySubject(1);
+            $name.next(target.name);
+            const _getNameRoot = (name) => {
+                return mapKeyRE.test(name)
+                    ? name.replace(mapKeyRE, '.')
+                    : '';
+            }
+            const nameRoot = _getNameRoot(target.name);
+            
+            const labelText = elem({
+                $name: 'span',
+                className: 'label-text',
+                contentEditable: true,
+                $children: [text(frink.forEach($name, mapKeyNormalizer))]
+            });
+            
+            const $updatedName = on(labelText, 'input', evt => nameRoot + evt.target.textContent, $name);
+            const child = bindAttribute(bindAttribute(target, 'name', $updatedName), 'placeholder', $updatedName);
+            //const $updatedName = seq(name, getLiveAttribute(Labelable, 'name'));
+            // bindActtribute(elem: Element, name: , s: Subject) -> NewElement
+            //let $bound-child := <{...$child} name="{$updated-name}"/> (: spread into empty element does something like
+            //Labelable.removeAttribute('name');
+            
+            return elem({
+                $name: 'label',
+                className: 'label-editable',
+                $children: seq(labelText, child)
+            });
+        };
+        const _l3Structure = l3Type => ({$name, $children}) => {
+            const node = _createFormOrStructuredControl(l3Type, $name);
+            $children.forEach(child => {
                 node.appendChild(child);
             });
             return node;
         }
-        const f = _l3Structure();
+        const f = _l3Structure('f');
         const l = _l3Structure('l');
         const m = _l3Structure('m');
         const c = _l3Structure('c');
         const q = _l3Structure('q');
         const e = _l3Structure('e');
         const a = _l3Structure('a');
-        const l3Constructors = {
+        var l3Constructors = {
             f,
             x,
             l,
@@ -199,51 +240,47 @@
             a,
         };
         function _createFormOrStructuredControl(l3Type, name) {
-            const isForm = !l3Type;
+            const isForm = l3Type === 'f';
             const type = isForm ? 'm' : l3Type;
-            const customExtensionType = customExtensionTypeMap[type];
-            const control = isForm
-                ? document.createElement('form', { is: 'x-form' })
-                : document.createElement('fieldset', { is: customExtensionType });
-            control.name = name;
-            control.tabIndex = 0;
-            control.autocomplete = 'off';
-            return control;
+            const customExtensionType = isForm
+                ? 'x-form'
+                : customExtensionTypeMap[type];
+            return elem({
+                $name: isForm ? 'form' : 'fieldset',
+                is: customExtensionType,
+                name,
+                tabIndex: 0,
+                autocomplete: 'off'
+            });
         }
         const createStructuredControl = _createFormOrStructuredControl;
-        function createControlByType(l3Type, name, dataType) {
-            if(l3Type === 'x') {
-                return createAtomicControl(dataType, name);
-            }
-            return createStructuredControl(l3Type, name, { type: 's' });
-        }
         const mapKeyNormalizer = name => {
             if(!mapKeyRE.test(name)) {
-                throw new Error(`Incorrectly named property ${name} found in map`);
+                return name;
             }
             return name.match(mapKeyRE)[1];
         };
         const listKeyNormalizer = name => {
             if(!listKeyRE.test(name)) {
-                throw new Error(`Incorrectly named item ${name} found in list`);
+                return name;
             }
             return parseInt(name.match(listKeyRE)[1]);
         }
         const callKeyNormalizer = name => {
             if(!callKeyRE.test(name)) {
-                throw new Error(`Incorrectly named item ${name} found in call argument list`);
+                return name;
             }
             return parseInt(name.match(callKeyRE)[1], 10);
         };
         const quotationKeyNormalizer = name => {
             if(!elementKeyRE.test(name)) {
-                throw new Error(`Incorrectly named item ${name} found in quotation argument list`);
+                return name;
             }
             return parseInt(name.match(quotationKeyRE)[1], 10);
         };
         const elementKeyNormalizer = name => {
             if(!elementKeyRE.test(name)) {
-                throw new Error(`Incorrectly named item ${name} found in element list`);
+                return name;
             }
             return parseInt(name.match(elementKeyRE)[1], 10);
         };
@@ -265,6 +302,7 @@
                 : { $name, $children: insert($children, value, key - 1) }
         );
         const XBase = (SomeHTMLElement, {
+            l3Type,
             valueContainer = {},
             valueNormalizer = formValueNormalizer,
             keyNormalizer = identity,
@@ -272,6 +310,10 @@
         } = {}) => class extends SomeHTMLElement {
             constructor() {
                 super();
+                this._l3Type = l3Type;
+            }
+            get l3Type() {
+                return this._l3Type;
             }
             static get observedAttributes() { return ["value"]; }
 
@@ -297,7 +339,10 @@
 
             get value() {
                 return this.controls.reduce(
-                    (acc, control) => appender(acc, valueNormalizer(control, acc), keyNormalizer(control.name)),
+                    (acc, control) => {
+                        console.log(this.name, control.name, control.value)
+                        return appender(acc, valueNormalizer(control, acc), keyNormalizer(control.name));
+                    },
                     valueContainer
                 );
             }
@@ -309,65 +354,27 @@
                 return v;
             }
         }
-        class RadioGroup extends HTMLElement {
-            constructor() {
-                super()
-                this._internals = this.attachInternals();
-                this._shadowRoot = this.attachShadow({mode: 'open'});
-                this._options = [];
-            }
-            get value() {
-                const ret = Array.from(this._shadowRoot.children).find(elm => elm.control.checked);
-                return ret.control.value;
-            }
-            set value(val) {
-                const ret = Array.from(this._shadowRoot.children).find(elm => elm.control.value === val);
-                ret.control.checked = true;
-                return val;
-            }
-            get options() {
-                return this._options;
-            }
-            set options(val) {
-                this._options = val;
-                this.render();
-            }
-            render() {
-                if (!this.hasAttribute('tabindex')) {
-                    this.tabIndex = 0;
-                }
-                const root = this._shadowRoot;
-                while (root.firstChild) {
-                    root.removeChild(root.firstChild);
-                }
-                this._options.forEach(([k, v]) => {
-                    const input = document.createElement('input');
-                    const label = document.createElement('label');
-                    input.type = 'radio';
-                    input.name = 'type';
-                    input.value = k;
-                    input.dataset.key = k;
-                    const text = document.createTextNode(`[${k}] ${v}`);
-                    label.appendChild(input);
-                    label.appendChild(text);
-                    root.appendChild(label);
-                });
-            }
-        }
-        customElements.define("radio-group", RadioGroup);
-        class XForm extends XBase(HTMLFormElement) {}
+        // TODO generalize x-form as the root and subform
+        // since form is the separator of elements
+        // we can use it in light DOM and pass value
+        class XForm extends XBase(HTMLFormElement, {
+            l3Type: 'm',
+        }) {}
         customElements.define("x-form", XForm, { extends: 'form' });
         class XList extends XBase(HTMLFieldSetElement, {
+            l3Type: 'l',
             valueContainer: [],
             keyNormalizer: listKeyNormalizer,
             appender: insert,
         }) {}
         customElements.define("x-list", XList, { extends: 'fieldset' });
         class XMap extends XBase(HTMLFieldSetElement, {
+            l3Type: 'm',
             keyNormalizer: mapKeyNormalizer,
         }) {}
         customElements.define("x-map", XMap, { extends: 'fieldset' });
         class XCall extends XBase(HTMLFieldSetElement, {
+            l3Type: 'c',
             valueContainer: {
                 $name: void 0,
                 $args: [],
@@ -377,6 +384,7 @@
         }) {}
         customElements.define("x-call", XCall, { extends: 'fieldset' });
         class XElement extends XBase(HTMLFieldSetElement, {
+            l3Type: 'e',
             valueContainer: {
                 $name: void 0,
                 $children: [],
@@ -386,257 +394,84 @@
         }) {}
         customElements.define("x-element", XElement, { extends: 'fieldset' });
         // control appearences
-        const plain = ({l3Type, name, type, ...props}) => root => {
-            console.log(props)
-            const node = l3Type === 'x'
-                ? createAtomicControl(type, name)
-                : createStructuredControl(l3Type, name);
+        const plain = ({$name, type, ...props}) => {
+            const node = createAtomicControl(type, $name);
             Object.entries(props).forEach(([key, val]) => {
                 node[key] = val;
             });
-            root.appendChild(node);
+            return node;
         };
-        class L3Base extends HTMLElement {
-            static get formAssociated() { return true; }
-
-            constructor() {
-                super();
-                this._internals = this.attachInternals();
-                this._shadowRoot = this.attachShadow({mode: 'open'});
-                this._appearance = void 0;
-                this._props = void 0;
-            }
-
-            get form() { return this._internals.form; }
-
-            static get observedAttributes() {
-                return ['name', 'type', 'value'];
-            }
-            connectedCallback() {
-            }
-            focus() {
-                let child = this._shadowRoot;
-                while(child && !child.focus) {
-                    child = child.firstElementChild;
-                }
-                child && child.focus();
-            }
-            render() {
-                const root = this._shadowRoot;
-                while (root.firstChild) {
-                    root.removeChild(root.firstChild);
-                }
-                this._appearance({
-                    l3Type: this._l3Type,
-                    ...Array.from(this.attributes).reduce((acc, v) => {
-                        if(['appearance', 'props'].includes(v.name)) {
-                            return acc;
-                        }
-                        acc[v.name] = v.textContent;
-                        return acc;
-                    }, {}),
-                    ...this._props
-                })(this._shadowRoot);
-            }
-            attributeChangedCallback(name, oldval, newval) {
-                console.log('L3Base', name, oldval, newval);
-            }
-            get l3Type() {
-                return this._l3Type;
-            }
-            get type() {
-                return this.getAttribute('type');
-            }
-            set type(val) {
-                return this.setAttribute('type', val);
-            }
-            get appearance() {
-                return this._appearance;
-            }
-
-            set appearance(val) {
-                // TODO sanitize #+qname
-                this.setAttribute('appearance', '#'+val.name);
-                this._appearance = val;
-                this.render();
-                return val;
-            }
-
-            get props() {
-                return this._props;
-            }
-
-            set props(val) {
-                this.setAttribute('props', JSON.stringify(val));
-                return this._props = val;
-            }
-
-            get name() {
-                return this.getAttribute('name');
-            }
-
-            set name(val) {
-                return this.setAttribute('name', val);
-            }
-
-            get value() {
-                return this._shadowRoot.firstElementChild.value;
-            }
-
-            set value(val) {
-                return this._shadowRoot.firstElementChild.value = val;
-            }
-        }
-        // TODO validation
-        class L3Form extends L3Base {
-            constructor() {
-                super();
-            }
-        }
-        customElements.define('l3-form', L3Form);
-        class L3Text extends L3Base {
-            constructor() {
-                super();
-                this._l3Type = 'x';
-            }
-            _coerce(val) {
-                const typeMap = {
-                    n: Number,
-                };
-                const type = this.getAttribute("type");
-                const coercion = typeMap[type] || String;
-                return coercion(val);
-            }
-            get value() {
-                const node = this._shadowRoot.firstElementChild;
-                if(this.getAttribute('appearance') === '#plain' && this.type === 'b') {
-                    return node.checked;
-                }
-                return this._coerce(node.value);
-            }
-            set value(val) {
-                const node = this._shadowRoot.firstElementChild;
-                if(this.getAttribute('appearance') === '#plain') {
-                    if(this.type === 'b') {
-                        return node.checked = val;
-                    }
-                }
-                return node.value = String(val);
-            }
-        }
-        customElements.define('l3-text', L3Text);
-        class L3List extends L3Base {
-            constructor() {
-                super();
-                this._l3Type = 'l';
-            }
-        }
-        customElements.define('l3-list', L3List);
-        class L3Map extends L3Base {
-            constructor() {
-                super();
-                this._l3Type = 'm';
-            }
-        }
-        customElements.define('l3-map', L3Map);
+        // the intention is not to create a wrapper so we can in inspect it in the DOM
+        // it's to provide the capabilities that we need
+        // the problem is, we can't add CE wrapper on CE wrapper on CE wrapper
+        // instead it should take function upon function upon function and apply that to the wrapped control
+        // this would be the placeholder for that: DOM Type Classes...
+        // label -> Labelable -> Labeled
+        // Labeled can't be an argument for `label`
+        // any other wrappers are prefereably native DOM
+        // functions should be used to wrap a control with functionality (capabilities)
+        // not classes, because it will bite us in the end
+        // TODO when type() is called add data-type attr and validation/coercion
+        // TODO use EditableText with event (no form value)
+        // label may be in light DOM, but events are hidden
+        // label receives events and progates name to child
+        // how this should work...
+        /**
+         * component emits change
+         * change is stored in a local variable (Rx Subject)
+         * function passes var to child
+         * let $name := $child/!@name (: this is a live attribute! :)
+         * let $label-text := <span content-editable="{true()}">{$name}</span> (: component knows it should re-render, because $name is live :)
+         * let $updated-name := on($label-text, 'input', ($evt) => mapName($evt/target/text-content))
+         * let $bound-child := <{...$child} name="{$updated-name}"/> (: spread into empty element does something like
+         * elem($child/local-name, ($child/*[not(./local-name eq 'name', attr($updated-name))))
+         *  :)
+         * return <label>{$label-text, $bound-child}</label>
+        */
         
-        class L3Call extends L3Base {
-            constructor() {
-                super();
-                this._l3Type = 'c';
-            }
-        }
-        customElements.define('l3-call', L3Call);
-        
-        class L3Element extends L3Base {
-            constructor() {
-                super();
-                this._l3Type = 'e';
-            }
-        }
-        customElements.define('l3-element', L3Element);
-        
-        class L3Attribute extends L3Base {
-            constructor() {
-                super();
-                this._l3Type = 'a';
-            }
-        }
-        customElements.define('l3-attribute', L3Attribute);
-        
-        class L3Quotation extends L3Base {
-            constructor() {
-                super();
-                this._l3Type = 'q';
-            }
-        }
-        customElements.define('l3-quotation', L3Quotation);
-        
-        class L3X extends L3Text {}
-        customElements.define('l3-x', L3X);
-        class L3L extends L3List {}
-        customElements.define('l3-l', L3L);
-        class L3M extends L3Map {}
-        customElements.define('l3-m', L3M);
-        class L3C extends L3Call {}
-        customElements.define('l3-c', L3C);
-        class L3E extends L3Element {}
-        customElements.define('l3-e', L3E);
-        class L3A extends L3Attribute {}
-        customElements.define('l3-a', L3A);
-        class L3Q extends L3Quotation {}
-        customElements.define('l3-q', L3Q);
-        const radioGroup = ({options, value}) => mountpoint => {
-            const node = document.createElement('radio-group');
-            node.options = options;
-            node.value = value;
-            mountpoint.appendChild(node);
+        const radioGroup = ({$name, options, value}) => {
+            return elem({
+                $name: 'radio-group',
+                name: $name,
+                options,
+                value,
+            })
         }
         function getL3TypeOrDataType(elm) {
             const l3Type = elm.l3Type;
             if(!l3Type) {
-                return 'm';
+                const typeMap = {
+                    text: 's'
+                };
+                return typeMap[elm.type];
             }
             if(l3Type !== 'x') {
                 return l3Type;
             }
-            return elm.type;
         }
-    </script>
-</head>
-
-<body>
-    <section id="mountpoint">
-    </section>
-    <section class="result">
-        <pre id="result"/>
-    </section>
-    <datalist id="calls">
-        <option value="equals">
-        <option value="not">
-        <option value="greater-than">
-        <option value="less-then">
-        <option value="and">
-    </datalist>
-    <script>
         // TODO use L3 DOM
         // The intent is NOT to use web components, but only the 'is' attribute
         // so that this form can be rendered on a server *and still work* (numbers and booleans should still be cast)
         // The interactive tree will be translated, and simply contains l3 elements
         // Any attributes may be provided as any data structure, so it would be possible to
         // e.g. provide a enum constraint of an element as a list
-        const main = f('main', [x('field1', 's')]);
-        const core = f('core', [
-            x('active', 'b'),
-            x('type', 's', radioGroup, { options: Object.entries(typeMap), value: 's' })
-        ]);
-        const mountpoint = document.getElementById('mountpoint');
-        mountpoint.appendChild(main);
-        mountpoint.appendChild(core);
-        main.addEventListener('input', function (evt) {
-            console.log(this.value);
-            document.getElementById('result').textContent = JSON.stringify(this.value, null, 4);
-        });
+        const jumpState = {selected: void 0};
+        window.onload = () => {
+            const main = f({$name: 'main', $children: [x('field1', 's', pipe(plain, labelEditable))]});
+            const core = f({$name: 'core', $children: [
+                x('active', 'b', pipe(plain, label)),
+                x('type', 's', pipe(radioGroup, label), { options: Object.entries(typeMap), value: 's' })
+            ]});
+            main.addEventListener("keydown", mainKeyDownHandler);
+            main.addEventListener('input', function (evt) {
+                console.log(this.value);
+                document.getElementById('result').textContent = JSON.stringify(this.value, null, 4);
+            });
+            const mountpoint = document.getElementById('mountpoint');
+            mountpoint.appendChild(main);
+            mountpoint.appendChild(core);
+            main.controls[0].focus();
+        }
         
         const captureBackSlash = (code, state) => {
             const isBackSlash = code === KEY_BACKSLASH;
@@ -645,7 +480,7 @@
             }
             return state;
         };
-        const jumpState = {selected: void 0};
+        
         function coreChangeHandler(evt) {
             if(evt.target.name === 'active') {
                 // if this was triggered by inactivating
@@ -672,10 +507,11 @@
                 ? 'field' + (++parent.controlCount)
                 : parent.controls.length; // FIXME rename all children
             const name = parent.isSameNode(selected.form) ? key : keyFormatterMap[parentType](parent.name, key);
-            const control = createControlByType(type, name, parentType);
-            const child = postCreateFieldMap[parentType](key, control);
-            parent.insertBefore(child, selected.nextSibling);
-            control.focus();
+            const appearance = parentType === 'm' ? pipe(plain, labelEditable) : plain;
+            const control = x(name, type, appearance);
+            const ref = selected.closest('l3-type');
+            parent.insertBefore(control, ref.nextElementSibling);
+            parent.elements[name].focus();
         }
         function emitCoreChange({type}, selected) {
             console.log('emitCoreChange', type);
@@ -690,9 +526,10 @@
                 if(Object.keys(state).length === 1) {
                     return alert('Can not remove this control as it is the only one in this parent');
                 }
-                const next = selected.nextElementSibling || selected.previousElementSibling;
-                next && next.focus();
-                selected.remove();
+                const ref = selected.closest('l3-type');
+                const next = ref.nextElementSibling || ref.previousElementSibling;
+                next && parent.elements[next.dataset.name].focus();
+                ref.remove();
             } else if(type === ',') {
                 // append new parent control
                 insertChildControl('s', selected, parent);
@@ -714,24 +551,34 @@
                 console.log(`change type from ${selected.type} to ${type} in parent ${parentType}`);
                 // FIXME selected.name is the path
                 const { name } = selected;
-                const defaultChildName = type === 'm'
-                    ? defaultChild.name || 'field1'
-                    : 0;
-                const defaultChildKey = keyFormatterMap[type](name, defaultChildName);
-                console.log(defaultChildKey);
-                const field = x(defaultChildKey, 's');
-                // TODO move to appearance
-                //const child = postCreateFieldMap[type](defaultChildName, field);
-                const control = l3Constructors[l3Type](name, l3Type === 'x' ? type : [field]);
-                //const node = postCreateFieldMap[parentType](key, control);
-                const node = control;
-                parent.insertBefore(node, selected);
-                selected.remove();
-                if(type === 'l' || type === 'm' || type === 'c' || type === 'e') {
-                    control.controls[0].focus();
+                const ref = selected.closest('l3-type');
+                if (l3Type !== 'x') {
+                    const defaultChildName = type === 'm'
+                        ? 'field1'
+                        : 0;
+                    const defaultChildKey = keyFormatterMap[type](name, defaultChildName);
+                    const childAppearance = type === 'm' ? pipe(plain, labelEditable) : plain;
+                    const field = x(defaultChildKey, 's', childAppearance);
+                    const constructor = l3Constructors[l3Type];
+                    const appearance = parentType === 'm' ? pipe(constructor, labelEditable) : constructor;
+                    const control = x(name, type, appearance, { $children: [field] });
+                    parent.insertBefore(control, ref.nextElementSibling);
+                    ref.remove();
+                    parent.elements[name].elements[defaultChildKey].focus();
                 } else {
-                    control.focus();
+                    const appearance = parentType === 'm' ? pipe(plain, labelEditable) : plain;
+                    const control = x(name, type, appearance);
+                    parent.insertBefore(control, ref.nextElementSibling);
+                    ref.remove();
+                    parent.elements[name].focus();
                 }
+                // TODO move to appearance
+                
+                //if(type === 'l' || type === 'm' || type === 'c' || type === 'e') {
+                //    child.controls[0].focus();
+                //} else {
+                    
+                //}
             }
         }
         function cleanCore() {
@@ -780,9 +627,7 @@
                 jumpState.selected = selected;
                 // TODO infer type from control (until we have custom controls)
                 const type = getL3TypeOrDataType(selected);
-                const typeControl = Array.from(core.controls).find(elm => {
-                    return elm.name === 'type';
-                });
+                const typeControl = core.elements.type;
                 core.value = {
                     active: true,
                     type,
@@ -795,9 +640,22 @@
                 core.addEventListener("keydown", coreKeyDownHandler);
             }
         }
-        main.addEventListener("keydown", mainKeyDownHandler);
-        main.controls[0].focus();
     </script>
+</head>
+
+<body>
+    <section id="mountpoint">
+    </section>
+    <section class="result">
+        <pre id="result"/>
+    </section>
+    <datalist id="calls">
+        <option value="equals">
+        <option value="not">
+        <option value="greater-than">
+        <option value="less-then">
+        <option value="and">
+    </datalist>
 </body>
 
 </html>
